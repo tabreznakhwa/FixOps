@@ -24,6 +24,12 @@
 .DS_Store
 *.pem
 
+# sensitive files
+*.png
+*.jpg
+*.jpeg
+OAuth*
+
 # debug
 npm-debug.log*
 yarn-debug.log*
