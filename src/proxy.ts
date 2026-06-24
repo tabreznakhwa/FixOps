@@ -54,6 +54,11 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/login?error=account_disabled', request.url))
     }
 
+    // Technician: block supplier/vendor routes — they can view stock only
+    if (profile.role === 'technician' && pathname.startsWith('/suppliers')) {
+      return NextResponse.redirect(new URL('/dashboard?error=unauthorized', request.url))
+    }
+
     // Skip API routes (enforced at DB/RLS) and locked roles (always full access)
     if (!pathname.startsWith('/api') && !LOCKED_ROLES.includes(profile.role)) {
       const module = getRouteModule(pathname)

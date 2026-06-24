@@ -193,7 +193,7 @@ export default async function InvoiceDetailPage({
               <div className="flex justify-between"><span className="text-slate-500">VAT ({invoice.tax_rate}%)</span><span className="font-medium">{formatCurrency(invoice.tax_amount)}</span></div>
             )}
             <div className="border-t-2 border-slate-800 pt-2 flex justify-between text-base font-bold">
-              <span>Total (AED)</span><span>{formatCurrency(invoice.total_amount)}</span>
+              <span>Total (KWD)</span><span>{formatCurrency(invoice.total_amount)}</span>
             </div>
             {invoice.amount_paid > 0 && (
               <div className="flex justify-between text-green-700"><span>Amount Paid</span><span className="font-semibold">− {formatCurrency(invoice.amount_paid)}</span></div>

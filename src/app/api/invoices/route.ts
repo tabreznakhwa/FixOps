@@ -47,13 +47,19 @@ export async function POST(request: NextRequest) {
     })
     const invoiceNumber = seqData ?? `INV-${Date.now()}`
 
-    // Calculate subtotal from items (qty * unit_price, before item-level discounts/taxes)
+    // Calculate subtotal from items (qty * unit_price, before any discounts/taxes)
     const subtotal = items.reduce((sum: number, item: { quantity: number; unit_price: number }) => {
       return sum + item.quantity * item.unit_price
     }, 0)
 
+    // Sum item-level discounts so invoice total reflects them
+    const itemDiscountTotal = items.reduce((sum: number, item: { quantity: number; unit_price: number; discount_percent?: number }) => {
+      return sum + item.quantity * item.unit_price * (Number(item.discount_percent ?? 0) / 100)
+    }, 0)
+
     const headerDiscount = Number(discount_amount ?? 0)
-    const taxableAmount = subtotal - headerDiscount
+    const totalDiscountAmount = itemDiscountTotal + headerDiscount
+    const taxableAmount = subtotal - totalDiscountAmount
     const taxRateVal = Number(tax_rate ?? 0)
     const taxAmount = (taxableAmount * taxRateVal) / 100
     const totalAmount = taxableAmount + taxAmount
@@ -69,7 +75,7 @@ export async function POST(request: NextRequest) {
         due_date: due_date ?? null,
         work_order_id: work_order_id ?? null,
         subtotal,
-        discount_amount: headerDiscount,
+        discount_amount: totalDiscountAmount,
         tax_rate: taxRateVal,
         tax_amount: taxAmount,
         total_amount: totalAmount,
@@ -147,7 +153,7 @@ export async function POST(request: NextRequest) {
       action: 'create',
       entityType: 'invoice',
       entityId: invoice.id,
-      entityLabel: `${invoice.invoice_number} — AED ${totalAmount.toFixed(2)}`,
+      entityLabel: `${invoice.invoice_number} — KWD ${totalAmount.toFixed(3)}`,
     })
 
     return NextResponse.json({ success: true, id: invoice.id, invoiceNumber: invoice.invoice_number })

@@ -39,6 +39,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     id: string; customer_code: string; full_name: string; company_name: string | null;
     contact_person: string | null; customer_type: string; mobile_number: string;
     whatsapp_number: string | null; email: string | null; address: string | null;
+    block: string | null; street: string | null; avenue: string | null; house_number: string | null;
     area: string | null; city: string | null; payment_terms: number; credit_limit: number;
     advance_balance: number; notes: string | null; status: string; created_at: string;
   }
@@ -143,11 +144,17 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           {/* Address */}
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <h3 className="text-sm font-semibold text-slate-700 mb-3">Address</h3>
-            {customer.address || customer.area || customer.city ? (
+            {(customer.address || customer.block || customer.street || customer.avenue || customer.house_number || customer.area || customer.city) ? (
               <div className="flex items-start gap-2.5 text-sm text-slate-700">
                 <MapPin className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
-                <div>
+                <div className="space-y-0.5">
                   {customer.address && <p>{customer.address}</p>}
+                  <div className="flex flex-wrap gap-x-3 text-slate-600">
+                    {customer.block && <span>Block {customer.block}</span>}
+                    {customer.street && <span>Street {customer.street}</span>}
+                    {customer.avenue && <span>Ave {customer.avenue}</span>}
+                    {customer.house_number && <span>House {customer.house_number}</span>}
+                  </div>
                   {(customer.area || customer.city) && (
                     <p className="text-slate-500">{[customer.area, customer.city].filter(Boolean).join(', ')}</p>
                   )}

@@ -13,6 +13,12 @@ export const metadata = { title: 'Dashboard' }
 export default async function DashboardPage() {
   const supabase = await createClient()
 
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = await (supabase as any)
+    .from('users').select('role').eq('id', user!.id).single()
+  const role = (profileRaw as { role: string } | null)?.role ?? 'technician'
+  const isTechnician = role === 'technician'
+
   const today = new Date().toISOString().split('T')[0]
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
 
@@ -33,13 +39,18 @@ export default async function DashboardPage() {
     supabase.from('complaints').select('*', { count: 'exact', head: true }).not('status', 'in', '(completed,verified,invoiced,paid,cancelled)'),
     supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('priority', 'emergency').not('status', 'in', '(completed,cancelled)'),
     supabase.from('work_orders').select('*', { count: 'exact', head: true }).eq('status', 'completed').gte('updated_at', today),
-    supabase.from('invoices').select('invoice_date, total_amount, amount_paid').gte('invoice_date', monthStart).not('status', 'in', '(cancelled,written_off)').order('invoice_date'),
+    // Skip financial queries for technicians
+    isTechnician
+      ? Promise.resolve({ data: [] })
+      : supabase.from('invoices').select('invoice_date, total_amount, amount_paid').gte('invoice_date', monthStart).not('status', 'in', '(cancelled,written_off)').order('invoice_date'),
     supabase.from('complaints').select('status').not('status', 'in', '(cancelled)'),
     supabase.from('complaints').select('id, complaint_number, description, priority, status, created_at, customers(full_name)').order('created_at', { ascending: false }).limit(8),
     supabase.from('users').select('id, full_name').eq('role', 'technician').eq('status', 'active'),
     supabase.from('staff').select('id, full_name').eq('employment_status', 'active'),
     supabase.from('inventory_items').select('id, item_name, current_stock, minimum_stock_level, unit_of_measure').filter('current_stock', 'lte', 'minimum_stock_level').eq('is_active', true).limit(5),
-    supabase.from('invoices').select('balance_due, status').in('status', ['issued', 'partial', 'overdue']),
+    isTechnician
+      ? Promise.resolve({ data: [] })
+      : supabase.from('invoices').select('balance_due, status').in('status', ['issued', 'partial', 'overdue']),
   ])
 
   type RevRow = { invoice_date: string; total_amount: number; amount_paid: number }
@@ -76,6 +87,7 @@ export default async function DashboardPage() {
       <div className="p-6 space-y-6">
         {/* KPI Cards */}
         <DashboardStats
+          hideFinancials={isTechnician}
           stats={{
             newComplaints: totalComplaints ?? 0,
             openComplaints: openComplaints ?? 0,
@@ -89,11 +101,15 @@ export default async function DashboardPage() {
         />
 
         {/* Charts Row */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2">
-            <RevenueChart data={rev} />
+        <div className={`grid grid-cols-1 xl:grid-cols-3 gap-6`}>
+          {!isTechnician && (
+            <div className="xl:col-span-2">
+              <RevenueChart data={rev} />
+            </div>
+          )}
+          <div className={isTechnician ? 'xl:col-span-3' : ''}>
+            <ComplaintStatusChart statusCounts={statusCounts} />
           </div>
-          <ComplaintStatusChart statusCounts={statusCounts} />
         </div>
 
         {/* Bottom Row */}

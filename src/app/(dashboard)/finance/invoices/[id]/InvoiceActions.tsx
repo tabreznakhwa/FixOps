@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { CheckCircle, CreditCard, XCircle, ArrowLeft, AlertCircle, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import { formatCurrency } from '@/lib/utils'
 
 interface Props {
   invoiceId: string
@@ -92,7 +93,7 @@ export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerI
           Record Payment
           {balanceDue > 0 && (
             <span className="text-xs bg-green-700 px-1.5 py-0.5 rounded font-mono">
-              AED {balanceDue.toLocaleString('en-AE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+              {formatCurrency(balanceDue)}
             </span>
           )}
         </Link>

@@ -18,7 +18,7 @@ import { type ModuleKey, type ModuleAccess } from '@/lib/permissions'
 const navGroups: Array<{
   label: string
   module: ModuleKey
-  items: { href: string; label: string; icon: ElementType; exact?: boolean }[]
+  items: { href: string; label: string; icon: ElementType; exact?: boolean; excludeRoles?: string[] }[]
 }> = [
   {
     label: 'Operations',
@@ -50,9 +50,9 @@ const navGroups: Array<{
     items: [
       { href: '/inventory', label: 'Inventory', icon: Package, exact: true },
       { href: '/inventory/stock-trial', label: 'Stock Trial', icon: Layers },
-      { href: '/suppliers', label: 'Suppliers & PO', icon: Building2, exact: true },
-      { href: '/suppliers/purchase-register', label: 'Purchase Register', icon: ShoppingCart },
-      { href: '/suppliers/vendor-payments', label: 'Vendor Payments', icon: TrendingDown },
+      { href: '/suppliers', label: 'Suppliers & PO', icon: Building2, exact: true, excludeRoles: ['technician'] },
+      { href: '/suppliers/purchase-register', label: 'Purchase Register', icon: ShoppingCart, excludeRoles: ['technician'] },
+      { href: '/suppliers/vendor-payments', label: 'Vendor Payments', icon: TrendingDown, excludeRoles: ['technician'] },
     ],
   },
   {
@@ -134,7 +134,7 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
 
             {!collapsed[group.label] && (
               <div className="mt-1 space-y-0.5">
-                {group.items.map(({ href, label, icon: Icon, exact }) => {
+                {group.items.filter(({ excludeRoles }) => !excludeRoles?.includes(user.role)).map(({ href, label, icon: Icon, exact }) => {
                   const active = exact ? pathname === href : (pathname === href || pathname.startsWith(href + '/'))
                   return (
                     <Link

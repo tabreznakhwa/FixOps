@@ -14,7 +14,7 @@ interface Stats {
   lowStockCount: number
 }
 
-export function DashboardStats({ stats }: { stats: Stats }) {
+export function DashboardStats({ stats, hideFinancials = false }: { stats: Stats; hideFinancials?: boolean }) {
   const cards = [
     {
       label: 'New Complaints',
@@ -101,9 +101,13 @@ export function DashboardStats({ stats }: { stats: Stats }) {
     },
   ]
 
+  const visibleCards = hideFinancials
+    ? cards.filter(c => !['Month Revenue', 'Month Collected', 'Total Receivables'].includes(c.label))
+    : cards
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {cards.map(({ label, value, icon: Icon, color, bg, border, badge, badgeColor, isText }) => (
+      {visibleCards.map(({ label, value, icon: Icon, color, bg, border, badge, badgeColor, isText }) => (
         <div
           key={label}
           className={`bg-white rounded-xl border ${border} p-4 hover:shadow-md transition-all duration-200 animate-count`}

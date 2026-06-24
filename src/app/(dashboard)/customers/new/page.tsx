@@ -153,13 +153,53 @@ export default function NewCustomerPage() {
           <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
             <h2 className="text-sm font-semibold text-slate-700">Address</h2>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Street Address</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Address</label>
               <input
                 type="text"
                 name="address"
-                placeholder="Villa 12, Building / Street name"
+                placeholder="e.g. Apartment / Floor / Building name"
                 className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Block</label>
+                <input
+                  type="text"
+                  name="block"
+                  placeholder="e.g. 5"
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Street</label>
+                <input
+                  type="text"
+                  name="street"
+                  placeholder="e.g. 12 or Al Soor St"
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Avenue</label>
+                <input
+                  type="text"
+                  name="avenue"
+                  placeholder="e.g. 3 (optional)"
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">House / Building No.</label>
+                <input
+                  type="text"
+                  name="house_number"
+                  placeholder="e.g. 47"
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -167,7 +207,7 @@ export default function NewCustomerPage() {
                 <input
                   type="text"
                   name="area"
-                  placeholder="e.g. Dubai Marina"
+                  placeholder="e.g. Salmiya"
                   className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -176,7 +216,7 @@ export default function NewCustomerPage() {
                 <input
                   type="text"
                   name="city"
-                  placeholder="e.g. Dubai"
+                  placeholder="e.g. Kuwait City"
                   className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
