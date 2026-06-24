@@ -19,6 +19,10 @@ export async function PATCH(
     const profile = profileRaw as { organization_id: string; role: string } | null
     if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    if (profile.role === 'technician') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json()
 
     const ALLOWED_FIELDS = [

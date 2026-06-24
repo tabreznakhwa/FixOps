@@ -16,6 +16,10 @@ export default async function InventoryItemPage({
   const { id } = await params
   const supabase = await createClient()
 
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
+  const isTechnician = ((profileRaw as { role: string } | null)?.role ?? '') === 'technician'
+
   const { data: itemRaw } = await supabase
     .from('inventory_items')
     .select(
@@ -123,7 +127,7 @@ export default async function InventoryItemPage({
                   </p>
                 </div>
               )}
-              <div className="grid grid-cols-3 gap-4">
+              <div className={`grid gap-4 ${isTechnician ? 'grid-cols-2' : 'grid-cols-3'}`}>
                 <div className="text-center">
                   <p className={`text-3xl font-bold ${isLowStock ? 'text-red-600' : 'text-slate-900'}`}>
                     {item.current_stock}
@@ -134,45 +138,51 @@ export default async function InventoryItemPage({
                   <p className="text-3xl font-bold text-slate-400">{item.minimum_stock_level}</p>
                   <p className="text-xs text-slate-400 mt-0.5">Minimum Level</p>
                 </div>
-                <div className="text-center">
-                  <p className="text-xl font-bold text-slate-700">{formatCurrency(stockValue)}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Stock Value</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Pricing */}
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Pricing</h3>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <p className="text-xs text-slate-400 mb-0.5">Purchase Price</p>
-                  <p className="text-lg font-bold text-slate-900">{formatCurrency(item.purchase_price)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400 mb-0.5">Selling Price</p>
-                  <p className="text-lg font-bold text-slate-900">{formatCurrency(item.selling_price)}</p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-1 mb-0.5">
-                    <TrendingUp className="w-3 h-3 text-green-500" />
-                    <p className="text-xs text-slate-400">Margin</p>
+                {!isTechnician && (
+                  <div className="text-center">
+                    <p className="text-xl font-bold text-slate-700">{formatCurrency(stockValue)}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Stock Value</p>
                   </div>
-                  <p className="text-lg font-bold text-green-600">{margin.toFixed(1)}%</p>
-                </div>
+                )}
               </div>
             </div>
+
+            {/* Pricing — hidden for technicians */}
+            {!isTechnician && (
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Pricing</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-xs text-slate-400 mb-0.5">Purchase Price</p>
+                    <p className="text-lg font-bold text-slate-900">{formatCurrency(item.purchase_price)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 mb-0.5">Selling Price</p>
+                    <p className="text-lg font-bold text-slate-900">{formatCurrency(item.selling_price)}</p>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <TrendingUp className="w-3 h-3 text-green-500" />
+                      <p className="text-xs text-slate-400">Margin</p>
+                    </div>
+                    <p className="text-lg font-bold text-green-600">{margin.toFixed(1)}%</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Right column */}
-          <div>
-            <InventoryActions
-              itemId={item.id}
-              currentStock={item.current_stock}
-              unitOfMeasure={item.unit_of_measure}
-              isActive={item.is_active}
-            />
-          </div>
+          {/* Right column — hidden for technicians */}
+          {!isTechnician && (
+            <div>
+              <InventoryActions
+                itemId={item.id}
+                currentStock={item.current_stock}
+                unitOfMeasure={item.unit_of_measure}
+                isActive={item.is_active}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
