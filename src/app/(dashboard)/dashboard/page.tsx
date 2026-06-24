@@ -20,7 +20,8 @@ export default async function DashboardPage() {
   const role = (profileRaw as { role: string } | null)?.role ?? 'technician'
   const isTechnician = role === 'technician'
 
-  const today = new Date().toISOString().split('T')[0]
+  const todayISO = (() => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return d.toISOString() })()
+  const today = todayISO.split('T')[0]
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
 
   const [
@@ -39,7 +40,7 @@ export default async function DashboardPage() {
     supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('status', 'new'),
     supabase.from('complaints').select('*', { count: 'exact', head: true }).not('status', 'in', '(completed,verified,invoiced,paid,cancelled)'),
     supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('priority', 'emergency').not('status', 'in', '(completed,cancelled)'),
-    supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('status', 'completed').gte('updated_at', today),
+    (supabase as any).from('complaint_status_history').select('*', { count: 'exact', head: true }).eq('new_status', 'completed').gte('created_at', todayISO),
     // Skip financial queries for technicians
     isTechnician
       ? Promise.resolve({ data: [] })
