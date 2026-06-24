@@ -10,6 +10,10 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   const params = await searchParams
   const supabase = await createClient()
 
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
+  const isTechnician = ((profileRaw as { role: string } | null)?.role ?? '') === 'technician'
+
   let query = supabase
     .from('inventory_items')
     .select('id, item_code, item_name, category, brand, unit_of_measure, current_stock, minimum_stock_level, purchase_price, selling_price, storage_location, is_active')
@@ -35,12 +39,14 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
         title="Inventory"
         subtitle="Parts and materials management"
         actions={
-          <Link
-            href="/inventory/new"
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Add Item
-          </Link>
+          !isTechnician && (
+            <Link
+              href="/inventory/new"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Add Item
+            </Link>
+          )
         }
       />
 
@@ -50,7 +56,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
           {[
             { label: 'Total Items', value: items?.length ?? 0, color: 'text-blue-600', bg: 'bg-blue-50' },
             { label: 'Low Stock', value: lowStockCount, color: 'text-red-600', bg: 'bg-red-50', alert: lowStockCount > 0 },
-            { label: 'Stock Value', value: formatCurrency(totalValue), color: 'text-green-600', bg: 'bg-green-50', isText: true },
+            ...(!isTechnician ? [{ label: 'Stock Value', value: formatCurrency(totalValue), color: 'text-green-600', bg: 'bg-green-50', isText: true }] : []),
             { label: 'Categories', value: [...new Set(items?.map((i) => i.category).filter(Boolean))].length, color: 'text-purple-600', bg: 'bg-purple-50' },
           ].map(({ label, value, color, bg, alert, isText }) => (
             <div key={label} className={`bg-white rounded-xl border ${alert ? 'border-red-200' : 'border-slate-200'} p-4`}>
@@ -99,8 +105,8 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Item</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Category</th>
                   <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Stock</th>
-                  <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Purchase Price</th>
-                  <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Selling Price</th>
+                  {!isTechnician && <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Purchase Price</th>}
+                  {!isTechnician && <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Selling Price</th>}
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Location</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -139,12 +145,16 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
                           </p>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-right hidden lg:table-cell text-sm text-slate-600">
-                        {formatCurrency(item.purchase_price)}
-                      </td>
-                      <td className="px-4 py-3.5 text-right hidden lg:table-cell text-sm font-semibold text-slate-900">
-                        {formatCurrency(item.selling_price)}
-                      </td>
+                      {!isTechnician && (
+                        <td className="px-4 py-3.5 text-right hidden lg:table-cell text-sm text-slate-600">
+                          {formatCurrency(item.purchase_price)}
+                        </td>
+                      )}
+                      {!isTechnician && (
+                        <td className="px-4 py-3.5 text-right hidden lg:table-cell text-sm font-semibold text-slate-900">
+                          {formatCurrency(item.selling_price)}
+                        </td>
+                      )}
                       <td className="px-4 py-3.5 hidden md:table-cell text-sm text-slate-600">
                         {item.storage_location ?? '—'}
                       </td>

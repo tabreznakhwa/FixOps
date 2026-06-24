@@ -54,8 +54,11 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/login?error=account_disabled', request.url))
     }
 
-    // Technician: block supplier/vendor routes — they can view stock only
-    if (profile.role === 'technician' && pathname.startsWith('/suppliers')) {
+    // Technician: block supplier/vendor routes and stock-trial — stock list only
+    if (profile.role === 'technician' && (
+      pathname.startsWith('/suppliers') ||
+      pathname.startsWith('/inventory/stock-trial')
+    )) {
       return NextResponse.redirect(new URL('/dashboard?error=unauthorized', request.url))
     }
 
