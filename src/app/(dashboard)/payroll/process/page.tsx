@@ -3,7 +3,7 @@ import { Header } from '@/components/layout/Header'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
 import { ArrowLeft, Printer } from 'lucide-react'
-import { ProcessPayrollButton } from './ProcessPayrollButton'
+import { PayrollEntryForm } from './PayrollEntryForm'
 import { PaySalariesButton } from './PaySalariesButton'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
@@ -143,13 +143,7 @@ export default async function PayrollProcessPage({
         </form>
 
         {!run && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-800">No payroll run for {MONTHS[month - 1]} {year}</p>
-              <p className="text-xs text-amber-700 mt-0.5">Process payroll to generate payslips for all {staff.length} active employees.</p>
-            </div>
-            <ProcessPayrollButton month={month} year={year} staffCount={staff.length} />
-          </div>
+          <PayrollEntryForm month={month} year={year} staff={staff} />
         )}
 
         {run && (

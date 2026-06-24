@@ -26,8 +26,9 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
     .maybeSingle()
   const slip = slipRaw as {
     basic_salary: number; housing_allowance: number; transport_allowance: number
-    other_allowance: number; overtime_amount: number; gross_salary: number
-    deductions: number; advance_deduction: number; net_salary: number
+    food_allowance: number | null; other_allowance: number
+    overtime_amount: number; normal_overtime: number | null; friday_overtime: number | null
+    gross_salary: number; deductions: number; advance_deduction: number; net_salary: number
     payment_status: string; payment_date: string | null; payment_mode: string | null
   } | null
 
@@ -71,12 +72,14 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
 
   const monthLabel = `${MONTHS[run.salary_month - 1]} ${run.salary_year}`
 
+  const allowance = (slip.housing_allowance ?? 0) + (slip.transport_allowance ?? 0) + (slip.other_allowance ?? 0)
   const earnings = [
-    { label: 'Basic Salary', amount: slip.basic_salary },
-    { label: 'Housing Allowance', amount: slip.housing_allowance },
-    { label: 'Transport Allowance', amount: slip.transport_allowance },
-    { label: 'Other Allowance', amount: slip.other_allowance },
-    ...(slip.overtime_amount > 0 ? [{ label: 'Overtime (Fixed)', amount: slip.overtime_amount }] : []),
+    { label: 'Basic', amount: slip.basic_salary },
+    { label: 'Allowance', amount: allowance },
+    { label: 'Food Allowance', amount: slip.food_allowance ?? 0 },
+    { label: 'Fixed Over Time', amount: slip.overtime_amount ?? 0 },
+    { label: 'Normal Overtime', amount: slip.normal_overtime ?? 0 },
+    { label: 'Friday Overtime', amount: slip.friday_overtime ?? 0 },
   ].filter((e) => e.amount > 0)
 
   const deductions = [
