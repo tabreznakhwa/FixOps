@@ -23,8 +23,6 @@ export default function NewStaffPage() {
     department: '',
     joining_date: '',
     basic_salary: '',
-    housing_allowance: '',
-    transport_allowance: '',
     food_allowance: '',
     other_allowance: '',
     fixed_overtime_monthly: '',
@@ -51,8 +49,8 @@ export default function NewStaffPage() {
         body: JSON.stringify({
           ...form,
           basic_salary: Number(form.basic_salary),
-          housing_allowance: form.housing_allowance ? Number(form.housing_allowance) : 0,
-          transport_allowance: form.transport_allowance ? Number(form.transport_allowance) : 0,
+          housing_allowance: 0,
+          transport_allowance: 0,
           food_allowance: form.food_allowance ? Number(form.food_allowance) : 0,
           other_allowance: form.other_allowance ? Number(form.other_allowance) : 0,
           fixed_overtime_monthly: form.fixed_overtime_monthly ? Number(form.fixed_overtime_monthly) : 0,
@@ -170,19 +168,11 @@ export default function NewStaffPage() {
                 <input type="number" min="0" step="0.001" value={form.basic_salary} onChange={set('basic_salary')} placeholder="0.000" className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Housing Allowance</label>
-                <input type="number" min="0" step="0.001" value={form.housing_allowance} onChange={set('housing_allowance')} placeholder="0.000" className={inputClass} />
-              </div>
-              <div>
-                <label className={labelClass}>Transport Allowance</label>
-                <input type="number" min="0" step="0.001" value={form.transport_allowance} onChange={set('transport_allowance')} placeholder="0.000" className={inputClass} />
-              </div>
-              <div>
                 <label className={labelClass}>Food Allowance</label>
                 <input type="number" min="0" step="0.001" value={form.food_allowance} onChange={set('food_allowance')} placeholder="0.000" className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Other Allowance</label>
+                <label className={labelClass}>Allowance</label>
                 <input type="number" min="0" step="0.001" value={form.other_allowance} onChange={set('other_allowance')} placeholder="0.000" className={inputClass} />
               </div>
               <div>
@@ -197,8 +187,6 @@ export default function NewStaffPage() {
               <p className="text-xl font-bold text-slate-900">
                 KWD {(
                   (Number(form.basic_salary) || 0) +
-                  (Number(form.housing_allowance) || 0) +
-                  (Number(form.transport_allowance) || 0) +
                   (Number(form.food_allowance) || 0) +
                   (Number(form.other_allowance) || 0) +
                   (Number(form.fixed_overtime_monthly) || 0)

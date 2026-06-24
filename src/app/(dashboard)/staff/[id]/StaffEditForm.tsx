@@ -9,7 +9,7 @@ interface StaffRecord {
   passport_number: string | null; visa_number: string | null; emirates_id: string | null
   visa_expiry_date: string | null; passport_expiry_date: string | null
   basic_salary: number; housing_allowance: number; transport_allowance: number
-  food_allowance: number; other_allowance: number; fixed_overtime_monthly: number
+  food_allowance: number | null; other_allowance: number; fixed_overtime_monthly: number
   overtime_eligible: boolean; bank_name: string | null; iban: string | null
   employment_status: string; notes: string | null
 }
@@ -34,10 +34,9 @@ export function StaffEditForm({ staff }: { staff: StaffRecord }) {
     visa_expiry_date: staff.visa_expiry_date ?? '',
     passport_expiry_date: staff.passport_expiry_date ?? '',
     basic_salary: String(staff.basic_salary ?? 0),
-    housing_allowance: String(staff.housing_allowance ?? 0),
-    transport_allowance: String(staff.transport_allowance ?? 0),
     food_allowance: String(staff.food_allowance ?? 0),
-    other_allowance: String(staff.other_allowance ?? 0),
+    // Merge legacy housing+transport into other_allowance so existing totals are preserved
+    other_allowance: String((staff.housing_allowance ?? 0) + (staff.transport_allowance ?? 0) + (staff.other_allowance ?? 0)),
     fixed_overtime_monthly: String(staff.fixed_overtime_monthly ?? 0),
     overtime_eligible: staff.overtime_eligible ?? false,
     bank_name: staff.bank_name ?? '',
@@ -66,8 +65,8 @@ export function StaffEditForm({ staff }: { staff: StaffRecord }) {
         body: JSON.stringify({
           ...form,
           basic_salary: Number(form.basic_salary),
-          housing_allowance: Number(form.housing_allowance),
-          transport_allowance: Number(form.transport_allowance),
+          housing_allowance: 0,
+          transport_allowance: 0,
           food_allowance: Number(form.food_allowance),
           other_allowance: Number(form.other_allowance),
           fixed_overtime_monthly: Number(form.fixed_overtime_monthly),
@@ -162,10 +161,8 @@ export function StaffEditForm({ staff }: { staff: StaffRecord }) {
         <div className="grid grid-cols-2 gap-3">
           {[
             { key: 'basic_salary', label: 'Basic Salary' },
-            { key: 'housing_allowance', label: 'Housing' },
-            { key: 'transport_allowance', label: 'Transport' },
-            { key: 'food_allowance', label: 'Food' },
-            { key: 'other_allowance', label: 'Other' },
+            { key: 'food_allowance', label: 'Food Allowance' },
+            { key: 'other_allowance', label: 'Allowance' },
             { key: 'fixed_overtime_monthly', label: 'Fixed OT (Monthly)' },
           ].map(({ key, label }) => (
             <div key={key}>

@@ -45,7 +45,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
 
   const visaDays = daysUntil(s.visa_expiry_date)
   const passportDays = daysUntil(s.passport_expiry_date)
-  const grossSalary = s.basic_salary + s.housing_allowance + s.transport_allowance + s.food_allowance + s.other_allowance + (s.fixed_overtime_monthly ?? 0)
+  const grossSalary = s.basic_salary + (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + s.food_allowance + s.other_allowance + (s.fixed_overtime_monthly ?? 0)
 
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -175,10 +175,8 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
                 <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
                   {[
                     { label: 'Basic Salary', value: s.basic_salary },
-                    { label: 'Housing Allowance', value: s.housing_allowance },
-                    { label: 'Transport Allowance', value: s.transport_allowance },
+                    { label: 'Allowance', value: (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + s.other_allowance },
                     { label: 'Food Allowance', value: s.food_allowance },
-                    { label: 'Other Allowance', value: s.other_allowance },
                     ...(s.fixed_overtime_monthly > 0 ? [{ label: 'Fixed OT (Monthly)', value: s.fixed_overtime_monthly }] : []),
                   ].filter((r) => r.value > 0).map(({ label, value }) => (
                     <div key={label} className="flex justify-between py-1 border-b border-slate-50">
