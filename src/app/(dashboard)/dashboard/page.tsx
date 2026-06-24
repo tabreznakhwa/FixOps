@@ -8,6 +8,7 @@ import { TechnicianWorkload } from '@/components/dashboard/TechnicianWorkload'
 import { LowStockAlert } from '@/components/dashboard/LowStockAlert'
 import { formatDate } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Dashboard' }
 
 export default async function DashboardPage() {
@@ -38,7 +39,7 @@ export default async function DashboardPage() {
     supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('status', 'new'),
     supabase.from('complaints').select('*', { count: 'exact', head: true }).not('status', 'in', '(completed,verified,invoiced,paid,cancelled)'),
     supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('priority', 'emergency').not('status', 'in', '(completed,cancelled)'),
-    supabase.from('work_orders').select('*', { count: 'exact', head: true }).eq('status', 'completed').gte('updated_at', today),
+    supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('status', 'completed').gte('updated_at', today),
     // Skip financial queries for technicians
     isTechnician
       ? Promise.resolve({ data: [] })
