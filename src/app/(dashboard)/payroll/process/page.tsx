@@ -51,7 +51,7 @@ export default async function PayrollProcessPage({
     id: string; staff_code: string; full_name: string; designation: string | null; department: string | null
     basic_salary: number; housing_allowance: number; transport_allowance: number
     food_allowance: number | null; other_allowance: number
-    fixed_overtime_monthly: number | null
+    fixed_overtime_monthly: number | null; advance_balance: number | null
     overtime_eligible: boolean; bank_name: string | null; iban: string | null
   }>
 

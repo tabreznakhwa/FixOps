@@ -5,6 +5,7 @@ interface StaffEntry {
   staff_id: string
   normal_overtime: number
   friday_overtime: number
+  advance_deduction: number
 }
 
 export async function POST(request: Request) {
@@ -44,13 +45,14 @@ export async function POST(request: Request) {
     id: string; basic_salary: number; housing_allowance: number; transport_allowance: number
     food_allowance: number | null; other_allowance: number
     fixed_overtime_monthly: number | null; overtime_eligible: boolean
+    advance_balance: number | null
   }>
 
   if (staff.length === 0) return NextResponse.json({ error: 'No active staff found' }, { status: 400 })
 
   const entryMap = new Map(entries.map((e) => [e.staff_id, e]))
 
-  let totalBasic = 0, totalAllowances = 0, totalOvertime = 0, totalNet = 0
+  let totalBasic = 0, totalAllowances = 0, totalOvertime = 0, totalDeductions = 0, totalNet = 0
 
   const slips = staff.map((s) => {
     const entry = entryMap.get(s.id)
@@ -62,15 +64,17 @@ export async function POST(request: Request) {
     const fixedOT = s.fixed_overtime_monthly ?? 0
     const normalOT = entry?.normal_overtime ?? 0
     const fridayOT = entry?.friday_overtime ?? 0
+    const advDeduct = Math.min(entry?.advance_deduction ?? 0, s.advance_balance ?? 0)
 
     const totalAllowance = housing + transport + food + other
     const totalOT = fixedOT + normalOT + fridayOT
     const gross = basic + totalAllowance + totalOT
-    const net = gross
+    const net = gross - advDeduct
 
     totalBasic += basic
     totalAllowances += totalAllowance
     totalOvertime += totalOT
+    totalDeductions += advDeduct
     totalNet += net
 
     return {
@@ -86,7 +90,7 @@ export async function POST(request: Request) {
       friday_overtime: fridayOT,
       gross_salary: gross,
       deductions: 0,
-      advance_deduction: 0,
+      advance_deduction: advDeduct,
       net_salary: net,
       payment_status: 'pending',
     }
@@ -102,7 +106,7 @@ export async function POST(request: Request) {
       total_basic: totalBasic,
       total_allowances: totalAllowances,
       total_overtime: totalOvertime,
-      total_deductions: 0,
+      total_deductions: totalDeductions,
       total_net: totalNet,
       processed_by: user.id,
       processed_at: new Date().toISOString(),
@@ -115,6 +119,15 @@ export async function POST(request: Request) {
   const slipsWithRun = slips.map((sl) => ({ ...sl, salary_run_id: runData.id }))
   const { error: slipError } = await adminDb.from('salary_slips').insert(slipsWithRun)
   if (slipError) return NextResponse.json({ error: slipError.message }, { status: 500 })
+
+  // Decrement advance_balance for staff who had deductions
+  const deductionUpdates = slips.filter((sl) => sl.advance_deduction > 0)
+  for (const sl of deductionUpdates) {
+    const staffRecord = staff.find((s) => s.id === sl.staff_id)
+    if (!staffRecord) continue
+    const newBalance = Math.max(0, (staffRecord.advance_balance ?? 0) - sl.advance_deduction)
+    await adminDb.from('staff').update({ advance_balance: newBalance }).eq('id', sl.staff_id)
+  }
 
   return NextResponse.json({ success: true, runId: runData.id })
 }

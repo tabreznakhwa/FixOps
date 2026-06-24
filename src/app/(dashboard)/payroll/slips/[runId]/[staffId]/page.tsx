@@ -82,6 +82,11 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
     { label: 'Friday Overtime', amount: slip.friday_overtime ?? 0 },
   ].filter((e) => e.amount > 0)
 
+  // Fetch current advance balance to show remaining on payslip
+  const { data: staffBalanceRaw } = await (supabase as any)
+    .from('staff').select('advance_balance').eq('id', staffId).maybeSingle()
+  const remainingAdvance = (staffBalanceRaw as { advance_balance: number | null } | null)?.advance_balance ?? 0
+
   const deductions = [
     ...(slip.deductions > 0 ? [{ label: 'Deductions', amount: slip.deductions }] : []),
     ...(slip.advance_deduction > 0 ? [{ label: 'Advance Recovery', amount: slip.advance_deduction }] : []),
@@ -168,6 +173,14 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
                 <span className="text-slate-700">Total Deductions</span>
                 <span className="text-red-600">{formatCurrency((slip.deductions ?? 0) + (slip.advance_deduction ?? 0))}</span>
               </div>
+              {slip.advance_deduction > 0 && (
+                <div className="mt-2 flex justify-between text-xs text-slate-500">
+                  <span>Advance balance remaining</span>
+                  <span className={remainingAdvance > 0 ? 'font-semibold text-amber-600' : 'font-semibold text-green-600'}>
+                    {remainingAdvance > 0 ? formatCurrency(remainingAdvance) : 'Cleared'}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

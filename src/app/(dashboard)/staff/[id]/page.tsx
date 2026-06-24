@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Phone, Mail, CreditCard, Calendar, Briefcase, DollarSign, AlertTriangle } from 'lucide-react'
 import { formatCurrency, formatDate, daysUntil } from '@/lib/utils'
 import { StaffEditForm } from './StaffEditForm'
+import { StaffAdvancePanel } from './StaffAdvancePanel'
 
 export const metadata = { title: 'Staff Profile' }
 
@@ -41,6 +42,15 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
   const slips = (slipsRaw ?? []) as Array<{
     net_salary: number; payment_status: string
     salary_runs: { salary_month: number; salary_year: number } | null
+  }>
+
+  const { data: advancesRaw } = await (supabase as any)
+    .from('staff_advances')
+    .select('id, type, amount, issued_date, notes')
+    .eq('staff_id', id)
+    .order('issued_date', { ascending: false })
+  const advances = (advancesRaw ?? []) as Array<{
+    id: string; type: string; amount: number; issued_date: string; notes: string | null
   }>
 
   const visaDays = daysUntil(s.visa_expiry_date)
@@ -236,6 +246,12 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
                 </div>
               </div>
             )}
+
+            <StaffAdvancePanel
+              staffId={s.id}
+              currentBalance={s.advance_balance ?? 0}
+              advances={advances}
+            />
 
             {s.notes && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
