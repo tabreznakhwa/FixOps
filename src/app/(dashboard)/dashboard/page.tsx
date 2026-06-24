@@ -40,7 +40,7 @@ export default async function DashboardPage() {
     supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('status', 'new'),
     supabase.from('complaints').select('*', { count: 'exact', head: true }).not('status', 'in', '(completed,verified,invoiced,paid,cancelled)'),
     supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('priority', 'emergency').not('status', 'in', '(completed,cancelled)'),
-    (supabase as any).from('complaint_status_history').select('*', { count: 'exact', head: true }).eq('new_status', 'completed').gte('created_at', todayISO),
+    supabase.from('complaints').select('*', { count: 'exact', head: true }).not('status', 'eq', 'cancelled').gte('closed_at' as any, todayISO),
     // Skip financial queries for technicians
     isTechnician
       ? Promise.resolve({ data: [] })

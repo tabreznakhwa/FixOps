@@ -24,24 +24,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
+    const now = new Date().toISOString()
+    const complaintUpdate: Record<string, unknown> = { ...updates, updated_at: now }
+    // Stamp closed_at once when status reaches completed
+    if (updates.status === 'completed') complaintUpdate.closed_at = now
+
     const supabase = createAdminClient()
     const { error } = await (supabase as any)
       .from('complaints')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update(complaintUpdate)
       .eq('id', id)
 
     if (error) throw error
 
-    // Log status change to history so the dashboard can accurately count completions
+    // Also log to status history (best-effort, non-blocking)
     if (updates.status && orgId) {
       await (supabase as any)
         .from('complaint_status_history')
-        .insert({
-          organization_id: orgId,
-          complaint_id: id,
-          new_status: updates.status,
-          updated_by: user.id,
-        })
+        .insert({ organization_id: orgId, complaint_id: id, new_status: updates.status, updated_by: user.id })
     }
 
     return NextResponse.json({ success: true })
