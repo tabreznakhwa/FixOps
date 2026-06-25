@@ -17,7 +17,7 @@ export default async function CompanySettingsPage() {
   const admin = createAdminClient() as any
   const { data: orgRaw } = profile?.organization_id
     ? await admin.from('organizations')
-        .select('name, email, phone, address, city, country, currency, vat_number, vat_rate, logo_url, bank_name, bank_account_number, bank_iban, bank_swift')
+        .select('name, email, phone, address, city, country, currency, vat_number, vat_rate, logo_url, bank_name, bank_account_number, bank_iban, bank_swift, opening_cash_balance, opening_bank_balance, opening_balance_date')
         .eq('id', profile.organization_id)
         .single()
     : { data: null }
@@ -26,6 +26,7 @@ export default async function CompanySettingsPage() {
     name: '', email: null, phone: null, address: null, city: null, country: 'Kuwait',
     currency: 'KWD', vat_number: null, vat_rate: null, logo_url: null,
     bank_name: null, bank_account_number: null, bank_iban: null, bank_swift: null,
+    opening_cash_balance: 0, opening_bank_balance: 0, opening_balance_date: null,
   }
 
   return (

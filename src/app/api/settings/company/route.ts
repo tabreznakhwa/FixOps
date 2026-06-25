@@ -15,7 +15,7 @@ export async function GET() {
 
   const admin = createAdminClient() as any
   const { data } = await admin.from('organizations')
-    .select('name, email, phone, address, city, country, currency, vat_number, vat_rate, logo_url, bank_name, bank_account_number, bank_iban, bank_swift')
+    .select('name, email, phone, address, city, country, currency, vat_number, vat_rate, logo_url, bank_name, bank_account_number, bank_iban, bank_swift, opening_cash_balance, opening_bank_balance, opening_balance_date')
     .eq('id', profile.organization_id)
     .single()
 
@@ -47,6 +47,9 @@ export async function PATCH(request: NextRequest) {
     bank_account_number: body.bank_account_number || null,
     bank_iban: body.bank_iban || null,
     bank_swift: body.bank_swift || null,
+    opening_cash_balance: body.opening_cash_balance != null ? Number(body.opening_cash_balance) : 0,
+    opening_bank_balance: body.opening_bank_balance != null ? Number(body.opening_bank_balance) : 0,
+    opening_balance_date: body.opening_balance_date || null,
     updated_at: new Date().toISOString(),
   }).eq('id', profile.organization_id)
 

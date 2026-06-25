@@ -8,6 +8,7 @@ interface Org {
   currency: string | null; vat_number: string | null; vat_rate: number | null
   logo_url: string | null; bank_name: string | null; bank_account_number: string | null
   bank_iban: string | null; bank_swift: string | null
+  opening_cash_balance: number | null; opening_bank_balance: number | null; opening_balance_date: string | null
 }
 
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
@@ -151,6 +152,37 @@ export function CompanySettingsForm({ org }: { org: Org }) {
           <div>
             <label className={labelClass}>SWIFT / BIC Code</label>
             <input value={form.bank_swift ?? ''} onChange={e => set('bank_swift', e.target.value)} className={inputClass} placeholder="e.g. NBOKKWKW" />
+          </div>
+        </div>
+      </div>
+
+      {/* Opening Balances */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <h3 className={sectionTitle}>Opening Balances</h3>
+        <p className="text-xs text-slate-500 mb-4">Set these once before going live. They appear as the starting balance in the Cash Book and Bank Book.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className={labelClass}>Opening Date</label>
+            <input type="date" value={form.opening_balance_date ?? ''}
+              onChange={e => set('opening_balance_date', e.target.value || null)}
+              className={inputClass} />
+            <p className="text-xs text-slate-400 mt-1">Date your books start</p>
+          </div>
+          <div>
+            <label className={labelClass}>Opening Cash Balance (KWD)</label>
+            <input type="number" min="0" step="0.001" placeholder="0.000"
+              value={form.opening_cash_balance ?? ''}
+              onChange={e => set('opening_cash_balance', e.target.value ? Number(e.target.value) : null)}
+              className={inputClass} />
+            <p className="text-xs text-slate-400 mt-1">Cash in hand on opening date</p>
+          </div>
+          <div>
+            <label className={labelClass}>Opening Bank Balance (KWD)</label>
+            <input type="number" min="0" step="0.001" placeholder="0.000"
+              value={form.opening_bank_balance ?? ''}
+              onChange={e => set('opening_bank_balance', e.target.value ? Number(e.target.value) : null)}
+              className={inputClass} />
+            <p className="text-xs text-slate-400 mt-1">Bank account balance on opening date</p>
           </div>
         </div>
       </div>

@@ -26,6 +26,13 @@ export default async function BankBookPage({
   const from = params.from ?? firstOfMonth
   const to = params.to ?? today
 
+  // Fetch opening balance
+  const { data: orgRaw } = await (supabase as any)
+    .from('organizations').select('opening_bank_balance, opening_balance_date').limit(1).single()
+  const org = (orgRaw ?? {}) as { opening_bank_balance: number | null; opening_balance_date: string | null }
+  const openingBank = org.opening_bank_balance ?? 0
+  const openingDate = org.opening_balance_date ?? null
+
   const { data: receiptsRaw } = await (supabase as any)
     .from('payments')
     .select('id, payment_date, payment_number, amount_received, payment_mode, reference_number, notes, customers(full_name)')
@@ -106,7 +113,7 @@ export default async function BankBookPage({
 
   const totalReceipts = entries.reduce((s, e) => s + e.receipts, 0)
   const totalPayments = entries.reduce((s, e) => s + e.payments, 0)
-  const closingBalance = totalReceipts - totalPayments
+  const closingBalance = openingBank + totalReceipts - totalPayments
 
   return (
     <div className="animate-fade-in">
@@ -185,29 +192,42 @@ export default async function BankBookPage({
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {(() => {
-                    let running = 0
-                    return entries.map((e, i) => {
-                      running += e.receipts - e.payments
-                      return (
-                        <tr key={i} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{formatDate(e.date)}</td>
-                          <td className="px-4 py-3 text-sm text-slate-800">{e.narration}</td>
-                          <td className="px-4 py-3">
-                            <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">{e.mode}</span>
-                          </td>
-                          <td className="px-4 py-3 text-xs text-slate-400 font-mono">{e.ref}</td>
-                          <td className="px-4 py-3 text-right text-sm font-medium text-green-700">
-                            {e.receipts > 0 ? formatCurrency(e.receipts) : '—'}
-                          </td>
-                          <td className="px-4 py-3 text-right text-sm font-medium text-red-600">
-                            {e.payments > 0 ? formatCurrency(e.payments) : '—'}
-                          </td>
-                          <td className={`px-5 py-3 text-right text-sm font-bold ${running >= 0 ? 'text-slate-800' : 'text-red-600'}`}>
-                            {formatCurrency(running)}
-                          </td>
+                    let running = openingBank
+                    return [
+                      ...(openingBank > 0 ? [(
+                        <tr key="opening" className="bg-blue-50">
+                          <td className="px-5 py-3 text-sm text-slate-500 whitespace-nowrap">{openingDate ? formatDate(openingDate) : '—'}</td>
+                          <td className="px-4 py-3 text-sm font-semibold text-blue-700">Opening Balance b/f</td>
+                          <td className="px-4 py-3"><span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Opening</span></td>
+                          <td className="px-4 py-3 text-xs text-slate-400 font-mono">—</td>
+                          <td className="px-4 py-3 text-right text-sm font-semibold text-blue-700">{formatCurrency(openingBank)}</td>
+                          <td className="px-4 py-3 text-right text-sm text-slate-400">—</td>
+                          <td className="px-5 py-3 text-right text-sm font-bold text-blue-700">{formatCurrency(openingBank)}</td>
                         </tr>
-                      )
-                    })
+                      )] : []),
+                      ...entries.map((e, i) => {
+                        running += e.receipts - e.payments
+                        return (
+                          <tr key={i} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{formatDate(e.date)}</td>
+                            <td className="px-4 py-3 text-sm text-slate-800">{e.narration}</td>
+                            <td className="px-4 py-3">
+                              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">{e.mode}</span>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-slate-400 font-mono">{e.ref}</td>
+                            <td className="px-4 py-3 text-right text-sm font-medium text-green-700">
+                              {e.receipts > 0 ? formatCurrency(e.receipts) : '—'}
+                            </td>
+                            <td className="px-4 py-3 text-right text-sm font-medium text-red-600">
+                              {e.payments > 0 ? formatCurrency(e.payments) : '—'}
+                            </td>
+                            <td className={`px-5 py-3 text-right text-sm font-bold ${running >= 0 ? 'text-slate-800' : 'text-red-600'}`}>
+                              {formatCurrency(running)}
+                            </td>
+                          </tr>
+                        )
+                      }),
+                    ]
                   })()}
                 </tbody>
                 <tfoot>

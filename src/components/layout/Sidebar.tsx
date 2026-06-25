@@ -49,6 +49,7 @@ const navGroups: Array<{
     module: 'inventory' as const,
     items: [
       { href: '/inventory', label: 'Inventory', icon: Package, exact: true },
+      { href: '/inventory/opening-stock', label: 'Opening Stock', icon: Layers, excludeRoles: ['technician'] },
       { href: '/inventory/stock-trial', label: 'Stock Trial', icon: Layers, excludeRoles: ['technician'] },
       { href: '/suppliers', label: 'Suppliers & PO', icon: Building2, exact: true, excludeRoles: ['technician'] },
       { href: '/suppliers/purchase-register', label: 'Purchase Register', icon: ShoppingCart, excludeRoles: ['technician'] },
