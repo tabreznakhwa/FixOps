@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { Plus, Search, Phone, MapPin, Building2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Phone, MapPin, Building2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { CustomerSearch } from './CustomerSearch'
 import { getStatusColor } from '@/lib/utils'
 
 export const metadata = { title: 'Customers' }
@@ -73,15 +74,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
       <div className="p-6 space-y-4">
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
-          <form className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              name="q"
-              defaultValue={params.q}
-              placeholder="Search by name, company, mobile, or code..."
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </form>
+          <CustomerSearch />
 
           <div className="flex gap-2 flex-wrap">
             {['individual', 'company', 'amc', 'one_time', 'credit'].map((t) => (
