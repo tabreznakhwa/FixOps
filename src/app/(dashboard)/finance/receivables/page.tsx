@@ -2,21 +2,34 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AlertTriangle, TrendingDown, Clock, Users } from 'lucide-react'
+import Link from 'next/link'
 
 export const metadata = { title: 'Receivables' }
 
 export default async function ReceivablesPage() {
   const supabase = await createClient()
 
-  const { data: receivablesRaw } = await supabase
-    .from('invoices')
-    .select('customer_id, balance_due, due_date, status, invoice_date, customers(full_name, mobile_number, area)')
-    .in('status', ['issued', 'partial', 'overdue'])
-    .gt('balance_due', 0)
-    .order('balance_due', { ascending: false })
-  const receivables = receivablesRaw as unknown as Array<{
+  const [receivablesRes, openingRes] = await Promise.all([
+    (supabase as any)
+      .from('invoices')
+      .select('customer_id, balance_due, due_date, status, invoice_date, customers(id, full_name, mobile_number, area)')
+      .in('status', ['issued', 'partial', 'overdue'])
+      .gt('balance_due', 0)
+      .order('balance_due', { ascending: false }),
+    (supabase as any)
+      .from('opening_receivables')
+      .select('customer_id, balance_due, due_date, invoice_date, customers(id, full_name, mobile_number, area)')
+      .gt('balance_due', 0),
+  ])
+
+  const receivables = (receivablesRes.data ?? []) as Array<{
     customer_id: string; balance_due: number; due_date: string | null; status: string; invoice_date: string;
-    customers: { full_name: string; mobile_number: string; area: string | null } | null
+    customers: { id: string; full_name: string; mobile_number: string; area: string | null } | null
+  }>
+
+  const openingReceivables = (openingRes.data ?? []) as Array<{
+    customer_id: string; balance_due: number; due_date: string | null; invoice_date: string;
+    customers: { id: string; full_name: string; mobile_number: string; area: string | null } | null
   }>
 
   // Group by customer
@@ -29,8 +42,8 @@ export default async function ReceivablesPage() {
     invoices: { balance_due: number; due_date: string | null; status: string; invoice_date: string }[]
   }> = {}
 
-  receivables?.forEach((inv) => {
-    const customer = inv.customers as { full_name: string; mobile_number: string; area: string | null } | null
+  receivables.forEach((inv) => {
+    const customer = inv.customers
     if (!customer) return
     if (!customerMap[inv.customer_id]) {
       customerMap[inv.customer_id] = {
@@ -51,12 +64,38 @@ export default async function ReceivablesPage() {
     })
   })
 
+  openingReceivables.forEach((op) => {
+    const customer = op.customers
+    if (!customer) return
+    if (!customerMap[op.customer_id]) {
+      customerMap[op.customer_id] = {
+        customer_id: op.customer_id,
+        full_name: customer.full_name,
+        mobile_number: customer.mobile_number,
+        area: customer.area,
+        total_balance: 0,
+        invoices: [],
+      }
+    }
+    customerMap[op.customer_id].total_balance += op.balance_due
+    customerMap[op.customer_id].invoices.push({
+      balance_due: op.balance_due,
+      due_date: op.due_date,
+      status: 'opening',
+      invoice_date: op.invoice_date,
+    })
+  })
+
   const customers = Object.values(customerMap).sort((a, b) => b.total_balance - a.total_balance)
 
   // Aging buckets
   const now = new Date()
   const aging = { current: 0, '30': 0, '60': 0, '90+': 0 }
-  receivables?.forEach((inv) => {
+  const allForAging = [
+    ...receivables.map(i => ({ balance_due: i.balance_due, due_date: i.due_date })),
+    ...openingReceivables.map(i => ({ balance_due: i.balance_due, due_date: i.due_date })),
+  ]
+  allForAging.forEach((inv) => {
     if (!inv.due_date) { aging.current += inv.balance_due; return }
     const daysPast = Math.floor((now.getTime() - new Date(inv.due_date).getTime()) / (1000 * 60 * 60 * 24))
     if (daysPast <= 0) aging.current += inv.balance_due
@@ -69,7 +108,13 @@ export default async function ReceivablesPage() {
 
   return (
     <div className="animate-fade-in">
-      <Header title="Receivables" subtitle="Outstanding customer balances" />
+      <Header title="Receivables" subtitle="Outstanding customer balances"
+        actions={
+          <Link href="/finance/opening-receivables" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
+            Opening Receivables
+          </Link>
+        }
+      />
 
       <div className="p-6 space-y-6">
         {/* Total + Aging */}

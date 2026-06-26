@@ -1,0 +1,68 @@
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
+
+async function getOrgId() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data } = await (supabase as any).from('users').select('organization_id, role').eq('id', user.id).single()
+  return data as { organization_id: string; role: string } | null
+}
+
+export async function GET() {
+  const profile = await getOrgId()
+  if (!profile) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
+  const admin = createAdminClient() as any
+  const { data, error } = await admin
+    .from('opening_payables')
+    .select('*, suppliers(supplier_name, supplier_code)')
+    .eq('organization_id', profile.organization_id)
+    .order('bill_date', { ascending: true })
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data)
+}
+
+export async function POST(request: Request) {
+  const profile = await getOrgId()
+  if (!profile) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  if (!['owner', 'admin', 'manager'].includes(profile.role))
+    return NextResponse.json({ error: 'Permission denied' }, { status: 403 })
+
+  const body = await request.json()
+  const { supplier_id, bill_ref, bill_date, due_date, amount, notes } = body
+
+  if (!supplier_id || !bill_ref || !bill_date || !amount)
+    return NextResponse.json({ error: 'Required fields missing' }, { status: 400 })
+
+  const admin = createAdminClient() as any
+  const { data, error } = await admin.from('opening_payables').insert({
+    organization_id: profile.organization_id,
+    supplier_id,
+    bill_ref: bill_ref.trim(),
+    bill_date,
+    due_date: due_date || null,
+    amount: Number(amount),
+    balance_due: Number(amount),
+    notes: notes?.trim() || null,
+  }).select().single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data)
+}
+
+export async function DELETE(request: Request) {
+  const profile = await getOrgId()
+  if (!profile) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  if (!['owner', 'admin', 'manager'].includes(profile.role))
+    return NextResponse.json({ error: 'Permission denied' }, { status: 403 })
+
+  const { id } = await request.json()
+  const admin = createAdminClient() as any
+  const { error } = await admin.from('opening_payables').delete()
+    .eq('id', id).eq('organization_id', profile.organization_id)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true })
+}

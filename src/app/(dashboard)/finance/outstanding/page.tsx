@@ -25,18 +25,41 @@ export default async function OutstandingPage({
 
   if (params.customer) query = query.eq('customer_id', params.customer)
 
-  const { data: invoicesRaw } = await query.limit(200)
+  let openingQuery = (supabase as any)
+    .from('opening_receivables')
+    .select('id, invoice_ref, invoice_date, due_date, amount, balance_due, customers(id, full_name, company_name, customer_code, mobile_number)')
+    .gt('balance_due', 0)
+    .order('due_date', { ascending: true })
+
+  if (params.customer) openingQuery = openingQuery.eq('customer_id', params.customer)
+
+  const [{ data: invoicesRaw }, { data: openingRaw }] = await Promise.all([
+    query.limit(200),
+    openingQuery.limit(200),
+  ])
+
   const invoices = (invoicesRaw ?? []) as Array<{
     id: string; invoice_number: string; invoice_date: string; due_date: string | null
     total_amount: number; amount_paid: number; balance_due: number; status: string
     customers: { id: string; full_name: string; company_name: string | null; customer_code: string; mobile_number: string } | null
   }>
 
+  const openingInvoices = (openingRaw ?? []) as Array<{
+    id: string; invoice_ref: string; invoice_date: string; due_date: string | null
+    amount: number; balance_due: number
+    customers: { id: string; full_name: string; company_name: string | null; customer_code: string; mobile_number: string } | null
+  }>
+
   const totalOutstanding = invoices.reduce((s, i) => s + i.balance_due, 0)
+    + openingInvoices.reduce((s, i) => s + i.balance_due, 0)
 
   // Ageing buckets
   const today = new Date()
-  const ageing = invoices.reduce(
+  const allForAgeing = [
+    ...invoices.map(i => ({ balance_due: i.balance_due, due_date: i.due_date })),
+    ...openingInvoices.map(i => ({ balance_due: i.balance_due, due_date: i.due_date })),
+  ]
+  const ageing = allForAgeing.reduce(
     (acc, inv) => {
       if (!inv.due_date) { acc.current += inv.balance_due; return acc }
       const days = Math.floor((today.getTime() - new Date(inv.due_date).getTime()) / 86400000)
@@ -61,7 +84,15 @@ export default async function OutstandingPage({
         <OrgLetterhead title="Bill-wise Outstanding" subtitle={`As of ${new Date().toLocaleDateString('en-GB')}`} />
       </div>
       <Header title="Bill-wise Outstanding" subtitle="Customer invoices with pending balances"
-        actions={<PrintActions />} />
+        actions={
+          <div className="flex items-center gap-2 print:hidden">
+            <Link href="/finance/opening-receivables" className="px-3 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
+              Opening Receivables
+            </Link>
+            <PrintActions />
+          </div>
+        }
+      />
 
       <div className="p-6 space-y-5">
         {/* Ageing summary */}
@@ -84,12 +115,12 @@ export default async function OutstandingPage({
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <h3 className="font-semibold text-slate-900">
               Outstanding Invoices
-              <span className="ml-2 text-sm font-normal text-slate-500">({invoices.length})</span>
+              <span className="ml-2 text-sm font-normal text-slate-500">({invoices.length + openingInvoices.length})</span>
             </h3>
             <p className="text-sm font-bold text-red-600">Total: {formatCurrency(totalOutstanding)}</p>
           </div>
 
-          {invoices.length === 0 ? (
+          {invoices.length === 0 && openingInvoices.length === 0 ? (
             <div className="p-10 text-center">
               <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="text-sm text-slate-400">No outstanding invoices</p>
@@ -110,6 +141,31 @@ export default async function OutstandingPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
+                  {openingInvoices.map((inv) => {
+                    const isOverdue = inv.due_date && new Date(inv.due_date) < today
+                    return (
+                      <tr key={`op-${inv.id}`} className="hover:bg-amber-50 transition-colors bg-amber-50/40">
+                        <td className="px-5 py-3 text-sm font-mono text-amber-700 font-semibold">{inv.invoice_ref}</td>
+                        <td className="px-4 py-3">
+                          <p className="text-sm font-semibold text-slate-800">{inv.customers?.full_name}</p>
+                          {inv.customers?.company_name && <p className="text-xs text-slate-400">{inv.customers.company_name}</p>}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{formatDate(inv.invoice_date)}</td>
+                        <td className={`px-4 py-3 text-sm ${isOverdue ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
+                          {inv.due_date ? formatDate(inv.due_date) : '—'}
+                          {isOverdue && <span className="ml-1 text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">Overdue</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                            Opening Bal
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm text-slate-700">{formatCurrency(inv.amount)}</td>
+                        <td className="px-4 py-3 text-right text-sm text-green-700">—</td>
+                        <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(inv.balance_due)}</td>
+                      </tr>
+                    )
+                  })}
                   {invoices.map((inv) => {
                     const isOverdue = inv.due_date && new Date(inv.due_date) < today && inv.status !== 'paid'
                     return (
@@ -144,7 +200,10 @@ export default async function OutstandingPage({
                   <tr className="bg-slate-50 border-t border-slate-200">
                     <td colSpan={5} className="px-5 py-3 text-sm font-bold text-slate-700">Total</td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">
-                      {formatCurrency(invoices.reduce((s, i) => s + i.total_amount, 0))}
+                      {formatCurrency(
+                        invoices.reduce((s, i) => s + i.total_amount, 0)
+                        + openingInvoices.reduce((s, i) => s + i.amount, 0)
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-green-700">
                       {formatCurrency(invoices.reduce((s, i) => s + i.amount_paid, 0))}

@@ -67,6 +67,10 @@ export function PayrollEntryForm({ month, year, staff }: Props) {
 
   const hasAdvances = staff.some(s => (s.advance_balance ?? 0) > 0)
 
+  function calcOT(basic: number, hrs: number, multiplier: number) {
+    return (basic / 30 / 8) * multiplier * hrs
+  }
+
   return (
     <div className="space-y-4">
       {error && (
@@ -79,7 +83,7 @@ export function PayrollEntryForm({ month, year, staff }: Props) {
             <h3 className="font-semibold text-slate-900">Enter Overtime — {staff.length} Employees</h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Basic, Allowances, Food Allowance and Fixed OT are pre-filled from staff profiles.
-              Enter Normal OT, Friday OT{hasAdvances ? ', and Advance Recovery' : ''} per employee, then process.
+              Enter Normal OT (×1.25) and Friday OT (×1.5) hours{hasAdvances ? ', and Advance Recovery' : ''} — amounts are calculated automatically.
             </p>
           </div>
           <button
@@ -101,10 +105,10 @@ export function PayrollEntryForm({ month, year, staff }: Props) {
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Food Allow.</th>
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Fixed OT</th>
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">
-                  Normal OT <span className="text-blue-500">✎</span>
+                  Normal OT hrs <span className="text-blue-500">✎</span>
                 </th>
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">
-                  Friday OT <span className="text-blue-500">✎</span>
+                  Friday OT hrs <span className="text-blue-500">✎</span>
                 </th>
                 {hasAdvances && (
                   <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">
@@ -121,12 +125,14 @@ export function PayrollEntryForm({ month, year, staff }: Props) {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {staff.map((s) => {
-                const normalOT = parseFloat(entries[s.id]?.normal_overtime || '0') || 0
-                const fridayOT = parseFloat(entries[s.id]?.friday_overtime || '0') || 0
+                const normalOTHrs = parseFloat(entries[s.id]?.normal_overtime || '0') || 0
+                const fridayOTHrs = parseFloat(entries[s.id]?.friday_overtime || '0') || 0
                 const advDeduct = parseFloat(entries[s.id]?.advance_deduction || '0') || 0
                 const allowance = (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + (s.other_allowance ?? 0)
                 const food = s.food_allowance ?? 0
                 const fixedOT = s.fixed_overtime_monthly ?? 0
+                const normalOT = calcOT(s.basic_salary ?? 0, normalOTHrs, 1.25)
+                const fridayOT = calcOT(s.basic_salary ?? 0, fridayOTHrs, 1.5)
                 const gross = (s.basic_salary ?? 0) + allowance + food + fixedOT + normalOT + fridayOT
                 const net = gross - advDeduct
                 const advBalance = s.advance_balance ?? 0
@@ -142,16 +148,18 @@ export function PayrollEntryForm({ month, year, staff }: Props) {
                     <td className="px-4 py-3 text-right text-sm text-slate-600">{food > 0 ? formatCurrency(food) : '—'}</td>
                     <td className="px-4 py-3 text-right text-sm text-slate-600">{fixedOT > 0 ? formatCurrency(fixedOT) : '—'}</td>
                     <td className="px-4 py-3 text-right">
-                      <input type="number" min="0" step="0.001" placeholder="0.000"
+                      <input type="number" min="0" step="0.5" placeholder="0"
                         value={entries[s.id]?.normal_overtime}
                         onChange={(e) => setEntry(s.id, 'normal_overtime', e.target.value)}
                         className={inputCls} />
+                      {normalOTHrs > 0 && <p className="text-xs text-blue-600 mt-0.5">{formatCurrency(normalOT)}</p>}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <input type="number" min="0" step="0.001" placeholder="0.000"
+                      <input type="number" min="0" step="0.5" placeholder="0"
                         value={entries[s.id]?.friday_overtime}
                         onChange={(e) => setEntry(s.id, 'friday_overtime', e.target.value)}
                         className={inputCls} />
+                      {fridayOTHrs > 0 && <p className="text-xs text-blue-600 mt-0.5">{formatCurrency(fridayOT)}</p>}
                     </td>
                     {hasAdvances && (
                       <td className="px-4 py-3 text-right text-sm">

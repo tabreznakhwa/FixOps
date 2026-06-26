@@ -39,6 +39,7 @@ const navGroups: Array<{
       { href: '/finance/receivables', label: 'Receivables', icon: DollarSign },
       { href: '/finance/ledger', label: 'Customer Ledger', icon: FileBarChart },
       { href: '/finance/outstanding', label: 'Bill-wise Outstanding', icon: AlertCircle },
+      { href: '/finance/opening-receivables', label: 'Opening Receivables', icon: TrendingDown, excludeRoles: ['technician'] },
       { href: '/finance/expenses', label: 'Expenses', icon: Receipt, excludeRoles: ['technician'] },
       { href: '/finance/cash-book', label: 'Cash Book', icon: Banknote },
       { href: '/finance/bank-book', label: 'Bank Book', icon: Landmark },
@@ -55,6 +56,7 @@ const navGroups: Array<{
       { href: '/suppliers', label: 'Suppliers & PO', icon: Building2, exact: true, excludeRoles: ['technician'] },
       { href: '/suppliers/purchase-register', label: 'Purchase Register', icon: ShoppingCart, excludeRoles: ['technician'] },
       { href: '/suppliers/vendor-payments', label: 'Vendor Payments', icon: TrendingDown, excludeRoles: ['technician'] },
+      { href: '/suppliers/opening-payables', label: 'Opening Payables', icon: TrendingDown, excludeRoles: ['technician'] },
     ],
   },
   {
