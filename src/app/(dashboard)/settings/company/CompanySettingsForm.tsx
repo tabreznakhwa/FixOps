@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { Upload, Loader2 } from 'lucide-react'
 
 interface Org {
   name: string; email: string | null; phone: string | null
@@ -20,6 +22,34 @@ export function CompanySettingsForm({ org }: { org: Org }) {
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) { setUploadError('Please select an image file'); return }
+    if (file.size > 2 * 1024 * 1024) { setUploadError('Image must be under 2MB'); return }
+
+    setUploading(true)
+    setUploadError('')
+    try {
+      const supabase = createClient()
+      const ext = file.name.split('.').pop()
+      const path = `org-logo-${Date.now()}.${ext}`
+      const { error: uploadErr } = await supabase.storage.from('logos').upload(path, file, { upsert: true })
+      if (uploadErr) throw uploadErr
+      const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(path)
+      set('logo_url', publicUrl)
+      setSaved(false)
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   function set(field: keyof Org, value: string | number | null) {
     setForm(prev => ({ ...prev, [field]: value === '' ? null : value }))
@@ -93,12 +123,32 @@ export function CompanySettingsForm({ org }: { org: Org }) {
               </div>
             )}
           </div>
-          <div className="flex-1">
-            <label className={labelClass}>Logo URL</label>
-            <input value={form.logo_url ?? ''} onChange={e => set('logo_url', e.target.value)} placeholder="https://your-domain.com/logo.png" className={inputClass} />
-            <p className="text-xs text-slate-400 mt-1.5">
-              Upload your logo to any public image host and paste the URL here. It appears on all printed invoices, payslips, and reports.
-            </p>
+          <div className="flex-1 space-y-3">
+            <div>
+              <label className={labelClass}>Upload Logo</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 transition disabled:opacity-60"
+              >
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {uploading ? 'Uploading…' : 'Choose Image'}
+              </button>
+              <p className="text-xs text-slate-400 mt-1.5">PNG, JPG or SVG · max 2 MB · appears on invoices, payslips and reports</p>
+              {uploadError && <p className="text-xs text-red-600 mt-1">{uploadError}</p>}
+            </div>
+            <div>
+              <label className={labelClass}>Or paste a URL</label>
+              <input value={form.logo_url ?? ''} onChange={e => set('logo_url', e.target.value)} placeholder="https://example.com/logo.png" className={inputClass} />
+            </div>
           </div>
         </div>
       </div>
