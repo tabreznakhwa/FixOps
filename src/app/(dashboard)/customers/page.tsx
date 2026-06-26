@@ -1,19 +1,24 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { Plus, Search, Phone, MapPin, Building2, User } from 'lucide-react'
-import { formatDate, getStatusColor } from '@/lib/utils'
+import { Plus, Search, Phone, MapPin, Building2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { getStatusColor } from '@/lib/utils'
 
 export const metadata = { title: 'Customers' }
 
-export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string }> }) {
+const PAGE_SIZE = 50
+
+export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; page?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
+  const page = Math.max(1, parseInt(params.page ?? '1', 10))
+  const from = (page - 1) * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
 
   let query = supabase
     .from('customers')
-    .select('id, customer_code, full_name, company_name, customer_type, mobile_number, area, city, status, advance_balance, created_at')
-    .order('created_at', { ascending: false })
+    .select('id, customer_code, full_name, company_name, customer_type, mobile_number, area, city, status, created_at', { count: 'exact' })
+    .order('full_name', { ascending: true })
 
   if (params.q) {
     query = query.or(`full_name.ilike.%${params.q}%,company_name.ilike.%${params.q}%,mobile_number.ilike.%${params.q}%,customer_code.ilike.%${params.q}%`)
@@ -22,12 +27,24 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
     query = query.eq('customer_type', params.type)
   }
 
-  const { data: customersRaw } = await query.limit(50)
-  const customers = customersRaw as unknown as Array<{
+  const { data: customersRaw, count } = await query.range(from, to)
+  const customers = (customersRaw ?? []) as Array<{
     id: string; customer_code: string; full_name: string; company_name: string | null;
-    customer_type: string; mobile_number: string; area: string | null; city: string | null;
-    status: string; advance_balance: number; created_at: string
+    customer_type: string; mobile_number: string | null; area: string | null; city: string | null;
+    status: string; created_at: string
   }>
+
+  const totalCount = count ?? 0
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
+
+  const buildHref = (p: number) => {
+    const sp = new URLSearchParams()
+    if (params.q) sp.set('q', params.q)
+    if (params.type) sp.set('type', params.type)
+    if (p > 1) sp.set('page', String(p))
+    const s = sp.toString()
+    return `/customers${s ? '?' + s : ''}`
+  }
 
   const typeColors: Record<string, string> = {
     individual: 'bg-blue-100 text-blue-700',
@@ -41,7 +58,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
     <div className="animate-fade-in">
       <Header
         title="Customers"
-        subtitle={`${customers?.length ?? 0} customers`}
+        subtitle={`${totalCount.toLocaleString()} customers total`}
         actions={
           <Link
             href="/customers/new"
@@ -61,7 +78,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
             <input
               name="q"
               defaultValue={params.q}
-              placeholder="Search by name, company, mobile..."
+              placeholder="Search by name, company, mobile, or code..."
               className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </form>
@@ -81,12 +98,12 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
           </div>
         </div>
 
-        {/* Customer Cards */}
-        {customers?.length === 0 ? (
+        {/* Customer Table */}
+        {customers.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
             <Building2 className="w-10 h-10 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500 font-medium">No customers found</p>
-            <p className="text-slate-400 text-sm mt-1">Add your first customer to get started</p>
+            <p className="text-slate-400 text-sm mt-1">Try a different search or add a new customer</p>
             <Link
               href="/customers/new"
               className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
@@ -95,74 +112,106 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
             </Link>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Customer</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Contact</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Location</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Type</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden sm:table-cell">Status</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {customers?.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-50 transition-colors group">
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                          {(c.full_name || c.company_name || 'C').slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800 group-hover:text-blue-700 transition-colors">
-                            {c.full_name}
-                          </p>
-                          {c.company_name && (
-                            <p className="text-xs text-slate-500">{c.company_name}</p>
-                          )}
-                          <p className="text-xs text-slate-400 font-mono">{c.customer_code}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 hidden md:table-cell">
-                      <div className="flex items-center gap-1.5 text-sm text-slate-600">
-                        <Phone className="w-3.5 h-3.5 text-slate-400" />
-                        {c.mobile_number}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 hidden lg:table-cell">
-                      {(c.area || c.city) && (
-                        <div className="flex items-center gap-1.5 text-sm text-slate-600">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                          {[c.area, c.city].filter(Boolean).join(', ')}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${typeColors[c.customer_type] ?? 'bg-slate-100 text-slate-700'}`}>
-                        {c.customer_type.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 hidden sm:table-cell">
-                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${getStatusColor(c.status)}`}>
-                        {c.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      <Link
-                        href={`/customers/${c.id}`}
-                        className="text-xs text-blue-600 hover:text-blue-700 font-medium opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        View →
-                      </Link>
-                    </td>
+          <>
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Customer</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Contact</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Location</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Type</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden sm:table-cell">Status</th>
+                    <th className="px-4 py-3" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {customers.map((c) => (
+                    <tr key={c.id} className="hover:bg-slate-50 transition-colors group">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                            {(c.full_name || c.company_name || 'C').slice(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 group-hover:text-blue-700 transition-colors">
+                              {c.full_name}
+                            </p>
+                            {c.company_name && <p className="text-xs text-slate-500">{c.company_name}</p>}
+                            <p className="text-xs text-slate-400 font-mono">{c.customer_code}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 hidden md:table-cell">
+                        {c.mobile_number && (
+                          <div className="flex items-center gap-1.5 text-sm text-slate-600">
+                            <Phone className="w-3.5 h-3.5 text-slate-400" />
+                            {c.mobile_number}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 hidden lg:table-cell">
+                        {(c.area || c.city) && (
+                          <div className="flex items-center gap-1.5 text-sm text-slate-600">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                            {[c.area, c.city].filter(Boolean).join(', ')}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${typeColors[c.customer_type] ?? 'bg-slate-100 text-slate-700'}`}>
+                          {c.customer_type.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 hidden sm:table-cell">
+                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${getStatusColor(c.status)}`}>
+                          {c.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <Link
+                          href={`/customers/${c.id}`}
+                          className="text-xs text-blue-600 hover:text-blue-700 font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          View →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-slate-500">
+                  Showing {from + 1}–{Math.min(to + 1, totalCount)} of {totalCount.toLocaleString()} customers
+                </p>
+                <div className="flex items-center gap-2">
+                  {page > 1 ? (
+                    <Link href={buildHref(page - 1)} className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+                      <ChevronLeft className="w-4 h-4" /> Prev
+                    </Link>
+                  ) : (
+                    <span className="flex items-center gap-1 px-3 py-1.5 border border-slate-100 rounded-lg text-sm text-slate-300 cursor-not-allowed">
+                      <ChevronLeft className="w-4 h-4" /> Prev
+                    </span>
+                  )}
+                  <span className="text-sm text-slate-600 font-medium px-2">Page {page} of {totalPages}</span>
+                  {page < totalPages ? (
+                    <Link href={buildHref(page + 1)} className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+                      Next <ChevronRight className="w-4 h-4" />
+                    </Link>
+                  ) : (
+                    <span className="flex items-center gap-1 px-3 py-1.5 border border-slate-100 rounded-lg text-sm text-slate-300 cursor-not-allowed">
+                      Next <ChevronRight className="w-4 h-4" />
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
