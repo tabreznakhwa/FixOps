@@ -70,6 +70,12 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
               <ArrowLeft className="w-4 h-4" /> Back
             </Link>
             <Link
+              href={`/customers/${customer.id}/edit`}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              <Edit className="w-4 h-4" /> Edit
+            </Link>
+            <Link
               href={`/complaints/new?customer_id=${customer.id}`}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
             >

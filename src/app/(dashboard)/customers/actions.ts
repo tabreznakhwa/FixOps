@@ -72,3 +72,66 @@ export async function createCustomer(
   revalidatePath('/customers')
   redirect('/customers')
 }
+
+export async function updateCustomer(
+  prevState: { error?: string } | null,
+  formData: FormData
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: profileRaw } = await supabase
+    .from('users')
+    .select('organization_id, full_name')
+    .eq('id', user.id)
+    .single()
+
+  const profile = profileRaw as unknown as { organization_id: string; full_name: string } | null
+  if (!profile?.organization_id) return { error: 'No organization found' }
+
+  const id = formData.get('id') as string
+  if (!id) return { error: 'Customer ID missing' }
+
+  const fullName = (formData.get('full_name') as string)?.trim()
+  const mobileNumber = (formData.get('mobile_number') as string)?.trim()
+  if (!fullName) return { error: 'Full name is required' }
+  if (!mobileNumber) return { error: 'Mobile number is required' }
+
+  const { error } = await (supabase as any).from('customers').update({
+    customer_type: formData.get('customer_type') as string || 'individual',
+    full_name: fullName,
+    company_name: (formData.get('company_name') as string)?.trim() || null,
+    contact_person: (formData.get('contact_person') as string)?.trim() || null,
+    mobile_number: mobileNumber,
+    whatsapp_number: (formData.get('whatsapp_number') as string)?.trim() || null,
+    email: (formData.get('email') as string)?.trim() || null,
+    address: (formData.get('address') as string)?.trim() || null,
+    block: (formData.get('block') as string)?.trim() || null,
+    street: (formData.get('street') as string)?.trim() || null,
+    avenue: (formData.get('avenue') as string)?.trim() || null,
+    house_number: (formData.get('house_number') as string)?.trim() || null,
+    area: (formData.get('area') as string)?.trim() || null,
+    city: (formData.get('city') as string)?.trim() || null,
+    payment_terms: parseInt(formData.get('payment_terms') as string) || 0,
+    credit_limit: parseFloat(formData.get('credit_limit') as string) || 0,
+    notes: (formData.get('notes') as string)?.trim() || null,
+    status: (formData.get('status') as string) || 'active',
+  }).eq('id', id).eq('organization_id', profile.organization_id)
+
+  if (error) return { error: error.message }
+
+  await logAudit({
+    orgId: profile.organization_id,
+    userId: user.id,
+    userName: profile.full_name,
+    action: 'update',
+    entityType: 'customer',
+    entityLabel: `${fullName} (${mobileNumber})`,
+    entityId: id,
+  })
+
+  revalidatePath(`/customers/${id}`)
+  revalidatePath('/customers')
+  redirect(`/customers/${id}`)
+}
