@@ -16,7 +16,7 @@ const SERVICE_CATEGORIES = [
   { value: 'emergency', label: 'Emergency' },
 ]
 
-interface Customer { id: string; full_name: string; mobile_number: string; company_name: string | null }
+interface Customer { id: string; full_name: string; mobile_number: string | null; company_name: string | null }
 interface Person { id: string; full_name: string; type: 'user' | 'staff'; role: string }
 interface Complaint {
   id: string; complaint_number: string; description: string
@@ -181,7 +181,7 @@ export function NewWorkOrderForm({ customers, technicians, complaints, prefill }
             <option value="">Select a customer…</option>
             {customers.map(c => (
               <option key={c.id} value={c.id}>
-                {c.full_name}{c.company_name ? ` — ${c.company_name}` : ''} · {c.mobile_number}
+                {c.full_name}{c.company_name ? ` — ${c.company_name}` : ''}{c.mobile_number ? ` · ${c.mobile_number}` : ''}
               </option>
             ))}
           </select>

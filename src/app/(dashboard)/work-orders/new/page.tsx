@@ -19,7 +19,8 @@ export default async function NewWorkOrderPage({
       .from('customers')
       .select('id, full_name, mobile_number, company_name')
       .eq('status', 'active')
-      .order('full_name'),
+      .order('full_name')
+      .limit(5000),
     supabase
       .from('users')
       .select('id, full_name, role')
@@ -40,7 +41,7 @@ export default async function NewWorkOrderPage({
   ])
 
   const customers = (customersRes.data ?? []) as unknown as Array<{
-    id: string; full_name: string; mobile_number: string; company_name: string | null
+    id: string; full_name: string; mobile_number: string | null; company_name: string | null
   }>
 
   // Combine system users + staff into one unified list

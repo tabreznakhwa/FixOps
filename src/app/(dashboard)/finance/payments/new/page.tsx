@@ -19,6 +19,7 @@ export default async function NewPaymentPage({
     .select('id, full_name, mobile_number, company_name')
     .eq('status', 'active')
     .order('full_name')
+    .limit(5000)
 
   const customers = (customersRaw ?? []) as unknown as Array<{
     id: string

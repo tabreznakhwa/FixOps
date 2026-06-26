@@ -14,6 +14,7 @@ export default async function NewAMCPage() {
     .select('id, full_name, company_name, mobile_number')
     .eq('status', 'active')
     .order('full_name')
+    .limit(5000)
 
   const customers = (customersRaw ?? []) as unknown as Array<{
     id: string

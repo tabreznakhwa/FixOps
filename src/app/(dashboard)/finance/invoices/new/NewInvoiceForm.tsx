@@ -6,7 +6,7 @@ import { Plus, Trash2, AlertCircle } from 'lucide-react'
 interface Customer {
   id: string
   full_name: string
-  mobile_number: string
+  mobile_number: string | null
   company_name: string | null
 }
 
@@ -157,7 +157,7 @@ export function NewInvoiceForm({ customers, workOrders }: Props) {
               <option value="">Select customer…</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.full_name}{c.company_name ? ` — ${c.company_name}` : ''} · {c.mobile_number}
+                  {c.full_name}{c.company_name ? ` — ${c.company_name}` : ''}{c.mobile_number ? ` · ${c.mobile_number}` : ''}
                 </option>
               ))}
             </select>

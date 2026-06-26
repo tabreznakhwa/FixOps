@@ -14,11 +14,12 @@ export default async function NewInvoicePage() {
     .select('id, full_name, mobile_number, company_name')
     .eq('status', 'active')
     .order('full_name')
+    .limit(5000)
 
   const customers = (customersRaw ?? []) as unknown as Array<{
     id: string
     full_name: string
-    mobile_number: string
+    mobile_number: string | null
     company_name: string | null
   }>
 

@@ -14,7 +14,8 @@ export default async function NewComplaintPage() {
       .from('customers')
       .select('id, full_name, company_name, mobile_number, customer_code')
       .eq('status', 'active')
-      .order('full_name'),
+      .order('full_name')
+      .limit(5000),
     supabase
       .from('users')
       .select('id, full_name')
@@ -24,7 +25,7 @@ export default async function NewComplaintPage() {
   ])
 
   const customers = (customersRaw ?? []) as {
-    id: string; full_name: string; company_name: string | null; mobile_number: string; customer_code: string
+    id: string; full_name: string; company_name: string | null; mobile_number: string | null; customer_code: string
   }[]
   const technicians = (techniciansRaw ?? []) as { id: string; full_name: string }[]
 

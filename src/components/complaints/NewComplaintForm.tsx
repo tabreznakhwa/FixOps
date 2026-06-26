@@ -31,7 +31,7 @@ const PRIORITIES = [
 ]
 
 interface Props {
-  customers: { id: string; full_name: string; company_name: string | null; mobile_number: string; customer_code: string }[]
+  customers: { id: string; full_name: string; company_name: string | null; mobile_number: string | null; customer_code: string }[]
   technicians: { id: string; full_name: string }[]
 }
 
@@ -47,15 +47,15 @@ export function NewComplaintForm({ customers, technicians }: Props) {
   const toggleCategory = (val: string) =>
     setCategories((prev) => prev.includes(val) ? prev.filter((c) => c !== val) : [...prev, val])
 
-  const filteredCustomers = customers.filter((c) => {
+  const filteredCustomers = customerSearch ? customers.filter((c) => {
     const q = customerSearch.toLowerCase()
     return (
-      c.full_name.toLowerCase().includes(q) ||
+      (c.full_name?.toLowerCase().includes(q) ?? false) ||
       (c.company_name?.toLowerCase().includes(q) ?? false) ||
-      c.mobile_number.includes(q) ||
-      c.customer_code.toLowerCase().includes(q)
+      (c.mobile_number?.includes(q) ?? false) ||
+      (c.customer_code?.toLowerCase().includes(q) ?? false)
     )
-  }).slice(0, 8)
+  }).slice(0, 8) : []
 
   return (
     <form action={action} className="space-y-6">
@@ -79,7 +79,7 @@ export function NewComplaintForm({ customers, technicians }: Props) {
               {selectedCustomer.company_name && (
                 <p className="text-xs text-slate-500">{selectedCustomer.company_name}</p>
               )}
-              <p className="text-xs text-slate-500">{selectedCustomer.mobile_number}</p>
+              {selectedCustomer.mobile_number && <p className="text-xs text-slate-500">{selectedCustomer.mobile_number}</p>}
             </div>
             <button
               type="button"
@@ -114,7 +114,7 @@ export function NewComplaintForm({ customers, technicians }: Props) {
                       className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
                     >
                       <p className="text-sm font-semibold text-slate-800">{c.full_name}</p>
-                      <p className="text-xs text-slate-500">{c.mobile_number} · {c.customer_code}</p>
+                      <p className="text-xs text-slate-500">{c.mobile_number ?? '—'} · {c.customer_code}</p>
                     </button>
                   ))
                 )}
