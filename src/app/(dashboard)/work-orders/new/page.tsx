@@ -65,12 +65,14 @@ export default async function NewWorkOrderPage({
     category: string
     job_description: string
     complaint_number: string
+    assigned_key: string
+    technician_name: string
   } | null = null
 
   if (params.complaint_id) {
     const { data: linkedRaw } = await (supabase as any)
       .from('complaints')
-      .select('id, complaint_number, description, priority, service_category, customer_id')
+      .select('id, complaint_number, description, priority, service_category, customer_id, assigned_to, assigned_staff_id, technician_name')
       .eq('id', params.complaint_id)
       .single()
 
@@ -78,12 +80,18 @@ export default async function NewWorkOrderPage({
       const linked = linkedRaw as {
         id: string; complaint_number: string; description: string
         priority: string; service_category: string | string[] | null; customer_id: string
+        assigned_to: string | null; assigned_staff_id: string | null; technician_name: string | null
       }
       const cats = Array.isArray(linked.service_category)
         ? linked.service_category
         : linked.service_category
           ? [linked.service_category]
           : []
+      const assignedKey = linked.assigned_to
+        ? `user:${linked.assigned_to}`
+        : linked.assigned_staff_id
+          ? `staff:${linked.assigned_staff_id}`
+          : ''
       prefill = {
         complaint_id: linked.id,
         customer_id: linked.customer_id,
@@ -91,6 +99,8 @@ export default async function NewWorkOrderPage({
         category: cats[0] ?? 'general',
         job_description: linked.description,
         complaint_number: linked.complaint_number,
+        assigned_key: assignedKey,
+        technician_name: linked.technician_name ?? '',
       }
     }
   }

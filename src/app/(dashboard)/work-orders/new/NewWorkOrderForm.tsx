@@ -25,6 +25,7 @@ interface Complaint {
 interface Prefill {
   complaint_id: string; customer_id: string; priority: string
   category: string; job_description: string; complaint_number: string
+  assigned_key: string; technician_name: string
 }
 
 interface Props {
@@ -41,7 +42,7 @@ export function NewWorkOrderForm({ customers, technicians, complaints, prefill }
   const [form, setForm] = useState({
     customer_id: prefill?.customer_id ?? '',
     complaint_id: prefill?.complaint_id ?? '',
-    assigned_key: '', // format: "user:UUID" or "staff:UUID"
+    assigned_key: prefill?.assigned_key ?? '', // format: "user:UUID" or "staff:UUID"
     service_category: prefill?.category ?? 'ac_maintenance',
     priority: prefill?.priority ?? 'medium',
     job_description: prefill?.job_description ?? '',
@@ -62,6 +63,7 @@ export function NewWorkOrderForm({ customers, technicians, complaints, prefill }
       priority: prefill.priority.toLowerCase(),
       service_category: prefill.category.toLowerCase(),
       job_description: prefill.job_description,
+      assigned_key: prefill.assigned_key,
     }))
   }, [prefill?.complaint_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
