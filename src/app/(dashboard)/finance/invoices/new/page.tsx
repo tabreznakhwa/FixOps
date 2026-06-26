@@ -37,6 +37,23 @@ export default async function NewInvoicePage() {
     customer_id: string
   }>
 
+  const { data: inventoryRaw } = await (supabase as any)
+    .from('inventory_items')
+    .select('id, item_code, item_name, selling_price, unit_of_measure, current_stock, category')
+    .eq('is_active', true)
+    .order('item_name')
+    .limit(2000)
+
+  const inventoryItems = (inventoryRaw ?? []) as unknown as Array<{
+    id: string
+    item_code: string
+    item_name: string
+    selling_price: number
+    unit_of_measure: string
+    current_stock: number
+    category: string | null
+  }>
+
   return (
     <div className="animate-fade-in">
       <Header
@@ -53,7 +70,7 @@ export default async function NewInvoicePage() {
       />
 
       <div className="p-6">
-        <NewInvoiceForm customers={customers} workOrders={workOrders} />
+        <NewInvoiceForm customers={customers} workOrders={workOrders} inventoryItems={inventoryItems} />
       </div>
     </div>
   )

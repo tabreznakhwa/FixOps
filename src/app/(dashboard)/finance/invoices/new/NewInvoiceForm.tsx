@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { Plus, Trash2, AlertCircle } from 'lucide-react'
 
 interface Customer {
@@ -17,7 +17,22 @@ interface WorkOrder {
   customer_id: string
 }
 
+interface InventoryItem {
+  id: string
+  item_code: string
+  item_name: string
+  selling_price: number
+  unit_of_measure: string
+  current_stock: number
+  category: string | null
+}
+
+type LineType = 'custom' | 'inventory' | 'service'
+
 interface LineItem {
+  type: LineType
+  inventory_item_id: string
+  service_label: string
   description: string
   quantity: string
   unit_price: string
@@ -27,7 +42,73 @@ interface LineItem {
 interface Props {
   customers: Customer[]
   workOrders: WorkOrder[]
+  inventoryItems: InventoryItem[]
 }
+
+const PRESET_SERVICES = [
+  {
+    group: '❄️ AC Services',
+    items: [
+      { label: 'Filter Cleaning', price: 5 },
+      { label: 'Gas Top-up (R22)', price: 15 },
+      { label: 'Gas Top-up (R32 / R410A)', price: 20 },
+      { label: 'Drain Block Removal', price: 10 },
+      { label: 'AC Full Service (Clean + Check)', price: 25 },
+      { label: 'Split AC Installation', price: 40 },
+      { label: 'Cassette / Ceiling AC Installation', price: 60 },
+      { label: 'AC Uninstallation', price: 20 },
+      { label: 'Thermostat Replacement', price: 15 },
+      { label: 'Capacitor Replacement', price: 12 },
+      { label: 'Fan Motor Replacement', price: 35 },
+      { label: 'Compressor Diagnostic', price: 10 },
+      { label: 'PCB / Control Board Repair', price: 30 },
+      { label: 'Remote Control Replacement', price: 8 },
+      { label: 'Gas Leak Detection', price: 15 },
+      { label: 'Duct Cleaning (per unit)', price: 20 },
+      { label: 'Annual AC Maintenance Contract', price: 60 },
+    ],
+  },
+  {
+    group: '🔧 Plumbing',
+    items: [
+      { label: 'Leak Detection & Repair', price: 10 },
+      { label: 'Pipe Replacement', price: 20 },
+      { label: 'Tap / Faucet Replacement', price: 15 },
+      { label: 'Toilet Repair / Flush Fix', price: 15 },
+      { label: 'Water Heater Installation', price: 25 },
+      { label: 'Drain Unblocking / Cleaning', price: 10 },
+      { label: 'Kitchen Sink Repair', price: 12 },
+      { label: 'Shower Mixer Replacement', price: 20 },
+      { label: 'Water Tank Cleaning', price: 30 },
+    ],
+  },
+  {
+    group: '⚡ Electrical',
+    items: [
+      { label: 'Wiring Repair', price: 15 },
+      { label: 'Switch / Socket Replacement', price: 8 },
+      { label: 'MCB / Breaker Replacement', price: 12 },
+      { label: 'Light Fixture Installation', price: 8 },
+      { label: 'Ceiling Fan Installation', price: 15 },
+      { label: 'DB Panel Inspection', price: 10 },
+      { label: 'Earth Leakage / RCD Testing', price: 12 },
+      { label: 'Cable Pulling & Trunking', price: 20 },
+    ],
+  },
+  {
+    group: '🔨 General',
+    items: [
+      { label: 'Inspection / Site Visit', price: 5 },
+      { label: 'Labour Charge (per hour)', price: 10 },
+      { label: 'Transportation / Call-out Fee', price: 3 },
+      { label: 'Emergency Call-out Surcharge', price: 15 },
+      { label: 'Annual Maintenance Contract (AMC)', price: 50 },
+      { label: 'Warranty Repair', price: 0 },
+    ],
+  },
+]
+
+const ALL_SERVICES = PRESET_SERVICES.flatMap(g => g.items)
 
 const TODAY = new Date().toISOString().split('T')[0]
 
@@ -40,10 +121,18 @@ function fmt(n: number) {
 }
 
 function emptyItem(): LineItem {
-  return { description: '', quantity: '1', unit_price: '', discount_percent: '0' }
+  return {
+    type: 'custom',
+    inventory_item_id: '',
+    service_label: '',
+    description: '',
+    quantity: '1',
+    unit_price: '',
+    discount_percent: '0',
+  }
 }
 
-export function NewInvoiceForm({ customers, workOrders }: Props) {
+export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props) {
   const [customerId, setCustomerId] = useState('')
   const [invoiceType, setInvoiceType] = useState('service')
   const [invoiceDate, setInvoiceDate] = useState(TODAY)
@@ -60,6 +149,17 @@ export function NewInvoiceForm({ customers, workOrders }: Props) {
     ? workOrders.filter((wo) => wo.customer_id === customerId)
     : workOrders
 
+  // Group inventory by category for optgroups
+  const invByCategory = useMemo(() => {
+    const map: Record<string, InventoryItem[]> = {}
+    for (const inv of inventoryItems) {
+      const cat = inv.category ?? 'Other'
+      if (!map[cat]) map[cat] = []
+      map[cat].push(inv)
+    }
+    return map
+  }, [inventoryItems])
+
   const updateItem = useCallback(
     (index: number, field: keyof LineItem, value: string) => {
       setItems((prev) => {
@@ -70,6 +170,67 @@ export function NewInvoiceForm({ customers, workOrders }: Props) {
     },
     [],
   )
+
+  const switchItemType = useCallback((index: number, type: LineType) => {
+    setItems((prev) => {
+      const next = [...prev]
+      next[index] = {
+        ...next[index],
+        type,
+        inventory_item_id: '',
+        service_label: '',
+        description: '',
+        unit_price: '',
+      }
+      return next
+    })
+  }, [])
+
+  const selectInventoryItem = useCallback((index: number, itemId: string) => {
+    if (!itemId) {
+      setItems((prev) => {
+        const next = [...prev]
+        next[index] = { ...next[index], inventory_item_id: '', description: '', unit_price: '' }
+        return next
+      })
+      return
+    }
+    const inv = inventoryItems.find((i) => i.id === itemId)
+    if (!inv) return
+    setItems((prev) => {
+      const next = [...prev]
+      next[index] = {
+        ...next[index],
+        inventory_item_id: itemId,
+        description: inv.item_name,
+        unit_price: inv.selling_price > 0 ? String(inv.selling_price) : '',
+      }
+      return next
+    })
+  }, [inventoryItems])
+
+  const selectService = useCallback((index: number, label: string) => {
+    if (!label) {
+      setItems((prev) => {
+        const next = [...prev]
+        next[index] = { ...next[index], service_label: '', description: '', unit_price: '' }
+        return next
+      })
+      return
+    }
+    const svc = ALL_SERVICES.find((s) => s.label === label)
+    if (!svc) return
+    setItems((prev) => {
+      const next = [...prev]
+      next[index] = {
+        ...next[index],
+        service_label: label,
+        description: label,
+        unit_price: svc.price > 0 ? String(svc.price) : '',
+      }
+      return next
+    })
+  }, [])
 
   const addItem = () => setItems((prev) => [...prev, emptyItem()])
   const removeItem = (index: number) => {
@@ -216,13 +377,13 @@ export function NewInvoiceForm({ customers, workOrders }: Props) {
         <h2 className="font-semibold text-slate-900 mb-4">Line Items</h2>
 
         <div className="space-y-3">
+          {/* Column headers — desktop only */}
           <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
             <div className="col-span-5">Description</div>
             <div className="col-span-1 text-right">Qty</div>
             <div className="col-span-2 text-right">Unit Price (KWD)</div>
             <div className="col-span-2 text-right">Disc %</div>
-            <div className="col-span-1 text-right">Line Total</div>
-            <div className="col-span-1" />
+            <div className="col-span-2 text-right">Line Total</div>
           </div>
 
           {items.map((item, index) => {
@@ -230,60 +391,27 @@ export function NewInvoiceForm({ customers, workOrders }: Props) {
             const price = parseFloat(item.unit_price) || 0
             const disc = parseFloat(item.discount_percent) || 0
             const lineTotal = qty * price * (1 - disc / 100)
+
             return (
-              <div key={index} className="grid grid-cols-12 gap-2 items-start">
-                <div className="col-span-12 md:col-span-5">
-                  <input
-                    type="text"
-                    placeholder="Description *"
-                    className={inputClass}
-                    value={item.description}
-                    onChange={(e) => updateItem(index, 'description', e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="col-span-4 md:col-span-1">
-                  <input
-                    type="number"
-                    placeholder="Qty"
-                    min="0.01"
-                    step="0.01"
-                    className={`${inputClass} text-right`}
-                    value={item.quantity}
-                    onChange={(e) => updateItem(index, 'quantity', e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="col-span-8 md:col-span-2">
-                  <input
-                    type="number"
-                    placeholder="0.000"
-                    min="0"
-                    step="0.001"
-                    className={`${inputClass} text-right`}
-                    value={item.unit_price}
-                    onChange={(e) => updateItem(index, 'unit_price', e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="col-span-4 md:col-span-2">
-                  <input
-                    type="number"
-                    placeholder="0"
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    className={`${inputClass} text-right`}
-                    value={item.discount_percent}
-                    onChange={(e) => updateItem(index, 'discount_percent', e.target.value)}
-                  />
-                </div>
-                <div className="col-span-3 md:col-span-1 flex items-center justify-end">
-                  <span className="text-sm font-semibold text-slate-700">
-                    {fmt(lineTotal)}
-                  </span>
-                </div>
-                <div className="col-span-1 flex items-center justify-center">
+              <div key={index} className="border border-slate-200 rounded-xl p-3 space-y-2.5 bg-slate-50">
+                {/* Type toggle + delete */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex rounded-lg border border-slate-200 bg-white overflow-hidden text-xs font-semibold divide-x divide-slate-200">
+                    {(['custom', 'inventory', 'service'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => switchItemType(index, t)}
+                        className={`px-3 py-1.5 transition-colors ${
+                          item.type === t
+                            ? 'bg-blue-600 text-white'
+                            : 'text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        {t === 'custom' ? '✏️ Custom' : t === 'inventory' ? '📦 Part' : '🔧 Service'}
+                      </button>
+                    ))}
+                  </div>
                   <button
                     type="button"
                     onClick={() => removeItem(index)}
@@ -292,6 +420,99 @@ export function NewInvoiceForm({ customers, workOrders }: Props) {
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
+                </div>
+
+                {/* Part picker */}
+                {item.type === 'inventory' && (
+                  <select
+                    value={item.inventory_item_id}
+                    onChange={(e) => selectInventoryItem(index, e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Select part from inventory…</option>
+                    {Object.entries(invByCategory).sort(([a], [b]) => a.localeCompare(b)).map(([cat, catItems]) => (
+                      <optgroup key={cat} label={cat}>
+                        {catItems.map((inv) => (
+                          <option key={inv.id} value={inv.id}>
+                            {inv.item_name} — KWD {inv.selling_price.toFixed(3)} (Stock: {inv.current_stock} {inv.unit_of_measure})
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                )}
+
+                {/* Service picker */}
+                {item.type === 'service' && (
+                  <select
+                    value={item.service_label}
+                    onChange={(e) => selectService(index, e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Select service…</option>
+                    {PRESET_SERVICES.map((group) => (
+                      <optgroup key={group.group} label={group.group}>
+                        {group.items.map((svc) => (
+                          <option key={svc.label} value={svc.label}>
+                            {svc.label}{svc.price > 0 ? ` — KWD ${svc.price.toFixed(3)}` : ' — Free / Custom price'}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                )}
+
+                {/* Description + price fields */}
+                <div className="grid grid-cols-12 gap-2 items-center">
+                  <div className="col-span-12 md:col-span-5">
+                    <input
+                      type="text"
+                      placeholder={item.type === 'custom' ? 'Description *' : 'Description (auto-filled, editable)'}
+                      className={inputClass}
+                      value={item.description}
+                      onChange={(e) => updateItem(index, 'description', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="col-span-3 md:col-span-1">
+                    <input
+                      type="number"
+                      placeholder="Qty"
+                      min="0.01"
+                      step="0.01"
+                      className={`${inputClass} text-right`}
+                      value={item.quantity}
+                      onChange={(e) => updateItem(index, 'quantity', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="col-span-4 md:col-span-2">
+                    <input
+                      type="number"
+                      placeholder="0.000"
+                      min="0"
+                      step="0.001"
+                      className={`${inputClass} text-right`}
+                      value={item.unit_price}
+                      onChange={(e) => updateItem(index, 'unit_price', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="col-span-3 md:col-span-2">
+                    <input
+                      type="number"
+                      placeholder="0"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      className={`${inputClass} text-right`}
+                      value={item.discount_percent}
+                      onChange={(e) => updateItem(index, 'discount_percent', e.target.value)}
+                    />
+                  </div>
+                  <div className="col-span-2 md:col-span-2 flex items-center justify-end">
+                    <span className="text-sm font-semibold text-slate-700">{fmt(lineTotal)}</span>
+                  </div>
                 </div>
               </div>
             )
