@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, ClipboardList, Plus } from 'lucide-react'
+import { ArrowLeft, ClipboardList, Plus, Edit } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
 import { ComplaintActions } from './ComplaintActions'
 
@@ -66,9 +66,17 @@ export default async function ComplaintDetailPage({ params }: { params: Promise<
         title={complaint.complaint_number}
         subtitle={complaint.title ?? complaint.description.slice(0, 60)}
         actions={
-          <Link href="/complaints" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
-            <ArrowLeft className="w-4 h-4" /> All Complaints
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/complaints/${complaint.id}/edit`}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
+            >
+              <Edit className="w-4 h-4" /> Edit
+            </Link>
+            <Link href="/complaints" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
+              <ArrowLeft className="w-4 h-4" /> All Complaints
+            </Link>
+          </div>
         }
       />
 

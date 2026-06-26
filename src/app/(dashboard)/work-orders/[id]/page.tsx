@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Edit } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDate, formatCurrency } from '@/lib/utils'
 import { WorkOrderActions } from './WorkOrderActions'
 
@@ -52,9 +52,17 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
         title={wo.work_order_number}
         subtitle={wo.job_description?.slice(0, 60) ?? 'Work Order Detail'}
         actions={
-          <Link href="/work-orders" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
-            <ArrowLeft className="w-4 h-4" /> All Work Orders
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/work-orders/${wo.id}/edit`}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
+            >
+              <Edit className="w-4 h-4" /> Edit
+            </Link>
+            <Link href="/work-orders" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
+              <ArrowLeft className="w-4 h-4" /> All Work Orders
+            </Link>
+          </div>
         }
       />
 

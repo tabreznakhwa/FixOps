@@ -187,7 +187,18 @@ export function NewInvoiceForm({ customers, workOrders }: Props) {
           {filteredWorkOrders.length > 0 && (
             <div className="md:col-span-2">
               <label className={labelClass}>Link Work Order (optional)</label>
-              <select className={inputClass} value={workOrderId} onChange={(e) => setWorkOrderId(e.target.value)}>
+              <select
+                className={inputClass}
+                value={workOrderId}
+                onChange={(e) => {
+                  const id = e.target.value
+                  setWorkOrderId(id)
+                  if (id) {
+                    const wo = workOrders.find((w) => w.id === id)
+                    if (wo) setCustomerId(wo.customer_id)
+                  }
+                }}
+              >
                 <option value="">No work order</option>
                 {filteredWorkOrders.map((wo) => (
                   <option key={wo.id} value={wo.id}>

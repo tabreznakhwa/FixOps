@@ -69,3 +69,55 @@ export async function createComplaint(
   revalidatePath('/complaints')
   redirect('/complaints')
 }
+
+export async function updateComplaint(
+  prevState: { error?: string } | null,
+  formData: FormData
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: profileRaw } = await supabase
+    .from('users')
+    .select('organization_id, full_name')
+    .eq('id', user.id)
+    .single()
+
+  const profile = profileRaw as unknown as { organization_id: string; full_name: string } | null
+  if (!profile?.organization_id) return { error: 'No organization found' }
+
+  const id = formData.get('id') as string
+  if (!id) return { error: 'Complaint ID missing' }
+
+  const serviceCategories = formData.getAll('service_category') as string[]
+  const description = (formData.get('description') as string)?.trim()
+  if (!serviceCategories.length) return { error: 'At least one service category is required' }
+  if (!description || description.length < 5) return { error: 'Please provide a description (at least 5 characters)' }
+
+  const { error } = await (supabase as any).from('complaints').update({
+    service_category: serviceCategories,
+    priority: (formData.get('priority') as string) || 'medium',
+    description,
+    preferred_date: (formData.get('preferred_date') as string) || null,
+    preferred_time: (formData.get('preferred_time') as string) || null,
+    location: (formData.get('location') as string)?.trim() || null,
+    notes: (formData.get('notes') as string)?.trim() || null,
+  }).eq('id', id).eq('organization_id', profile.organization_id)
+
+  if (error) return { error: error.message }
+
+  await logAudit({
+    orgId: profile.organization_id,
+    userId: user.id,
+    userName: profile.full_name,
+    action: 'update',
+    entityType: 'complaint',
+    entityLabel: description.slice(0, 60),
+    entityId: id,
+  })
+
+  revalidatePath(`/complaints/${id}`)
+  revalidatePath('/complaints')
+  redirect(`/complaints/${id}`)
+}
