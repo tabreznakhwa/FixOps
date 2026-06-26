@@ -12,7 +12,6 @@ const KANBAN_COLUMNS = [
   { key: 'work_started', label: 'In Progress', color: 'bg-teal-500' },
   { key: 'waiting_parts', label: 'Waiting Parts', color: 'bg-orange-500' },
   { key: 'completed', label: 'Completed', color: 'bg-green-500' },
-  { key: 'verified', label: 'Verified', color: 'bg-emerald-500' },
 ]
 
 export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<{ view?: string; status?: string }> }) {

@@ -8,7 +8,6 @@ const WO_TO_COMPLAINT_STATUS: Record<string, string> = {
   work_started: 'work_started',
   waiting_parts: 'waiting_parts',
   completed: 'completed',
-  verified: 'verified',
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

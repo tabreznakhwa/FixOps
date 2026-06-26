@@ -6,7 +6,7 @@ import { Loader2, ChevronDown } from 'lucide-react'
 
 const STATUS_LABELS: Record<string, string> = {
   new: 'New', assigned: 'Assigned', work_started: 'Work Started',
-  waiting_parts: 'Waiting Parts', completed: 'Completed', verified: 'Verified',
+  waiting_parts: 'Waiting Parts', completed: 'Completed',
   invoiced: 'Invoiced', paid: 'Paid', cancelled: 'Cancelled',
 }
 

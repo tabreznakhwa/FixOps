@@ -35,7 +35,7 @@ export default async function NewWorkOrderPage({
     supabase
       .from('complaints')
       .select('id, complaint_number, description, priority, customer_id')
-      .not('status', 'in', '(completed,verified,cancelled)')
+      .not('status', 'in', '(completed,cancelled)')
       .order('created_at', { ascending: false })
       .limit(100),
   ])

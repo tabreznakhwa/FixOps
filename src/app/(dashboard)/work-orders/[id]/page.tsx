@@ -8,7 +8,7 @@ import { WorkOrderActions } from './WorkOrderActions'
 
 export const metadata = { title: 'Work Order' }
 
-const WO_STATUS_FLOW = ['new', 'assigned', 'work_started', 'waiting_parts', 'completed', 'verified']
+const WO_STATUS_FLOW = ['new', 'assigned', 'work_started', 'waiting_parts', 'completed']
 
 export default async function WorkOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
