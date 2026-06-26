@@ -414,7 +414,7 @@ export default async function ReportsPage({
                   Bucket
                 </th>
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">
-                  Amount (AED)
+                  Amount (KWD)
                 </th>
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">
                   % of Total

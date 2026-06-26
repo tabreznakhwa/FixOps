@@ -213,12 +213,12 @@ export function NewPaymentForm({
                   <option value="">Select invoice…</option>
                   {customerInvoices.map((inv) => (
                     <option key={inv.id} value={inv.id}>
-                      {inv.invoice_number} — Balance: AED{' '}
+                      {inv.invoice_number} — Balance: KWD{' '}
                       {inv.balance_due.toLocaleString('en-AE', {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}{' '}
-                      / Total: AED{' '}
+                      / Total: KWD{' '}
                       {inv.total_amount.toLocaleString('en-AE', {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
@@ -233,7 +233,7 @@ export function NewPaymentForm({
                   <span className="font-semibold capitalize">{selectedInvoice.status}</span>
                   {' '}· Balance due:{' '}
                   <span className="font-semibold text-amber-600">
-                    AED{' '}
+                    KWD{' '}
                     {selectedInvoice.balance_due.toLocaleString('en-AE', {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
@@ -258,7 +258,7 @@ export function NewPaymentForm({
 
           {/* Amount */}
           <div>
-            <label className={labelClass}>Amount (AED) *</label>
+            <label className={labelClass}>Amount (KWD) *</label>
             <input
               type="number"
               min="0.01"
@@ -329,7 +329,7 @@ export function NewPaymentForm({
               ) : null}
             </div>
             <p className="text-2xl font-bold text-green-700">
-              AED{' '}
+              KWD{' '}
               {parseFloat(amountReceived || '0').toLocaleString('en-AE', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,

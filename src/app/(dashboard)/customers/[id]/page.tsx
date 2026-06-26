@@ -177,12 +177,12 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
               </div>
               <div>
                 <p className="text-xs text-slate-400">Credit Limit</p>
-                <p className="text-sm font-semibold text-slate-800 mt-0.5">AED {customer.credit_limit.toLocaleString()}</p>
+                <p className="text-sm font-semibold text-slate-800 mt-0.5">KWD {customer.credit_limit.toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400">Advance Balance</p>
                 <p className={`text-sm font-semibold mt-0.5 ${customer.advance_balance > 0 ? 'text-green-600' : 'text-slate-800'}`}>
-                  AED {customer.advance_balance.toLocaleString()}
+                  KWD {customer.advance_balance.toLocaleString()}
                 </p>
               </div>
             </div>

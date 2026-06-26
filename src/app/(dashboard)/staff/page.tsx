@@ -116,7 +116,7 @@ export default async function StaffPage() {
                       </td>
                       <td className="px-4 py-3.5 hidden sm:table-cell text-right">
                         <p className="text-sm font-bold text-slate-900">
-                          {s.basic_salary.toLocaleString()} AED
+                          {s.basic_salary.toLocaleString()} KWD
                         </p>
                       </td>
                       <td className="px-4 py-3.5">

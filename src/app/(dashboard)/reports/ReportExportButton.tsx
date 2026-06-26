@@ -43,12 +43,12 @@ export function ReportExportButton({ range }: Props) {
         'Customer',
         'Type',
         'Status',
-        'Subtotal (AED)',
-        'Discount (AED)',
-        'Tax (AED)',
-        'Total (AED)',
-        'Paid (AED)',
-        'Balance Due (AED)',
+        'Subtotal (KWD)',
+        'Discount (KWD)',
+        'Tax (KWD)',
+        'Total (KWD)',
+        'Paid (KWD)',
+        'Balance Due (KWD)',
       ]
 
       const rows = invoices.map((inv) => [

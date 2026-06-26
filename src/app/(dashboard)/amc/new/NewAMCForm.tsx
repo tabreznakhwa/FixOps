@@ -125,7 +125,7 @@ export function NewAMCForm({ customers }: Props) {
         {/* Amount + Frequency */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>Contract Amount (AED)</label>
+            <label className={labelClass}>Contract Amount (KWD)</label>
             <input type="number" name="contract_amount" min="0" step="0.01" defaultValue="0" className={inputClass} />
           </div>
           <div>

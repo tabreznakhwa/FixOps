@@ -282,7 +282,7 @@ export function NewWorkOrderForm({ customers, technicians, complaints, prefill }
             <input type="number" min="0.5" step="0.5" value={form.estimated_hours} onChange={set('estimated_hours')} placeholder="e.g. 2.5" className={inputClass} />
           </div>
           <div>
-            <label className={labelClass}>Estimated Amount (AED)</label>
+            <label className={labelClass}>Estimated Amount (KWD)</label>
             <input type="number" min="0" step="0.01" value={form.estimated_amount} onChange={set('estimated_amount')} placeholder="e.g. 500.00" className={inputClass} />
           </div>
         </div>

@@ -239,7 +239,7 @@ export default function NewCustomerPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Credit Limit (AED)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Credit Limit (KWD)</label>
                   <input
                     type="number"
                     name="credit_limit"
