@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
           unit_price: number
           discount_percent: number
           tax_percent: number
+          inventory_item_id?: string | null
         },
         index: number,
       ) => {
@@ -128,6 +129,23 @@ export async function POST(request: NextRequest) {
       .insert(lineItemRows)
 
     if (itemsError) throw itemsError
+
+    // Deduct stock for any inventory items used
+    const inventoryLines = items.filter(
+      (it: { inventory_item_id?: string | null }) => it.inventory_item_id,
+    ) as { inventory_item_id: string; quantity: number }[]
+
+    if (inventoryLines.length > 0) {
+      await Promise.all(
+        inventoryLines.map(async (it) => {
+          const qty = Number(it.quantity) || 1
+          await (supabase as any).rpc('decrement_stock', {
+            p_item_id: it.inventory_item_id,
+            p_qty: qty,
+          })
+        }),
+      )
+    }
 
     // Create ledger entry
     const { error: ledgerError } = await (supabase as any)

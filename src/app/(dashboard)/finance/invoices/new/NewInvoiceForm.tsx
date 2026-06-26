@@ -275,6 +275,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
             unit_price: parseFloat(it.unit_price) || 0,
             discount_percent: parseFloat(it.discount_percent) || 0,
             tax_percent: 0,
+            inventory_item_id: it.inventory_item_id || null,
           })),
           discount_amount: discount,
           tax_rate: 0,
