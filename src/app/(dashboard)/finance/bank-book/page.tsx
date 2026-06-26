@@ -62,6 +62,29 @@ export default async function BankBookPage({
     suppliers: { supplier_name: string } | null
   }>
 
+  // Bank / cheque expenses
+  const { data: expensesRaw } = await (supabase as any)
+    .from('expenses')
+    .select('id, expense_date, expense_number, category, description, amount, payment_method, reference_number')
+    .in('payment_method', ['bank_transfer', 'cheque'])
+    .gte('expense_date', from)
+    .lte('expense_date', to)
+    .order('expense_date', { ascending: true })
+
+  const CATEGORY_LABELS: Record<string, string> = {
+    rent: 'Rent', electricity: 'Electricity', water: 'Water', phone: 'Phone / Mobile',
+    internet: 'Internet', stationery: 'Stationery & Office', fuel: 'Fuel & Transport',
+    vehicle_maintenance: 'Vehicle Maintenance', tools_equipment: 'Tools & Equipment',
+    marketing: 'Marketing', bank_charges: 'Bank Charges', insurance: 'Insurance',
+    professional_services: 'Professional Services', food_entertainment: 'Food & Refreshments',
+    other: 'Miscellaneous',
+  }
+
+  const expenses = (expensesRaw ?? []) as Array<{
+    id: string; expense_date: string; expense_number: string; category: string
+    description: string; amount: number; payment_method: string; reference_number: string | null
+  }>
+
   // Bank salary payments
   const { data: salaryRaw } = await (supabase as any)
     .from('salary_slips')
@@ -109,6 +132,14 @@ export default async function BankBookPage({
         ref: '—',
       }
     }),
+    ...expenses.map((e) => ({
+      date: e.expense_date,
+      narration: `Expense — ${CATEGORY_LABELS[e.category] ?? e.category}: ${e.description}`,
+      mode: e.payment_method === 'cheque' ? 'Cheque' : 'Bank Transfer',
+      receipts: 0,
+      payments: e.amount,
+      ref: e.reference_number ?? e.expense_number,
+    })),
   ].sort((a, b) => a.date.localeCompare(b.date))
 
   const totalReceipts = entries.reduce((s, e) => s + e.receipts, 0)
