@@ -18,6 +18,7 @@ export function formatDate(date: string | Date | null): string {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
+    timeZone: 'Asia/Kuwait',
   }).format(new Date(date))
 }
 
@@ -29,6 +30,7 @@ export function formatDateTime(date: string | Date | null): string {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Asia/Kuwait',
   }).format(new Date(date))
 }
 

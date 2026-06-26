@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 type Range = 'month' | 'last_month' | 'quarter' | 'year' | 'all'
 
 function getDateRange(range: Range): { from: string | null; to: string | null } {
-  const now = new Date()
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuwait' }))
   const y = now.getFullYear()
   const m = now.getMonth()
 

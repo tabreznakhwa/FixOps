@@ -104,8 +104,8 @@ export async function POST(request: NextRequest) {
     if (complaintError) throw complaintError
 
     // Fire notifications in parallel (non-blocking — errors are logged, not thrown)
-    const submittedAt = new Date().toLocaleString('en-AE', {
-      timeZone: 'Asia/Dubai',
+    const submittedAt = new Date().toLocaleString('en-KW', {
+      timeZone: 'Asia/Kuwait',
       dateStyle: 'medium',
       timeStyle: 'short',
     })

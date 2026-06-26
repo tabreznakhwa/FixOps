@@ -21,7 +21,8 @@ export default async function PayrollProcessPage({
   searchParams: Promise<{ month?: string; year?: string }>
 }) {
   const params = await searchParams
-  const now = new Date()
+  const nowKuwait = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuwait' })
+  const now = new Date(nowKuwait)
   const month = parseInt(params.month ?? String(now.getMonth() + 1))
   const year = parseInt(params.year ?? String(now.getFullYear()))
 
