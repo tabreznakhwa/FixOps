@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -14,14 +15,16 @@ export default async function OpeningReceivablesPage() {
     .from('users').select('organization_id').eq('id', user!.id).single()
   const profile = profileRaw as { organization_id: string } | null
 
+  const admin = createAdminClient() as any
+
   const [customersRes, entriesRes] = await Promise.all([
-    (supabase as any)
+    admin
       .from('customers')
-      .select('id, full_name, customer_code')
+      .select('id, full_name, customer_code, mobile_number')
       .eq('organization_id', profile?.organization_id)
       .eq('is_active', true)
       .order('full_name'),
-    (supabase as any)
+    admin
       .from('opening_receivables')
       .select('*, customers(full_name, customer_code)')
       .eq('organization_id', profile?.organization_id)
