@@ -6,6 +6,7 @@ import { ArrowLeft, FileText, User, CreditCard, ClipboardList, Edit } from 'luci
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
 import { InvoiceActions } from './InvoiceActions'
 import { PrintActions } from '@/components/print/PrintActions'
+import { InvoiceDateEditor } from './InvoiceDateEditor'
 
 export const metadata = { title: 'Invoice Detail' }
 
@@ -286,16 +287,18 @@ export default async function InvoiceDetailPage({
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Invoice Date</p>
-                  <p className="font-semibold text-slate-900">{formatDate(invoice.invoice_date)}</p>
-                </div>
-                <div>
-                  <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Due Date</p>
-                  <p className={`font-semibold ${invoice.status === 'overdue' ? 'text-red-600' : 'text-slate-900'}`}>
-                    {invoice.due_date ? formatDate(invoice.due_date) : '—'}
-                  </p>
-                </div>
+                <InvoiceDateEditor
+                  invoiceId={invoice.id}
+                  field="invoice_date"
+                  label="Invoice Date"
+                  value={invoice.invoice_date}
+                />
+                <InvoiceDateEditor
+                  invoiceId={invoice.id}
+                  field="due_date"
+                  label="Due Date"
+                  value={invoice.due_date}
+                />
                 {invoice.ref_number && (
                   <div>
                     <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">REF No.</p>

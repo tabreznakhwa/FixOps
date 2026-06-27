@@ -112,7 +112,7 @@ export async function PATCH(
       return NextResponse.json({ success: true, id })
     }
 
-    const ALLOWED_FIELDS = ['status', 'notes', 'terms_and_conditions', 'cancelled_reason', 'due_date']
+    const ALLOWED_FIELDS = ['status', 'notes', 'terms_and_conditions', 'cancelled_reason', 'due_date', 'invoice_date']
     const updatePayload: Record<string, unknown> = {}
 
     for (const field of ALLOWED_FIELDS) {
