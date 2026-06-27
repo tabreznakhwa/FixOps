@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, FileText, User, CreditCard, ClipboardList } from 'lucide-react'
+import { ArrowLeft, FileText, User, CreditCard, ClipboardList, Edit } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
 import { InvoiceActions } from './InvoiceActions'
 import { PrintActions } from '@/components/print/PrintActions'
@@ -82,6 +82,13 @@ export default async function InvoiceDetailPage({
     is_cancelled: boolean
   }>
 
+  // Role check for edit access
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = await (supabase as any)
+    .from('users').select('role').eq('id', user!.id).single()
+  const role = (profileRaw as { role: string } | null)?.role ?? ''
+  const canEdit = ['admin', 'owner', 'manager'].includes(role) && !['cancelled', 'paid'].includes(invoice.status)
+
   // Fetch org for print letterhead
   const { data: orgRaw } = await (supabase as any)
     .from('organizations')
@@ -119,7 +126,7 @@ export default async function InvoiceDetailPage({
             </div>
           </div>
           <div className="text-right">
-            <h2 className="text-3xl font-bold text-blue-700">TAX INVOICE</h2>
+            <h2 className="text-3xl font-bold text-blue-700">INVOICE</h2>
             <p className="text-xl font-mono font-bold text-slate-900 mt-1">{invoice.invoice_number}</p>
           </div>
         </div>
@@ -160,7 +167,6 @@ export default async function InvoiceDetailPage({
               <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2.5">Description</th>
               <th className="text-right text-xs font-semibold uppercase tracking-wider px-4 py-2.5">Qty</th>
               <th className="text-right text-xs font-semibold uppercase tracking-wider px-4 py-2.5">Unit Price</th>
-              <th className="text-right text-xs font-semibold uppercase tracking-wider px-4 py-2.5">Discount</th>
               <th className="text-right text-xs font-semibold uppercase tracking-wider px-4 py-2.5">Total</th>
             </tr>
           </thead>
@@ -171,9 +177,6 @@ export default async function InvoiceDetailPage({
                 <td className="px-4 py-2.5 text-sm text-slate-900">{item.description}</td>
                 <td className="px-4 py-2.5 text-sm text-right text-slate-700">{item.quantity}</td>
                 <td className="px-4 py-2.5 text-sm text-right text-slate-700">{formatCurrency(item.unit_price)}</td>
-                <td className="px-4 py-2.5 text-sm text-right text-slate-600">
-                  {(item.discount_percent ?? 0) > 0 ? `${item.discount_percent}%` : '—'}
-                </td>
                 <td className="px-4 py-2.5 text-sm text-right font-semibold text-slate-900">
                   {formatCurrency(item.line_total ?? item.total_price)}
                 </td>
@@ -223,6 +226,14 @@ export default async function InvoiceDetailPage({
         subtitle={`Invoice · ${formatStatus(invoice.invoice_type)}`}
         actions={
           <div className="flex items-center gap-2">
+            {canEdit && (
+              <Link
+                href={`/finance/invoices/${id}/edit`}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
+              >
+                <Edit className="w-4 h-4" /> Edit
+              </Link>
+            )}
             <PrintActions label="Print Invoice" />
             <Link
               href="/finance/invoices"
