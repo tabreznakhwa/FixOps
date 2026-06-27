@@ -22,8 +22,9 @@ export default async function OpeningReceivablesPage() {
       .from('customers')
       .select('id, full_name, customer_code, mobile_number')
       .eq('organization_id', profile?.organization_id)
-      .eq('is_active', true)
-      .order('full_name'),
+      .eq('status', 'active')
+      .order('full_name')
+      .limit(5000),
     admin
       .from('opening_receivables')
       .select('*, customers(full_name, customer_code)')
