@@ -136,6 +136,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
   const [invoiceDate, setInvoiceDate] = useState(TODAY)
   const [dueDate, setDueDate] = useState('')
   const [workOrderId, setWorkOrderId] = useState('')
+  const [refNumber, setRefNumber] = useState('')
   const [items, setItems] = useState<LineItem[]>([emptyItem()])
   const [discountAmount, setDiscountAmount] = useState('0')
   const [notes, setNotes] = useState('')
@@ -274,6 +275,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
             tax_percent: 0,
             inventory_item_id: it.inventory_item_id || null,
           })),
+          ref_number: refNumber.trim() || null,
           discount_amount: discount,
           tax_rate: 0,
           notes: notes.trim() || null,
@@ -341,6 +343,17 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
           <div>
             <label className={labelClass}>Due Date</label>
             <input type="date" className={inputClass} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className={labelClass}>REF Number <span className="text-slate-400 font-normal">(optional)</span></label>
+            <input
+              type="text"
+              placeholder="e.g. PO-2026-001, WO-REF-123…"
+              className={inputClass}
+              value={refNumber}
+              onChange={(e) => setRefNumber(e.target.value)}
+            />
           </div>
 
           {filteredWorkOrders.length > 0 && (

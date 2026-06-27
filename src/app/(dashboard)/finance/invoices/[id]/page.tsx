@@ -19,7 +19,7 @@ export default async function InvoiceDetailPage({
 
   const { data: invoiceRaw } = await (supabase as any)
     .from('invoices')
-    .select('*, customers(full_name, mobile_number, email, area, city), work_orders(work_order_number), users!invoices_created_by_fkey(full_name)')
+    .select('*, customers(full_name, mobile_number, email, address, block, street, avenue, house_number, area, city), work_orders(work_order_number), users!invoices_created_by_fkey(full_name)')
     .eq('id', id)
     .single()
 
@@ -31,6 +31,7 @@ export default async function InvoiceDetailPage({
     invoice_type: string
     invoice_date: string
     due_date: string | null
+    ref_number: string | null
     subtotal: number
     discount_amount: number
     tax_rate: number
@@ -43,7 +44,11 @@ export default async function InvoiceDetailPage({
     terms_and_conditions: string | null
     cancelled_reason: string | null
     created_at: string
-    customers: { full_name: string; mobile_number: string; email: string | null; area: string | null; city: string | null } | null
+    customers: {
+      full_name: string; mobile_number: string; email: string | null
+      address: string | null; block: string | null; street: string | null
+      avenue: string | null; house_number: string | null; area: string | null; city: string | null
+    } | null
     work_orders: { work_order_number: string } | null
     users: { full_name: string } | null
   }
@@ -136,10 +141,16 @@ export default async function InvoiceDetailPage({
           <div>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Bill To</p>
             <p className="font-bold text-slate-900">{customer?.full_name}</p>
+            {customer?.mobile_number && <p className="text-sm text-slate-600">{customer.mobile_number}</p>}
             {customer?.email && <p className="text-sm text-slate-600">{customer.email}</p>}
-            <p className="text-sm text-slate-600">{customer?.mobile_number}</p>
-            {(customer?.area || customer?.city) && (
-              <p className="text-sm text-slate-600">{[customer.area, customer.city].filter(Boolean).join(', ')}</p>
+            {customer && (customer.block || customer.street || customer.avenue || customer.house_number || customer.area || customer.city || customer.address) && (
+              <div className="text-sm text-slate-600 mt-0.5 space-y-0.5">
+                {customer.address && <p>{customer.address}</p>}
+                {(customer.block || customer.street || customer.avenue || customer.house_number) && (
+                  <p>{[customer.house_number && `House ${customer.house_number}`, customer.block && `Block ${customer.block}`, customer.street && `Street ${customer.street}`, customer.avenue && `Ave ${customer.avenue}`].filter(Boolean).join(', ')}</p>
+                )}
+                {(customer.area || customer.city) && <p>{[customer.area, customer.city].filter(Boolean).join(', ')}</p>}
+              </div>
             )}
           </div>
           <div className="text-right">
@@ -147,6 +158,7 @@ export default async function InvoiceDetailPage({
               {[
                 { label: 'Invoice Date', value: formatDate(invoice.invoice_date) },
                 { label: 'Due Date', value: invoice.due_date ? formatDate(invoice.due_date) : '—' },
+                ...(invoice.ref_number ? [{ label: 'REF No.', value: invoice.ref_number }] : []),
                 ...(workOrder ? [{ label: 'Work Order', value: workOrder.work_order_number }] : []),
                 { label: 'Status', value: invoice.status.toUpperCase() },
               ].map(({ label, value }) => (
@@ -273,7 +285,7 @@ export default async function InvoiceDetailPage({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
                   <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Invoice Date</p>
                   <p className="font-semibold text-slate-900">{formatDate(invoice.invoice_date)}</p>
@@ -284,6 +296,12 @@ export default async function InvoiceDetailPage({
                     {invoice.due_date ? formatDate(invoice.due_date) : '—'}
                   </p>
                 </div>
+                {invoice.ref_number && (
+                  <div>
+                    <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">REF No.</p>
+                    <p className="font-semibold text-slate-900 font-mono">{invoice.ref_number}</p>
+                  </div>
+                )}
                 {workOrder && (
                   <div>
                     <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Work Order</p>
@@ -313,7 +331,6 @@ export default async function InvoiceDetailPage({
                       <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Description</th>
                       <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Qty</th>
                       <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Unit Price</th>
-                      <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Disc %</th>
                       <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Total</th>
                     </tr>
                   </thead>

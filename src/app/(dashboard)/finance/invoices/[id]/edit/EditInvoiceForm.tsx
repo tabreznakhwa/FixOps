@@ -23,7 +23,7 @@ interface LineItem {
 interface Props {
   invoice: {
     id: string; invoice_number: string; invoice_type: string; invoice_date: string
-    due_date: string | null; discount_amount: number; notes: string | null
+    due_date: string | null; ref_number: string | null; discount_amount: number; notes: string | null
     terms_and_conditions: string | null; customer_id: string; work_order_id: string | null
   }
   items: { id: string; description: string; quantity: number; unit_price: number }[]
@@ -78,6 +78,7 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
   const [invoiceDate, setInvoiceDate] = useState(invoice.invoice_date)
   const [dueDate, setDueDate] = useState(invoice.due_date ?? '')
   const [workOrderId, setWorkOrderId] = useState(invoice.work_order_id ?? '')
+  const [refNumber, setRefNumber] = useState(invoice.ref_number ?? '')
   const [discountAmount, setDiscountAmount] = useState(String(invoice.discount_amount ?? 0))
   const [notes, setNotes] = useState(invoice.notes ?? '')
   const [termsAndConditions, setTermsAndConditions] = useState(invoice.terms_and_conditions ?? '')
@@ -168,6 +169,7 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
           invoice_date: invoiceDate,
           due_date: dueDate || null,
           work_order_id: workOrderId || null,
+          ref_number: refNumber.trim() || null,
           discount_amount: discount,
           notes: notes.trim() || null,
           terms_and_conditions: termsAndConditions.trim() || null,
@@ -224,6 +226,10 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
           <div>
             <label className={labelClass}>Due Date</label>
             <input type="date" className={inputClass} value={dueDate} onChange={e => setDueDate(e.target.value)} />
+          </div>
+          <div className="md:col-span-2">
+            <label className={labelClass}>REF Number <span className="text-slate-400 font-normal">(optional)</span></label>
+            <input type="text" placeholder="e.g. PO-2026-001, WO-REF-123…" className={inputClass} value={refNumber} onChange={e => setRefNumber(e.target.value)} />
           </div>
           {filteredWorkOrders.length > 0 && (
             <div className="md:col-span-2">
