@@ -88,7 +88,7 @@ export async function PATCH(
     }
 
     const { payment_date, payment_mode, reference_number, notes, amount_received } = body
-    const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    const updatePayload: Record<string, unknown> = {}
 
     if (payment_date) updatePayload.payment_date = payment_date
     if (payment_mode) updatePayload.payment_mode = payment_mode
@@ -111,12 +111,19 @@ export async function PATCH(
           const newPaid = Math.max(0, Number(inv.amount_paid) - oldAmount + newAmount)
           const newBalance = Math.max(0, Number(inv.total_amount) - newPaid)
           const newStatus = newPaid <= 0 ? 'issued' : newPaid < inv.total_amount ? 'partial' : 'paid'
-          await supabase.from('invoices').update({ amount_paid: newPaid, balance_due: newBalance, status: newStatus, updated_at: new Date().toISOString() }).eq('id', payment.invoice_id)
+          const { error: invErr } = await supabase.from('invoices').update({ amount_paid: newPaid, balance_due: newBalance, status: newStatus, updated_at: new Date().toISOString() }).eq('id', payment.invoice_id)
+          if (invErr) throw invErr
         }
       }
     }
 
-    await supabase.from('payments').update(updatePayload).eq('id', id)
+    if (Object.keys(updatePayload).length === 0) {
+      return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+    }
+
+    const { error: updateErr } = await supabase.from('payments').update(updatePayload).eq('id', id)
+    if (updateErr) throw updateErr
+
     await logAudit({ orgId: profile.organization_id, userId: user.id, action: 'update', entityType: 'payment', entityId: id, entityLabel: payment.payment_number })
     return NextResponse.json({ success: true })
   } catch (err: unknown) {
