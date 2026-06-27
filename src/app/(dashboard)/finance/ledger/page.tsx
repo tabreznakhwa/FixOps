@@ -4,6 +4,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { FileBarChart } from 'lucide-react'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
+import { LedgerCustomerSelector } from './LedgerCustomerSelector'
 
 export const metadata = { title: 'Customer Ledger' }
 
@@ -105,31 +106,7 @@ export default async function LedgerPage({
 
       <div className="p-6 space-y-5">
         {/* Customer selector */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 print:hidden">
-          <form method="GET" className="flex items-end gap-3">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Select Customer</label>
-              <select
-                name="customer_id"
-                defaultValue={params.customer_id ?? ''}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Choose a customer…</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.full_name}{c.company_name ? ` — ${c.company_name}` : ''} · {c.mobile_number}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button
-              type="submit"
-              className="px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition"
-            >
-              View Ledger
-            </button>
-          </form>
-        </div>
+        <LedgerCustomerSelector customers={customers} selectedId={params.customer_id ?? ''} />
 
         {selectedCustomer && (
           <>
