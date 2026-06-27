@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
-import { Plus, Trash2, AlertCircle } from 'lucide-react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { Plus, Trash2, AlertCircle, ChevronDown, X } from 'lucide-react'
 
 interface Customer {
   id: string
@@ -114,6 +114,120 @@ const TODAY = new Date().toISOString().split('T')[0]
 const inputClass =
   'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
+
+function CustomerCombobox({
+  customers,
+  value,
+  onChange,
+}: {
+  customers: Customer[]
+  value: string
+  onChange: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+
+  const selected = customers.find((c) => c.id === value)
+
+  const filtered = search.trim()
+    ? customers.filter(
+        (c) =>
+          c.full_name.toLowerCase().includes(search.toLowerCase()) ||
+          (c.company_name ?? '').toLowerCase().includes(search.toLowerCase()) ||
+          (c.mobile_number ?? '').includes(search),
+      )
+    : customers
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const select = (id: string) => {
+    onChange(id)
+    setOpen(false)
+    setSearch('')
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+      >
+        {selected ? (
+          <span className="text-slate-900 truncate">
+            {selected.full_name}
+            {selected.company_name ? ` — ${selected.company_name}` : ''}
+            {selected.mobile_number ? (
+              <span className="text-slate-400 ml-1">· {selected.mobile_number}</span>
+            ) : null}
+          </span>
+        ) : (
+          <span className="text-slate-400">Select customer…</span>
+        )}
+        <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+          {selected && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); select('') }}
+              onKeyDown={(e) => e.key === 'Enter' && (e.stopPropagation(), select(''))}
+              className="p-0.5 text-slate-400 hover:text-red-400 rounded cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </span>
+          )}
+          <ChevronDown className="w-4 h-4 text-slate-400" />
+        </div>
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+          <div className="p-2 border-b border-slate-100">
+            <input
+              autoFocus
+              type="text"
+              placeholder="Search name, company, phone…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full text-sm text-slate-900 placeholder-slate-400 px-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="text-sm text-slate-400 px-3 py-3 text-center">No customers found</p>
+            ) : (
+              filtered.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => select(c.id)}
+                  className={`w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 transition flex items-center justify-between gap-2 ${value === c.id ? 'bg-blue-50 font-semibold' : ''}`}
+                >
+                  <span className="text-slate-900 truncate">
+                    {c.full_name}
+                    {c.company_name ? (
+                      <span className="text-slate-400 font-normal"> — {c.company_name}</span>
+                    ) : null}
+                  </span>
+                  {c.mobile_number && (
+                    <span className="text-xs text-slate-400 flex-shrink-0">{c.mobile_number}</span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function fmt(n: number) {
   return `KWD ${n.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`
@@ -309,19 +423,11 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Customer *</label>
-            <select
-              className={inputClass}
+            <CustomerCombobox
+              customers={customers}
               value={customerId}
-              onChange={(e) => { setCustomerId(e.target.value); setWorkOrderId('') }}
-              required
-            >
-              <option value="">Select customer…</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.full_name}{c.company_name ? ` — ${c.company_name}` : ''}{c.mobile_number ? ` · ${c.mobile_number}` : ''}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => { setCustomerId(id); setWorkOrderId('') }}
+            />
           </div>
 
           <div>
