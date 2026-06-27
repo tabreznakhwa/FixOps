@@ -33,7 +33,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   // Mode breakdown
   const { data: allPaymentsRaw } = await supabase
     .from('payments')
-    .select('payment_mode, amount_received')
+    .select('payment_mode, amount_received, payment_date')
     .eq('is_cancelled', false)
   const allPayments = allPaymentsRaw as unknown as { payment_mode: string; amount_received: number; payment_date?: string }[]
 
