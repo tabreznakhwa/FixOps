@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Plus, Trash2, Loader2, AlertCircle } from 'lucide-react'
+import { Plus, Trash2, Loader2, AlertCircle, Search } from 'lucide-react'
 
 interface Supplier { id: string; supplier_name: string; supplier_code: string }
 interface Entry {
@@ -20,6 +20,7 @@ const today = new Date().toISOString().split('T')[0]
 export function OpeningPayablesForm({ suppliers, entries: initialEntries }: Props) {
   const router = useRouter()
   const [entries, setEntries] = useState<Entry[]>(initialEntries)
+  const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -79,7 +80,19 @@ export function OpeningPayablesForm({ suppliers, entries: initialEntries }: Prop
     }
   }
 
+  const filtered = search.trim()
+    ? entries.filter(e => {
+        const q = search.toLowerCase()
+        return (
+          e.suppliers?.supplier_name.toLowerCase().includes(q) ||
+          e.suppliers?.supplier_code.toLowerCase().includes(q) ||
+          e.bill_ref.toLowerCase().includes(q)
+        )
+      })
+    : entries
+
   const total = entries.reduce((s, e) => s + e.balance_due, 0)
+  const filteredTotal = filtered.reduce((s, e) => s + e.balance_due, 0)
 
   return (
     <div className="space-y-5">
@@ -94,52 +107,78 @@ export function OpeningPayablesForm({ suppliers, entries: initialEntries }: Prop
       )}
 
       {entries.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Supplier</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Bill Ref</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Date</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Due Date</th>
-                  <th className="text-right text-xs font-semibold text-red-600 uppercase tracking-wider px-5 py-3">Balance Due</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {entries.map(e => (
-                  <tr key={e.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-3">
-                      <p className="text-sm font-semibold text-slate-800">{e.suppliers?.supplier_name ?? '—'}</p>
-                      <p className="text-xs text-slate-400">{e.suppliers?.supplier_code}</p>
-                    </td>
-                    <td className="px-4 py-3 text-sm font-mono text-slate-700">{e.bill_ref}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{formatDate(e.bill_date)}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{e.due_date ? formatDate(e.due_date) : '—'}</td>
-                    <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(e.balance_due)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleDelete(e.id)}
-                        disabled={deleting === e.id}
-                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
-                      >
-                        {deleting === e.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-slate-50 border-t border-slate-200">
-                  <td colSpan={4} className="px-5 py-3 text-sm font-bold text-slate-700">Total</td>
-                  <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(total)}</td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
+        <>
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by supplier name, code, or bill ref…"
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
-        </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[700px]">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Supplier</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Bill Ref</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Date</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Due Date</th>
+                    <th className="text-right text-xs font-semibold text-red-600 uppercase tracking-wider px-5 py-3">Balance Due</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-8 text-center text-sm text-slate-400">
+                        No entries match &ldquo;{search}&rdquo;
+                      </td>
+                    </tr>
+                  ) : (
+                    filtered.map(e => (
+                      <tr key={e.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-5 py-3">
+                          <p className="text-sm font-semibold text-slate-800">{e.suppliers?.supplier_name ?? '—'}</p>
+                          <p className="text-xs text-slate-400">{e.suppliers?.supplier_code}</p>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-mono text-slate-700">{e.bill_ref}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{formatDate(e.bill_date)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{e.due_date ? formatDate(e.due_date) : '—'}</td>
+                        <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(e.balance_due)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => handleDelete(e.id)}
+                            disabled={deleting === e.id}
+                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                          >
+                            {deleting === e.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-50 border-t border-slate-200">
+                    <td colSpan={4} className="px-5 py-3 text-sm font-bold text-slate-700">
+                      {search.trim() ? `${filtered.length} of ${entries.length} entries` : 'Total'}
+                    </td>
+                    <td className="px-5 py-3 text-right text-sm font-bold text-red-600">
+                      {formatCurrency(search.trim() ? filteredTotal : total)}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </>
       )}
 
       {showForm ? (
