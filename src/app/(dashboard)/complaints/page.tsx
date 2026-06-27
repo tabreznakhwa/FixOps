@@ -68,7 +68,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
           >
             All ({counts?.length ?? 0})
           </Link>
-          {['new', 'assigned', 'work_started', 'waiting_parts', 'completed'].map((s) => (
+          {['new', 'assigned', 'accepted', 'on_the_way', 'work_started', 'waiting_parts', 'waiting_approval', 'completed'].map((s) => (
             <Link
               key={s}
               href={`/complaints?status=${s}`}
