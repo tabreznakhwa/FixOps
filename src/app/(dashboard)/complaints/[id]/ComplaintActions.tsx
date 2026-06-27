@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation'
 import { Loader2, ChevronDown } from 'lucide-react'
 
 const STATUS_LABELS: Record<string, string> = {
-  new: 'New', under_review: 'Under Review', assigned: 'Assigned', accepted: 'Accepted',
+  new: 'New', assigned: 'Assigned', accepted: 'Accepted',
   on_the_way: 'On The Way', work_started: 'Work Started', waiting_parts: 'Waiting Parts',
-  waiting_approval: 'Waiting Approval', completed: 'Completed', verified: 'Verified', cancelled: 'Cancelled',
+  waiting_approval: 'Waiting Approval', completed: 'Completed', cancelled: 'Cancelled',
 }
 
 interface Person { id: string; full_name: string; type: 'user' | 'staff'; role: string }

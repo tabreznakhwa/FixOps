@@ -15,8 +15,8 @@ const categoryIcons: Record<string, string> = {
 }
 
 const STATUS_FLOW = [
-  'new', 'under_review', 'assigned', 'accepted', 'on_the_way',
-  'work_started', 'waiting_parts', 'waiting_approval', 'completed', 'verified',
+  'new', 'assigned', 'accepted', 'on_the_way',
+  'work_started', 'waiting_parts', 'waiting_approval', 'completed',
 ]
 
 export default async function ComplaintDetailPage({ params }: { params: Promise<{ id: string }> }) {

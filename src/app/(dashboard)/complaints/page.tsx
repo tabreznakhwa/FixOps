@@ -6,7 +6,7 @@ import { getPriorityColor, getStatusColor, formatStatus, formatDateTime } from '
 
 export const metadata = { title: 'Complaints' }
 
-const STATUSES = ['new', 'under_review', 'assigned', 'accepted', 'on_the_way', 'work_started', 'waiting_parts', 'waiting_approval', 'completed', 'verified']
+const STATUSES = ['new', 'assigned', 'accepted', 'on_the_way', 'work_started', 'waiting_parts', 'waiting_approval', 'completed']
 
 export default async function ComplaintsPage({ searchParams }: { searchParams: Promise<{ status?: string; priority?: string; q?: string }> }) {
   const params = await searchParams

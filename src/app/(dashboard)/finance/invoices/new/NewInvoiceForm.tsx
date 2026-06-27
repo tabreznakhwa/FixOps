@@ -36,7 +36,6 @@ interface LineItem {
   description: string
   quantity: string
   unit_price: string
-  discount_percent: string
 }
 
 interface Props {
@@ -128,7 +127,6 @@ function emptyItem(): LineItem {
     description: '',
     quantity: '1',
     unit_price: '',
-    discount_percent: '0',
   }
 }
 
@@ -241,8 +239,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
   const subtotal = items.reduce((sum, item) => {
     const qty = parseFloat(item.quantity) || 0
     const price = parseFloat(item.unit_price) || 0
-    const disc = parseFloat(item.discount_percent) || 0
-    return sum + qty * price * (1 - disc / 100)
+    return sum + qty * price
   }, 0)
 
   const discount = parseFloat(discountAmount) || 0
@@ -273,7 +270,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
             description: it.description.trim(),
             quantity: parseFloat(it.quantity) || 1,
             unit_price: parseFloat(it.unit_price) || 0,
-            discount_percent: parseFloat(it.discount_percent) || 0,
+            discount_percent: 0,
             tax_percent: 0,
             inventory_item_id: it.inventory_item_id || null,
           })),
@@ -380,18 +377,16 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
         <div className="space-y-3">
           {/* Column headers — desktop only */}
           <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
-            <div className="col-span-5">Description</div>
-            <div className="col-span-1 text-right">Qty</div>
+            <div className="col-span-7">Description</div>
+            <div className="col-span-2 text-right">Qty</div>
             <div className="col-span-2 text-right">Unit Price (KWD)</div>
-            <div className="col-span-2 text-right">Disc %</div>
-            <div className="col-span-2 text-right">Line Total</div>
+            <div className="col-span-1 text-right">Total</div>
           </div>
 
           {items.map((item, index) => {
             const qty = parseFloat(item.quantity) || 0
             const price = parseFloat(item.unit_price) || 0
-            const disc = parseFloat(item.discount_percent) || 0
-            const lineTotal = qty * price * (1 - disc / 100)
+            const lineTotal = qty * price
 
             return (
               <div key={index} className="border border-slate-200 rounded-xl p-3 space-y-2.5 bg-slate-50">
@@ -465,7 +460,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
 
                 {/* Description + price fields */}
                 <div className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-12 md:col-span-5">
+                  <div className="col-span-12 md:col-span-7">
                     <input
                       type="text"
                       placeholder={item.type === 'custom' ? 'Description *' : 'Description (auto-filled, editable)'}
@@ -475,7 +470,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
                       required
                     />
                   </div>
-                  <div className="col-span-3 md:col-span-1">
+                  <div className="col-span-4 md:col-span-2">
                     <input
                       type="number"
                       placeholder="Qty"
@@ -487,7 +482,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
                       required
                     />
                   </div>
-                  <div className="col-span-4 md:col-span-2">
+                  <div className="col-span-5 md:col-span-2">
                     <input
                       type="number"
                       placeholder="0.000"
@@ -499,19 +494,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
                       required
                     />
                   </div>
-                  <div className="col-span-3 md:col-span-2">
-                    <input
-                      type="number"
-                      placeholder="0"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      className={`${inputClass} text-right`}
-                      value={item.discount_percent}
-                      onChange={(e) => updateItem(index, 'discount_percent', e.target.value)}
-                    />
-                  </div>
-                  <div className="col-span-2 md:col-span-2 flex items-center justify-end">
+                  <div className="col-span-3 md:col-span-1 flex items-center justify-end">
                     <span className="text-sm font-semibold text-slate-700">{fmt(lineTotal)}</span>
                   </div>
                 </div>
@@ -532,9 +515,9 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
       {/* Totals */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-          <h2 className="font-semibold text-slate-900">Adjustments</h2>
+          <h2 className="font-semibold text-slate-900">Discount</h2>
           <div>
-            <label className={labelClass}>Header Discount (KWD)</label>
+            <label className={labelClass}>Discount Amount (KWD)</label>
             <input
               type="number"
               min="0"
@@ -544,7 +527,6 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
               onChange={(e) => setDiscountAmount(e.target.value)}
             />
           </div>
-          <p className="text-xs text-slate-400">No VAT applied — Kuwait exemption</p>
         </div>
 
         <div className="bg-slate-50 rounded-xl border border-slate-200 p-5">
