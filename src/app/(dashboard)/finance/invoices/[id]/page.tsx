@@ -189,9 +189,6 @@ export default async function InvoiceDetailPage({
             {invoice.discount_amount > 0 && (
               <div className="flex justify-between"><span className="text-slate-500">Discount</span><span className="font-medium text-green-700">− {formatCurrency(invoice.discount_amount)}</span></div>
             )}
-            {invoice.tax_amount > 0 && (
-              <div className="flex justify-between"><span className="text-slate-500">VAT ({invoice.tax_rate}%)</span><span className="font-medium">{formatCurrency(invoice.tax_amount)}</span></div>
-            )}
             <div className="border-t-2 border-slate-800 pt-2 flex justify-between text-base font-bold">
               <span>Total (KWD)</span><span>{formatCurrency(invoice.total_amount)}</span>
             </div>
@@ -306,7 +303,6 @@ export default async function InvoiceDetailPage({
                       <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Qty</th>
                       <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Unit Price</th>
                       <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Disc %</th>
-                      <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Tax %</th>
                       <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Total</th>
                     </tr>
                   </thead>
@@ -320,9 +316,6 @@ export default async function InvoiceDetailPage({
                         </td>
                         <td className="px-4 py-3.5 text-sm text-slate-700 text-right hidden md:table-cell">
                           {item.discount_percent > 0 ? `${item.discount_percent}%` : '—'}
-                        </td>
-                        <td className="px-4 py-3.5 text-sm text-slate-700 text-right hidden md:table-cell">
-                          {item.tax_percent > 0 ? `${item.tax_percent}%` : '—'}
                         </td>
                         <td className="px-4 py-3.5 text-sm font-semibold text-slate-900 text-right">
                           {formatCurrency(item.line_total ?? item.total_price)}

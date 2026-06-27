@@ -59,10 +59,16 @@ export default async function DashboardPage() {
   type StatusRow = { status: string }
   type RecRow = { balance_due: number; status: string }
   type TechRow = { id: string; full_name: string }
+  const seenNames = new Set<string>()
   const technicianData: TechRow[] = [
     ...((technicianUsers as unknown as TechRow[]) ?? []),
     ...((technicianStaff as unknown as TechRow[]) ?? []),
-  ]
+  ].filter((t) => {
+    const key = t.full_name.trim().toLowerCase()
+    if (seenNames.has(key)) return false
+    seenNames.add(key)
+    return true
+  })
   type StockRow = { id: string; item_name: string; current_stock: number; minimum_stock_level: number; unit_of_measure: string }
 
   const rev = (revenueData as unknown as RevRow[]) ?? []
