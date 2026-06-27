@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Plus, Trash2, Loader2, AlertCircle, Search } from 'lucide-react'
+import { Plus, Trash2, Loader2, AlertCircle, Search, ChevronDown, X } from 'lucide-react'
 
 interface Supplier { id: string; supplier_name: string; supplier_code: string }
 interface Entry {
@@ -16,6 +16,138 @@ interface Props { suppliers: Supplier[]; entries: Entry[] }
 
 const inputCls = 'border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-full'
 const today = new Date().toISOString().split('T')[0]
+
+// ── Searchable supplier dropdown ───────────────────────────────────────────────
+
+function SupplierSelect({
+  suppliers,
+  value,
+  onChange,
+}: {
+  suppliers: Supplier[]
+  value: string
+  onChange: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const selected = suppliers.find(s => s.id === value) ?? null
+
+  const filtered = query.trim()
+    ? suppliers.filter(s =>
+        s.supplier_name.toLowerCase().includes(query.toLowerCase()) ||
+        s.supplier_code.toLowerCase().includes(query.toLowerCase())
+      )
+    : suppliers
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+        setQuery('')
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  function handleOpen() {
+    setOpen(true)
+    setQuery('')
+    setTimeout(() => inputRef.current?.focus(), 50)
+  }
+
+  function handleSelect(s: Supplier) {
+    onChange(s.id)
+    setOpen(false)
+    setQuery('')
+  }
+
+  function handleClear(e: React.MouseEvent) {
+    e.stopPropagation()
+    onChange('')
+    setOpen(false)
+    setQuery('')
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={handleOpen}
+        className={`${inputCls} flex items-center justify-between gap-2 text-left`}
+        style={{ paddingRight: '0.5rem' }}
+      >
+        {selected ? (
+          <span className="flex-1 truncate">
+            <span className="font-medium">{selected.supplier_name}</span>
+            <span className="ml-2 text-slate-400 text-xs">{selected.supplier_code}</span>
+          </span>
+        ) : (
+          <span className="text-slate-400 flex-1">Select supplier…</span>
+        )}
+        <span className="flex items-center gap-0.5 flex-shrink-0">
+          {selected && (
+            <span
+              role="button"
+              onClick={handleClear}
+              className="p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600"
+            >
+              <X className="w-3.5 h-3.5" />
+            </span>
+          )}
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+          {/* Search input */}
+          <div className="p-2 border-b border-slate-100">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search supplier…"
+                className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Options list */}
+          <ul className="max-h-52 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <li className="px-4 py-3 text-sm text-slate-400 text-center">No suppliers match &ldquo;{query}&rdquo;</li>
+            ) : (
+              filtered.map(s => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => handleSelect(s)}
+                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors flex items-center justify-between gap-3 ${s.id === value ? 'bg-blue-50 text-blue-700' : 'text-slate-800'}`}
+                  >
+                    <span className="font-medium truncate">{s.supplier_name}</span>
+                    <span className="text-xs text-slate-400 flex-shrink-0">{s.supplier_code}</span>
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main form ─────────────────────────────────────────────────────────────────
 
 export function OpeningPayablesForm({ suppliers, entries: initialEntries }: Props) {
   const router = useRouter()
@@ -35,7 +167,7 @@ export function OpeningPayablesForm({ suppliers, entries: initialEntries }: Prop
     notes: '',
   })
 
-  const set = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+  const set = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [field]: e.target.value }))
 
   async function handleAdd(e: React.FormEvent) {
@@ -192,10 +324,11 @@ export function OpeningPayablesForm({ suppliers, entries: initialEntries }: Prop
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Supplier *</label>
-              <select value={form.supplier_id} onChange={set('supplier_id')} required className={inputCls}>
-                <option value="">Select supplier…</option>
-                {suppliers.map(s => <option key={s.id} value={s.id}>{s.supplier_name} ({s.supplier_code})</option>)}
-              </select>
+              <SupplierSelect
+                suppliers={suppliers}
+                value={form.supplier_id}
+                onChange={id => setForm(f => ({ ...f, supplier_id: id }))}
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Bill / Invoice Ref *</label>
