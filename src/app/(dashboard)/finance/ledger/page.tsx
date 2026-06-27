@@ -11,7 +11,7 @@ export const metadata = { title: 'Customer Ledger' }
 export default async function LedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ customer_id?: string }>
+  searchParams: Promise<{ customer_id?: string; from_date?: string; to_date?: string }>
 }) {
   const params = await searchParams
   const supabase = await createClient()
@@ -42,21 +42,30 @@ export default async function LedgerPage({
   if (params.customer_id) {
     selectedCustomer = customers.find(c => c.id === params.customer_id) ?? null
 
+    const fromDate = params.from_date ?? null
+    const toDate = params.to_date ?? null
+
     // Fetch invoices (debit entries — customer owes us)
-    const { data: invoicesRaw } = await (supabase as any)
+    let invQuery = (supabase as any)
       .from('invoices')
       .select('id, invoice_number, invoice_date, total_amount, status')
       .eq('customer_id', params.customer_id)
       .not('status', 'in', '(cancelled,written_off)')
       .order('invoice_date', { ascending: true })
+    if (fromDate) invQuery = invQuery.gte('invoice_date', fromDate)
+    if (toDate) invQuery = invQuery.lte('invoice_date', toDate)
+    const { data: invoicesRaw } = await invQuery
 
     // Fetch payments (credit entries — customer paid us)
-    const { data: paymentsRaw } = await supabase
+    let payQuery = (supabase as any)
       .from('payments')
       .select('id, payment_number, payment_date, amount_received, payment_mode, is_advance, is_cancelled')
-      .eq('customer_id', params.customer_id as unknown as string)
+      .eq('customer_id', params.customer_id)
       .eq('is_cancelled', false)
       .order('payment_date', { ascending: true })
+    if (fromDate) payQuery = payQuery.gte('payment_date', fromDate)
+    if (toDate) payQuery = payQuery.lte('payment_date', toDate)
+    const { data: paymentsRaw } = await payQuery
 
     const invoices = (invoicesRaw ?? []) as unknown as Array<{
       id: string; invoice_number: string; invoice_date: string; total_amount: number; status: string
@@ -106,7 +115,12 @@ export default async function LedgerPage({
 
       <div className="p-6 space-y-5">
         {/* Customer selector */}
-        <LedgerCustomerSelector customers={customers} selectedId={params.customer_id ?? ''} />
+        <LedgerCustomerSelector
+          customers={customers}
+          selectedId={params.customer_id ?? ''}
+          fromDate={params.from_date ?? ''}
+          toDate={params.to_date ?? ''}
+        />
 
         {selectedCustomer && (
           <>
