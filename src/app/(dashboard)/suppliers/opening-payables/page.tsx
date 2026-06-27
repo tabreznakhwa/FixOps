@@ -19,7 +19,7 @@ export default async function OpeningPayablesPage() {
       .from('suppliers')
       .select('id, supplier_name, supplier_code')
       .eq('organization_id', profile?.organization_id)
-      .eq('is_active', true)
+      .eq('status', 'active')
       .order('supplier_name'),
     (supabase as any)
       .from('opening_payables')
