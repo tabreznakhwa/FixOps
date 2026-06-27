@@ -83,7 +83,7 @@ function CustomerCombobox({ customers, value, onChange }: { customers: Customer[
               placeholder="Search name, code, phone…"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full text-sm text-slate-900 placeholder-slate-400 bg-white px-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div className="max-h-52 overflow-y-auto">
