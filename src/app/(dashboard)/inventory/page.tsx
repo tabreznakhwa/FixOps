@@ -77,7 +77,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
               name="q"
               defaultValue={params.q}
               placeholder="Search items..."
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </form>
           <Link

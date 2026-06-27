@@ -28,7 +28,7 @@ export function CustomerSearch() {
           name="q"
           defaultValue={searchParams.get('q') ?? ''}
           placeholder="Search by name, company, mobile, or code..."
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
       <button type="submit"
