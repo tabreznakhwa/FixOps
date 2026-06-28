@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -17,10 +17,11 @@ export default async function InvoiceDetailPage({
 }) {
   const { id } = await params
   const supabase = await createClient()
+  const admin = createAdminClient() as any
 
-  const { data: invoiceRaw } = await (supabase as any)
+  const { data: invoiceRaw } = await admin
     .from('invoices')
-    .select('*, customers(full_name, mobile_number, email, address, block, street, avenue, house_number, area, city), work_orders(work_order_number), users!invoices_created_by_fkey(full_name)')
+    .select('*, customers(full_name, company_name, mobile_number, email, address, block, street, avenue, house_number, area, city), work_orders(work_order_number), users!invoices_created_by_fkey(full_name)')
     .eq('id', id)
     .single()
 
@@ -46,7 +47,7 @@ export default async function InvoiceDetailPage({
     cancelled_reason: string | null
     created_at: string
     customers: {
-      full_name: string; mobile_number: string; email: string | null
+      full_name: string; company_name: string | null; mobile_number: string; email: string | null
       address: string | null; block: string | null; street: string | null
       avenue: string | null; house_number: string | null; area: string | null; city: string | null
     } | null
@@ -54,7 +55,7 @@ export default async function InvoiceDetailPage({
     users: { full_name: string } | null
   }
 
-  const { data: itemsRaw } = await (supabase as any)
+  const { data: itemsRaw } = await admin
     .from('invoice_items')
     .select('*')
     .eq('invoice_id', id)
@@ -96,7 +97,7 @@ export default async function InvoiceDetailPage({
   const canEdit = ['admin', 'owner', 'manager'].includes(role) && !['cancelled', 'paid'].includes(invoice.status)
 
   // Fetch org for print letterhead
-  const { data: orgRaw } = await (supabase as any)
+  const { data: orgRaw } = await admin
     .from('organizations')
     .select('name, logo_url, address, city, phone, email, vat_number')
     .limit(1).single()
@@ -141,10 +142,11 @@ export default async function InvoiceDetailPage({
         <div className="grid grid-cols-2 gap-8 mb-8">
           <div>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Bill To</p>
-            <p className="font-bold text-slate-900">{customer?.full_name}</p>
+            <p className="font-bold text-slate-900 text-base">{customer?.full_name ?? '—'}</p>
+            {customer?.company_name && <p className="text-sm font-medium text-slate-700">{customer.company_name}</p>}
             {customer?.mobile_number && <p className="text-sm text-slate-600">{customer.mobile_number}</p>}
             {customer?.email && <p className="text-sm text-slate-600">{customer.email}</p>}
-            {customer && (customer.block || customer.street || customer.avenue || customer.house_number || customer.area || customer.city || customer.address) && (
+            {customer && (
               <div className="text-sm text-slate-600 mt-0.5 space-y-0.5">
                 {customer.address && <p>{customer.address}</p>}
                 {(customer.block || customer.street || customer.avenue || customer.house_number) && (
@@ -481,6 +483,7 @@ export default async function InvoiceDetailPage({
                 </h3>
                 <div className="space-y-1.5 text-sm">
                   <p className="font-semibold text-slate-900">{customer.full_name}</p>
+                  {customer.company_name && <p className="text-slate-600 font-medium">{customer.company_name}</p>}
                   <p className="text-slate-600">{customer.mobile_number}</p>
                   {customer.email && <p className="text-slate-600">{customer.email}</p>}
                   {(customer.area || customer.city) && (
