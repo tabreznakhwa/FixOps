@@ -116,7 +116,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
             workOrderId={wo.id}
             inventoryItems={inventoryItems}
             existingParts={existingParts}
-            isCompleted={wo.status === 'completed'}
+            isCompleted={['invoiced', 'paid', 'cancelled'].includes(wo.status)}
           />
 
           {/* Financials + schedule */}
