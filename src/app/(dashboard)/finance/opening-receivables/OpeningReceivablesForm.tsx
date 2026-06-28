@@ -294,7 +294,7 @@ export function OpeningReceivablesForm({ customers, entries: initialEntries }: P
                                 step="0.001"
                                 value={payAmount}
                                 onChange={ev => setPayAmount(ev.target.value)}
-                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 w-36 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
                                 autoFocus
                               />
                             </div>
@@ -303,7 +303,7 @@ export function OpeningReceivablesForm({ customers, entries: initialEntries }: P
                               <select
                                 value={payMode}
                                 onChange={ev => setPayMode(ev.target.value)}
-                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
                               >
                                 <option value="cash">Cash</option>
                                 <option value="bank_transfer">Bank Transfer</option>
@@ -317,7 +317,7 @@ export function OpeningReceivablesForm({ customers, entries: initialEntries }: P
                                 type="date"
                                 value={payDate}
                                 onChange={ev => setPayDate(ev.target.value)}
-                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
                               />
                             </div>
                             {payError && (
