@@ -25,7 +25,7 @@ export default function EditComplaintPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    fetch(`/api/complaints/${id}/detail`)
+    fetch(`/api/complaints/${id}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.error) { setError(data.error); return }
