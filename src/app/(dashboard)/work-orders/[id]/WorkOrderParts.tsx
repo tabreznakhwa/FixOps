@@ -223,7 +223,6 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
   const [unitPrice, setUnitPrice] = useState('')
   const [inventoryItemId, setInventoryItemId] = useState('')
   const [serviceLabel, setServiceLabel] = useState('')
-  const [isCustomService, setIsCustomService] = useState(false)
 
   const [saving, setSaving] = useState(false)
   const [removing, setRemoving] = useState<string | null>(null)
@@ -237,7 +236,6 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
     setUnitPrice('')
     setInventoryItemId('')
     setServiceLabel('')
-    setIsCustomService(false)
     setError('')
   }
 
@@ -261,7 +259,6 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
   function handleServiceSelect(label: string) {
     setServiceLabel(label)
     const isCustom = label.toLowerCase().startsWith('custom ')
-    setIsCustomService(isCustom)
     if (!isCustom) {
       setDescription(label)
       const price = ALL_SERVICES_MAP[label]
