@@ -452,7 +452,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems }: Props)
         ...next[index],
         service_label: label,
         description: label,
-        unit_price: price !== null && price > 0 ? String(price) : '',
+        unit_price: price !== null ? String(price) : '0',
       }
       return next
     })

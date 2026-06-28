@@ -379,11 +379,11 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
       const price = ALL_SERVICES_MAP[label]
       // "Custom X Service" presets clear description so user types their own
       setDescription(label.toLowerCase().startsWith('custom ') ? '' : label)
-      setUnitPrice(price > 0 ? price.toFixed(3) : '')
+      setUnitPrice(price.toFixed(3))
     } else {
       // Fully custom service typed by user — pre-fill description with what they typed
       setDescription(label)
-      setUnitPrice('')
+      setUnitPrice('0.000')
     }
   }
 
@@ -599,7 +599,6 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
                   onChange={e => setUnitPrice(e.target.value)}
                   placeholder="0.000"
                   className={`${inputCls} text-right`}
-                  required
                 />
               </div>
             </div>

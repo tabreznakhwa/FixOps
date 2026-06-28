@@ -87,19 +87,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       throw insertErr
     }
 
-    // Recalculate and persist final_amount
-    const { data: allItems } = await (supabase as any)
-      .from('work_order_line_items')
-      .select('quantity, unit_price')
-      .eq('work_order_id', workOrderId)
+    // Recalculate and persist final_amount (non-critical — don't fail the insert if this errors)
+    try {
+      const { data: allItems } = await (supabase as any)
+        .from('work_order_line_items')
+        .select('quantity, unit_price')
+        .eq('work_order_id', workOrderId)
 
-    const newTotal = (allItems ?? []).reduce(
-      (s: number, i: { quantity: number; unit_price: number }) => s + i.quantity * i.unit_price, 0
-    )
-    await (supabase as any)
-      .from('work_orders')
-      .update({ final_amount: newTotal, updated_at: new Date().toISOString() })
-      .eq('id', workOrderId)
+      const newTotal = (allItems ?? []).reduce(
+        (s: number, i: { quantity: number; unit_price: number }) => s + i.quantity * i.unit_price, 0
+      )
+      await (supabase as any)
+        .from('work_orders')
+        .update({ final_amount: newTotal, updated_at: new Date().toISOString() })
+        .eq('id', workOrderId)
+    } catch (totalErr) {
+      console.error('final_amount update failed (non-critical):', totalErr)
+    }
 
     return NextResponse.json({ success: true, lineItem })
   } catch (err) {
@@ -148,19 +152,23 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     if (deleteErr) throw deleteErr
 
-    // Recalculate and persist final_amount
-    const { data: remaining } = await (supabase as any)
-      .from('work_order_line_items')
-      .select('quantity, unit_price')
-      .eq('work_order_id', workOrderId)
+    // Recalculate and persist final_amount (non-critical)
+    try {
+      const { data: remaining } = await (supabase as any)
+        .from('work_order_line_items')
+        .select('quantity, unit_price')
+        .eq('work_order_id', workOrderId)
 
-    const newTotal = (remaining ?? []).reduce(
-      (s: number, i: { quantity: number; unit_price: number }) => s + i.quantity * i.unit_price, 0
-    )
-    await (supabase as any)
-      .from('work_orders')
-      .update({ final_amount: newTotal, updated_at: new Date().toISOString() })
-      .eq('id', workOrderId)
+      const newTotal = (remaining ?? []).reduce(
+        (s: number, i: { quantity: number; unit_price: number }) => s + i.quantity * i.unit_price, 0
+      )
+      await (supabase as any)
+        .from('work_orders')
+        .update({ final_amount: newTotal, updated_at: new Date().toISOString() })
+        .eq('id', workOrderId)
+    } catch (totalErr) {
+      console.error('final_amount update failed (non-critical):', totalErr)
+    }
 
     return NextResponse.json({ success: true })
   } catch (err) {
