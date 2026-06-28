@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -9,11 +10,16 @@ export const metadata = { title: 'Edit Complaint' }
 
 export default async function EditComplaintPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  // Verify user is authenticated
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) notFound()
 
-  const { data: complaintRaw } = await (supabase as any)
+  // Use admin client so RLS never blocks reading any complaint (including completed)
+  const admin = createAdminClient() as any
+  const { data: complaintRaw } = await admin
     .from('complaints')
-    .select('id, complaint_number, service_category, priority, description, location, preferred_date, preferred_time, notes')
+    .select('id, complaint_number, service_category, priority, description, location, preferred_date, preferred_time, notes, status')
     .eq('id', id)
     .single()
 
