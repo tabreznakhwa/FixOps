@@ -74,7 +74,7 @@ export async function PATCH(
       if (!['admin', 'owner', 'manager'].includes(profile.role)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
-      const { customer_id, invoice_type, invoice_date, due_date, work_order_id, ref_number, discount_amount, notes, terms_and_conditions, items } = body
+      const { customer_id, invoice_type, invoice_date, due_date, work_order_id, ref_number, print_name, discount_amount, notes, terms_and_conditions, items } = body
 
       if (!customer_id) return NextResponse.json({ error: 'Customer is required' }, { status: 400 })
       if (!Array.isArray(items) || items.length === 0) return NextResponse.json({ error: 'At least one line item is required' }, { status: 400 })
@@ -93,6 +93,7 @@ export async function PATCH(
       const { error: invErr } = await supabaseAdmin.from('invoices').update({
         customer_id, invoice_type: invoice_type ?? 'service', invoice_date,
         due_date: due_date ?? null, work_order_id: work_order_id ?? null, ref_number: ref_number?.trim() ?? null,
+        print_name: print_name?.trim() ?? null,
         subtotal, discount_amount: discountAmt, total_amount: totalAmount, balance_due: balanceDue,
         notes: notes?.trim() ?? null, terms_and_conditions: terms_and_conditions?.trim() ?? null,
         updated_at: new Date().toISOString(),

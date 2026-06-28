@@ -34,6 +34,7 @@ export default async function InvoiceDetailPage({
     invoice_date: string
     due_date: string | null
     ref_number: string | null
+    print_name: string | null
     subtotal: number
     discount_amount: number
     tax_rate: number
@@ -142,8 +143,8 @@ export default async function InvoiceDetailPage({
         <div className="grid grid-cols-2 gap-8 mb-8">
           <div>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Bill To</p>
-            <p className="font-bold text-slate-900 text-base">{customer?.full_name ?? '—'}</p>
-            {customer?.company_name && <p className="text-sm font-medium text-slate-700">{customer.company_name}</p>}
+            <p className="font-bold text-slate-900 text-base">{invoice.print_name ?? customer?.full_name ?? '—'}</p>
+            {!invoice.print_name && customer?.company_name && <p className="text-sm font-medium text-slate-700">{customer.company_name}</p>}
             {customer?.mobile_number && <p className="text-sm text-slate-600">{customer.mobile_number}</p>}
             {customer?.email && <p className="text-sm text-slate-600">{customer.email}</p>}
             {customer && (
@@ -484,6 +485,11 @@ export default async function InvoiceDetailPage({
                 <div className="space-y-1.5 text-sm">
                   <p className="font-semibold text-slate-900">{customer.full_name}</p>
                   {customer.company_name && <p className="text-slate-600 font-medium">{customer.company_name}</p>}
+                  {invoice.print_name && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md font-medium">
+                      🖨 Prints as: {invoice.print_name}
+                    </p>
+                  )}
                   <p className="text-slate-600">{customer.mobile_number}</p>
                   {customer.email && <p className="text-slate-600">{customer.email}</p>}
                   {(customer.area || customer.city) && (
