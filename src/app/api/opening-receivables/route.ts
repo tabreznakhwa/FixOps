@@ -52,6 +52,42 @@ export async function POST(request: Request) {
   return NextResponse.json(data)
 }
 
+export async function PATCH(request: Request) {
+  const profile = await getOrgId()
+  if (!profile) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  if (!['owner', 'admin', 'manager'].includes(profile.role))
+    return NextResponse.json({ error: 'Permission denied' }, { status: 403 })
+
+  const { id, payment_amount } = await request.json()
+  if (!id || !payment_amount || payment_amount <= 0)
+    return NextResponse.json({ error: 'Invalid payment amount' }, { status: 400 })
+
+  const admin = createAdminClient() as any
+
+  const { data: entry, error: fetchErr } = await admin
+    .from('opening_receivables')
+    .select('balance_due')
+    .eq('id', id)
+    .eq('organization_id', profile.organization_id)
+    .single()
+
+  if (fetchErr || !entry) return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
+  if (payment_amount > entry.balance_due)
+    return NextResponse.json({ error: `Payment exceeds balance due (${entry.balance_due})` }, { status: 400 })
+
+  const new_balance = Math.max(0, entry.balance_due - payment_amount)
+
+  const { data, error } = await admin
+    .from('opening_receivables')
+    .update({ balance_due: new_balance })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true, balance_due: data.balance_due })
+}
+
 export async function DELETE(request: Request) {
   const profile = await getOrgId()
   if (!profile) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
