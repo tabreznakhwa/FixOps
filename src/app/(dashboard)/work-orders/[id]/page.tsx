@@ -5,10 +5,9 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, Edit } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDate, formatCurrency } from '@/lib/utils'
 import { WorkOrderActions } from './WorkOrderActions'
+import { WorkOrderParts } from './WorkOrderParts'
 
 export const metadata = { title: 'Work Order' }
-
-const WO_STATUS_FLOW = ['new', 'assigned', 'work_started', 'waiting_parts', 'completed']
 
 export default async function WorkOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -33,18 +32,25 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
     complaints: { complaint_number: string; description: string } | null
   }
 
-  const [techniciansRaw, staffRaw] = await Promise.all([
+  const [techniciansRaw, staffRaw, inventoryRaw, partsRaw] = await Promise.all([
     supabase.from('users').select('id, full_name, role').in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
     supabase.from('staff').select('id, full_name, designation').eq('employment_status', 'active'),
+    (supabase as any).from('inventory_items').select('id, item_code, item_name, unit_of_measure, current_stock, selling_price').eq('is_active', true).order('item_name'),
+    (supabase as any).from('work_order_line_items').select('id, item_type, description, quantity, unit_price, inventory_item_id').eq('work_order_id', id).order('created_at'),
   ])
+
   const systemUsers = (techniciansRaw.data ?? []) as unknown as { id: string; full_name: string; role: string }[]
   const staffMembers = (staffRaw.data ?? []) as unknown as { id: string; full_name: string; designation: string | null }[]
   const technicians = [
     ...systemUsers.map(u => ({ id: u.id, full_name: u.full_name, type: 'user' as const, role: u.role })),
     ...staffMembers.map(s => ({ id: s.id, full_name: s.full_name, type: 'staff' as const, role: s.designation ?? 'Technician' })),
   ]
-
-  const currentStep = WO_STATUS_FLOW.indexOf(wo.status)
+  const inventoryItems = (inventoryRaw.data ?? []) as unknown as {
+    id: string; item_code: string; item_name: string; unit_of_measure: string; current_stock: number; selling_price: number
+  }[]
+  const existingParts = (partsRaw.data ?? []) as unknown as {
+    id: string; item_type: 'custom' | 'part' | 'service'; description: string; quantity: number; unit_price: number; inventory_item_id: string | null
+  }[]
 
   return (
     <div className="animate-fade-in">
@@ -53,6 +59,9 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
         subtitle={wo.job_description?.slice(0, 60) ?? 'Work Order Detail'}
         actions={
           <div className="flex items-center gap-2">
+            <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${getStatusColor(wo.status)}`}>
+              {formatStatus(wo.status)}
+            </span>
             <Link
               href={`/work-orders/${wo.id}/edit`}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
@@ -69,29 +78,6 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
       <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl">
         {/* Left: main details */}
         <div className="lg:col-span-2 space-y-5">
-
-          {/* Status pipeline */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-slate-900">Progress</h2>
-              <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${getStatusColor(wo.status)}`}>
-                {formatStatus(wo.status)}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              {WO_STATUS_FLOW.map((s, i) => (
-                <div key={s} className="flex items-center gap-2 flex-1">
-                  <div className="flex flex-col items-center flex-1">
-                    <div className={`w-3 h-3 rounded-full ${i <= currentStep ? 'bg-blue-600' : 'bg-slate-200'}`} />
-                    <span className="text-[10px] text-slate-500 mt-1 text-center leading-tight">{formatStatus(s)}</span>
-                  </div>
-                  {i < WO_STATUS_FLOW.length - 1 && (
-                    <div className={`flex-1 h-0.5 mb-4 ${i < currentStep ? 'bg-blue-600' : 'bg-slate-200'}`} />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
 
           {/* Job description */}
           <div className="bg-white rounded-xl border border-slate-200 p-5">
@@ -118,6 +104,14 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
               </div>
             )}
           </div>
+
+          {/* Parts Used */}
+          <WorkOrderParts
+            workOrderId={wo.id}
+            inventoryItems={inventoryItems}
+            existingParts={existingParts}
+            isCompleted={wo.status === 'completed'}
+          />
 
           {/* Financials + schedule */}
           <div className="bg-white rounded-xl border border-slate-200 p-5">
@@ -206,7 +200,6 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
               wo.assigned_staff_id ? `staff:${wo.assigned_staff_id}` : null
             }
             technicians={technicians}
-            statusFlow={WO_STATUS_FLOW}
           />
         </div>
       </div>
