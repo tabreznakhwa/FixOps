@@ -14,7 +14,7 @@ export async function GET(
 
     const { data, error } = await (supabase as any)
       .from('complaints')
-      .select('id, complaint_number, service_category, priority, description, location, preferred_date, preferred_time, notes, status')
+      .select('id, complaint_number, service_category, priority, description, location, preferred_date, preferred_time, status')
       .eq('id', id)
       .single()
 
@@ -40,7 +40,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     // Full edit (description, category, etc.)
     if (body.edit === true) {
-      const { service_category, priority, description, location, preferred_date, preferred_time, notes } = body
+      const { service_category, priority, description, location, preferred_date, preferred_time } = body
       if (!description?.trim()) return NextResponse.json({ error: 'Description is required' }, { status: 400 })
       const supabase = createAdminClient()
       const { error } = await (supabase as any).from('complaints').update({
@@ -50,7 +50,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         location: location?.trim() || null,
         preferred_date: preferred_date || null,
         preferred_time: preferred_time || null,
-        notes: notes?.trim() || null,
         updated_at: new Date().toISOString(),
       }).eq('id', id)
       if (error) throw error

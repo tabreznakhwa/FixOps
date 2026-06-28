@@ -31,7 +31,6 @@ interface Complaint {
   location: string | null
   preferred_date: string | null
   preferred_time: string | null
-  notes: string | null
 }
 
 const inputCls = 'w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500'
@@ -49,7 +48,6 @@ export function EditComplaintForm({ complaint }: { complaint: Complaint }) {
   const [location, setLocation] = useState(complaint.location ?? '')
   const [preferredDate, setPreferredDate] = useState(complaint.preferred_date ?? '')
   const [preferredTime, setPreferredTime] = useState(complaint.preferred_time ?? '')
-  const [notes, setNotes] = useState(complaint.notes ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -75,7 +73,6 @@ export function EditComplaintForm({ complaint }: { complaint: Complaint }) {
           location: location.trim() || null,
           preferred_date: preferredDate || null,
           preferred_time: preferredTime || null,
-          notes: notes.trim() || null,
         }),
       })
       const data = await res.json()
@@ -182,15 +179,6 @@ export function EditComplaintForm({ complaint }: { complaint: Complaint }) {
               className={inputCls}
             />
           </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">Internal Notes</label>
-          <textarea
-            rows={2}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className={inputCls + ' resize-none'}
-          />
         </div>
       </div>
 

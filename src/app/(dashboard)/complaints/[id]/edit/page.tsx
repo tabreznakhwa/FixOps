@@ -15,7 +15,6 @@ interface Complaint {
   location: string | null
   preferred_date: string | null
   preferred_time: string | null
-  notes: string | null
   status: string
 }
 
