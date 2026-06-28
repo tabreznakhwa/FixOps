@@ -10,11 +10,20 @@ interface Customer {
   company_name: string | null
 }
 
+interface WoLineItem {
+  item_type: string
+  description: string
+  quantity: number
+  unit_price: number
+  inventory_item_id: string | null
+}
+
 interface WorkOrder {
   id: string
   work_order_number: string
   final_amount: number
   customer_id: string
+  line_items: WoLineItem[]
 }
 
 interface InventoryItem {
@@ -393,6 +402,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
   const [termsAndConditions, setTermsAndConditions] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [woItemsImported, setWoItemsImported] = useState(false)
 
   const filteredWorkOrders = customerId
     ? workOrders.filter((wo) => wo.customer_id === customerId)
@@ -606,9 +616,27 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
                 onChange={(e) => {
                   const id = e.target.value
                   setWorkOrderId(id)
+                  setWoItemsImported(false)
                   if (id) {
                     const wo = workOrders.find((w) => w.id === id)
-                    if (wo) setCustomerId(wo.customer_id)
+                    if (wo) {
+                      setCustomerId(wo.customer_id)
+                      if (wo.line_items.length > 0) {
+                        setItems(wo.line_items.map((li) => ({
+                          type: li.item_type === 'part' ? 'inventory' as LineType
+                            : li.item_type === 'service' ? 'service' as LineType
+                            : 'custom' as LineType,
+                          inventory_item_id: li.item_type === 'part' ? (li.inventory_item_id ?? '') : '',
+                          service_label: li.item_type === 'service' ? li.description : '',
+                          description: li.description,
+                          quantity: String(li.quantity),
+                          unit_price: String(li.unit_price),
+                        })))
+                        setWoItemsImported(true)
+                      }
+                    }
+                  } else {
+                    setItems([emptyItem()])
                   }
                 }}
               >
@@ -626,7 +654,14 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
 
       {/* Line Items */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <h2 className="font-semibold text-slate-900 mb-4">Line Items</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-slate-900">Line Items</h2>
+          {woItemsImported && (
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-3 py-1 rounded-full">
+              ✅ Imported from work order — edit as needed
+            </span>
+          )}
+        </div>
 
         <div className="space-y-3">
           {/* Column headers — desktop only */}

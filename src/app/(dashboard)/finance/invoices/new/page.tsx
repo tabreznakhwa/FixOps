@@ -42,7 +42,9 @@ export default async function NewInvoicePage() {
     customer_id: string
   }>
 
-  const [inventoryRaw, woServicesRaw, invServicesRaw] = await Promise.all([
+  const woIds = workOrders.map(wo => wo.id)
+
+  const [inventoryRaw, woServicesRaw, invServicesRaw, woLineItemsRaw] = await Promise.all([
     admin.from('inventory_items')
       .select('id, item_code, item_name, selling_price, unit_of_measure, current_stock, category')
       .eq('is_active', true).order('item_name').limit(2000),
@@ -51,6 +53,12 @@ export default async function NewInvoicePage() {
       .in('item_type', ['service', 'custom']).order('description'),
     admin.from('invoice_items')
       .select('description').eq('organization_id', orgId).order('description'),
+    woIds.length > 0
+      ? admin.from('work_order_line_items')
+          .select('work_order_id, item_type, description, quantity, unit_price, inventory_item_id')
+          .in('work_order_id', woIds)
+          .order('created_at')
+      : Promise.resolve({ data: [] }),
   ])
 
   const inventoryItems = (inventoryRaw.data ?? []) as unknown as Array<{
@@ -70,6 +78,19 @@ export default async function NewInvoicePage() {
     ]),
   ].filter(Boolean).sort() as string[]
 
+  // Group line items by work_order_id and attach to each work order
+  type WoLineItem = { work_order_id: string; item_type: string; description: string; quantity: number; unit_price: number; inventory_item_id: string | null }
+  const lineItemsByWo: Record<string, WoLineItem[]> = {}
+  for (const li of ((woLineItemsRaw as { data: WoLineItem[] | null }).data ?? [])) {
+    if (!lineItemsByWo[li.work_order_id]) lineItemsByWo[li.work_order_id] = []
+    lineItemsByWo[li.work_order_id].push(li)
+  }
+
+  const workOrdersWithItems = workOrders.map(wo => ({
+    ...wo,
+    line_items: lineItemsByWo[wo.id] ?? [],
+  }))
+
   return (
     <div className="animate-fade-in">
       <Header
@@ -86,7 +107,7 @@ export default async function NewInvoicePage() {
       />
 
       <div className="p-6">
-        <NewInvoiceForm customers={customers} workOrders={workOrders} inventoryItems={inventoryItems} customServices={customServices} />
+        <NewInvoiceForm customers={customers} workOrders={workOrdersWithItems} inventoryItems={inventoryItems} customServices={customServices} />
       </div>
     </div>
   )
