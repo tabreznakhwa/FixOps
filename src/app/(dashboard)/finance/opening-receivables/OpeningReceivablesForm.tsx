@@ -7,7 +7,7 @@ import { Plus, Trash2, Loader2, AlertCircle, ChevronDown, X, Banknote } from 'lu
 
 interface Customer { id: string; full_name: string; customer_code: string; mobile_number?: string }
 interface Entry {
-  id: string; invoice_ref: string; invoice_date: string; due_date: string | null
+  id: string; customer_id: string; invoice_ref: string; invoice_date: string; due_date: string | null
   amount: number; balance_due: number; notes: string | null
   customers: { full_name: string; customer_code: string } | null
 }
@@ -118,12 +118,16 @@ export function OpeningReceivablesForm({ customers, entries: initialEntries }: P
   // Payment recording state
   const [payingId, setPayingId] = useState<string | null>(null)
   const [payAmount, setPayAmount] = useState('')
+  const [payMode, setPayMode] = useState('cash')
+  const [payDate, setPayDate] = useState(today)
   const [payError, setPayError] = useState('')
   const [payingSaving, setPayingSaving] = useState(false)
 
   function openPayment(entry: Entry) {
     setPayingId(entry.id)
     setPayAmount(entry.balance_due.toFixed(3))
+    setPayMode('cash')
+    setPayDate(today)
     setPayError('')
   }
 
@@ -131,13 +135,22 @@ export function OpeningReceivablesForm({ customers, entries: initialEntries }: P
     e.preventDefault()
     const amount = parseFloat(payAmount)
     if (!amount || amount <= 0) { setPayError('Enter a valid amount'); return }
+    const entry = entries.find(e => e.id === payingId)
+    if (!entry) return
     setPayingSaving(true)
     setPayError('')
     try {
       const res = await fetch('/api/opening-receivables', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: payingId, payment_amount: amount }),
+        body: JSON.stringify({
+          id: payingId,
+          payment_amount: amount,
+          payment_mode: payMode,
+          payment_date: payDate,
+          customer_id: entry.customer_id,
+          invoice_ref: entry.invoice_ref,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -273,7 +286,7 @@ export function OpeningReceivablesForm({ customers, entries: initialEntries }: P
                         <td colSpan={6} className="px-5 py-4">
                           <form onSubmit={handlePayment} className="flex items-end gap-3 flex-wrap">
                             <div>
-                              <label className="block text-xs font-semibold text-slate-600 mb-1">Payment Amount (KWD)</label>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">Amount (KWD)</label>
                               <input
                                 type="number"
                                 min="0.001"
@@ -281,8 +294,30 @@ export function OpeningReceivablesForm({ customers, entries: initialEntries }: P
                                 step="0.001"
                                 value={payAmount}
                                 onChange={ev => setPayAmount(ev.target.value)}
-                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
                                 autoFocus
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">Payment Mode</label>
+                              <select
+                                value={payMode}
+                                onChange={ev => setPayMode(ev.target.value)}
+                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                              >
+                                <option value="cash">Cash</option>
+                                <option value="bank_transfer">Bank Transfer</option>
+                                <option value="cheque">Cheque</option>
+                                <option value="knet">KNET</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 mb-1">Date</label>
+                              <input
+                                type="date"
+                                value={payDate}
+                                onChange={ev => setPayDate(ev.target.value)}
+                                className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
                               />
                             </div>
                             {payError && (
@@ -296,7 +331,7 @@ export function OpeningReceivablesForm({ customers, entries: initialEntries }: P
                               {payingSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
                               Confirm Payment
                             </button>
-                            <p className="text-xs text-slate-500 self-center">Balance due: {formatCurrency(e.balance_due)}</p>
+                            <p className="text-xs text-slate-500 self-center">Balance: {formatCurrency(e.balance_due)}</p>
                           </form>
                         </td>
                       </tr>
