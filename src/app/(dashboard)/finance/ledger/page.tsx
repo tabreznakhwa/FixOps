@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { FileBarChart } from 'lucide-react'
@@ -15,6 +15,10 @@ export default async function LedgerPage({
 }) {
   const params = await searchParams
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = await (supabase as any).from('users').select('organization_id').eq('id', user!.id).single()
+  const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
+  const admin = createAdminClient() as any
 
   const { data: customersRaw } = await supabase
     .from('customers')
@@ -67,16 +71,37 @@ export default async function LedgerPage({
     if (toDate) payQuery = payQuery.lte('payment_date', toDate)
     const { data: paymentsRaw } = await payQuery
 
+    // Fetch opening receivables (debit entries — pre go-live balances)
+    let openingQuery = admin
+      .from('opening_receivables')
+      .select('id, invoice_ref, invoice_date, amount')
+      .eq('customer_id', params.customer_id)
+      .eq('organization_id', orgId)
+      .order('invoice_date', { ascending: true })
+    if (fromDate) openingQuery = openingQuery.gte('invoice_date', fromDate)
+    const { data: openingRaw } = await openingQuery
+
     const invoices = (invoicesRaw ?? []) as unknown as Array<{
       id: string; invoice_number: string; invoice_date: string; total_amount: number; status: string
     }>
     const payments = (paymentsRaw ?? []) as unknown as Array<{
       id: string; payment_number: string; payment_date: string; amount_received: number; payment_mode: string; is_advance: boolean; is_cancelled: boolean
     }>
+    const openingEntries = (openingRaw ?? []) as unknown as Array<{
+      id: string; invoice_ref: string; invoice_date: string; amount: number
+    }>
 
     // Merge into a single timeline
     type RawEntry = { date: string; description: string; type: string; reference: string | null; debit: number; credit: number }
     const merged: RawEntry[] = [
+      ...openingEntries.map(op => ({
+        date: op.invoice_date,
+        description: `Opening Balance — ${op.invoice_ref}`,
+        type: 'opening_balance',
+        reference: op.invoice_ref,
+        debit: op.amount,
+        credit: 0,
+      })),
       ...invoices.map(inv => ({
         date: inv.invoice_date,
         description: `Invoice ${inv.invoice_number}`,
@@ -175,6 +200,7 @@ export default async function LedgerPage({
                           <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${
                             row.type === 'invoice' ? 'bg-blue-50 text-blue-700' :
                             row.type === 'payment' ? 'bg-green-50 text-green-700' :
+                            row.type === 'opening_balance' ? 'bg-purple-50 text-purple-700' :
                             'bg-amber-50 text-amber-700'
                           }`}>
                             {row.type.replace(/_/g, ' ')}
