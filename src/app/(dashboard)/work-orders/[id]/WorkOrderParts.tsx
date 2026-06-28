@@ -98,6 +98,7 @@ interface Props {
   inventoryItems: InventoryItem[]
   existingParts: LineItem[]
   isCompleted: boolean
+  customServices: string[]
 }
 
 type TabType = 'custom' | 'part' | 'service'
@@ -208,7 +209,7 @@ function ItemCombobox({
   )
 }
 
-function ServiceCombobox({ value, onChange }: { value: string; onChange: (label: string) => void }) {
+function ServiceCombobox({ value, onChange, customServices = [] }: { value: string; onChange: (label: string) => void; customServices?: string[] }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
@@ -223,6 +224,11 @@ function ServiceCombobox({ value, onChange }: { value: string; onChange: (label:
 
   const totalFiltered = filteredGroups.reduce((n, g) => n + g.items.length, 0)
   const showAddCustom = query.trim().length > 0 && !(query.trim() in ALL_SERVICES_MAP)
+
+  // Previously-used services: exclude presets and filter by search
+  const prevUsed = customServices
+    .filter(s => !(s in ALL_SERVICES_MAP))
+    .filter(s => !query.trim() || s.toLowerCase().includes(query.toLowerCase()))
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -295,7 +301,25 @@ function ServiceCombobox({ value, onChange }: { value: string; onChange: (label:
                 </button>
               </li>
             )}
-            {totalFiltered === 0 && (
+            {/* Previously used custom services */}
+            {prevUsed.length > 0 && (
+              <li>
+                <div className="px-3 py-1 text-xs font-semibold text-indigo-500 uppercase tracking-wider bg-indigo-50 sticky top-0">
+                  🔖 Previously Used
+                </div>
+                <ul>
+                  {prevUsed.map(s => (
+                    <li key={s}>
+                      <button type="button" onClick={() => select(s)}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-blue-50 transition-colors flex items-center gap-3 ${s === value ? 'bg-blue-50 text-blue-700' : 'text-slate-800'}`}>
+                        {s}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            )}
+            {totalFiltered === 0 && prevUsed.length === 0 && (
               <li className="px-4 py-3 text-sm text-slate-400 text-center">No preset services match</li>
             )}
             {filteredGroups.map(group => (
@@ -328,7 +352,7 @@ function ServiceCombobox({ value, onChange }: { value: string; onChange: (label:
 const TYPE_ICON: Record<TabType, string> = { custom: '✏️', part: '📦', service: '🔧' }
 const TYPE_LABEL: Record<TabType, string> = { custom: 'Custom', part: 'Part', service: 'Service' }
 
-export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isCompleted }: Props) {
+export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isCompleted, customServices }: Props) {
   const router = useRouter()
   const [items, setItems] = useState<LineItem[]>(existingParts)
   const [showForm, setShowForm] = useState(false)
@@ -556,6 +580,7 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
                 <ServiceCombobox
                   value={serviceLabel}
                   onChange={handleServiceSelect}
+                  customServices={customServices}
                 />
               </div>
             )}

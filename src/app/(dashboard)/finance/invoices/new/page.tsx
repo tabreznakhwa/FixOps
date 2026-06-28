@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -8,6 +8,11 @@ export const metadata = { title: 'New Invoice' }
 
 export default async function NewInvoicePage() {
   const supabase = await createClient()
+  const admin = createAdminClient() as any
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = await admin.from('users').select('organization_id').eq('id', user!.id).single()
+  const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
 
   const { data: customersRaw } = await supabase
     .from('customers')
@@ -37,14 +42,18 @@ export default async function NewInvoicePage() {
     customer_id: string
   }>
 
-  const { data: inventoryRaw } = await (supabase as any)
-    .from('inventory_items')
-    .select('id, item_code, item_name, selling_price, unit_of_measure, current_stock, category')
-    .eq('is_active', true)
-    .order('item_name')
-    .limit(2000)
+  const [inventoryRaw, woServicesRaw, invServicesRaw] = await Promise.all([
+    admin.from('inventory_items')
+      .select('id, item_code, item_name, selling_price, unit_of_measure, current_stock, category')
+      .eq('is_active', true).order('item_name').limit(2000),
+    admin.from('work_order_line_items')
+      .select('description').eq('organization_id', orgId)
+      .in('item_type', ['service', 'custom']).order('description'),
+    admin.from('invoice_items')
+      .select('description').eq('organization_id', orgId).order('description'),
+  ])
 
-  const inventoryItems = (inventoryRaw ?? []) as unknown as Array<{
+  const inventoryItems = (inventoryRaw.data ?? []) as unknown as Array<{
     id: string
     item_code: string
     item_name: string
@@ -53,6 +62,13 @@ export default async function NewInvoicePage() {
     current_stock: number
     category: string | null
   }>
+
+  const customServices = [
+    ...new Set([
+      ...(woServicesRaw.data ?? []).map((r: { description: string }) => r.description),
+      ...(invServicesRaw.data ?? []).map((r: { description: string }) => r.description),
+    ]),
+  ].filter(Boolean).sort() as string[]
 
   return (
     <div className="animate-fade-in">
@@ -70,7 +86,7 @@ export default async function NewInvoicePage() {
       />
 
       <div className="p-6">
-        <NewInvoiceForm customers={customers} workOrders={workOrders} inventoryItems={inventoryItems} />
+        <NewInvoiceForm customers={customers} workOrders={workOrders} inventoryItems={inventoryItems} customServices={customServices} />
       </div>
     </div>
   )

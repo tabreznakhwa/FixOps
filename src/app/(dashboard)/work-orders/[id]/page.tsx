@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -12,6 +12,7 @@ export const metadata = { title: 'Work Order' }
 export default async function WorkOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
+  const admin = createAdminClient() as any
 
   const { data: raw } = await supabase
     .from('work_orders')
@@ -26,24 +27,35 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
     priority: string; status: string; payment_status: string; service_category: string | null
     scheduled_date: string | null; estimated_hours: number | null; estimated_amount: number | null
     final_amount: number; notes: string | null; created_at: string
-    customer_id: string | null; technician_name: string | null; assigned_staff_id: string | null
+    organization_id: string; customer_id: string | null; technician_name: string | null; assigned_staff_id: string | null
     customers: { full_name: string; mobile_number: string; email: string | null; area: string | null; city: string | null } | null
     users: { id: string; full_name: string } | null
     complaints: { complaint_number: string; description: string } | null
   }
 
-  const [techniciansRaw, staffRaw, inventoryRaw] = await Promise.all([
+  const orgId = wo.organization_id
+
+  const [techniciansRaw, staffRaw, inventoryRaw, lineItemsRaw, woServicesRaw, invServicesRaw] = await Promise.all([
     supabase.from('users').select('id, full_name, role').in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
     supabase.from('staff').select('id, full_name, designation').eq('employment_status', 'active'),
-    (supabase as any).from('inventory_items').select('id, item_code, item_name, unit_of_measure, current_stock, selling_price').eq('is_active', true).order('item_name'),
+    admin.from('inventory_items').select('id, item_code, item_name, unit_of_measure, current_stock, selling_price').eq('is_active', true).order('item_name'),
+    // Use admin client so the UI sees the same rows as the final_amount calculation
+    admin.from('work_order_line_items')
+      .select('id, item_type, description, quantity, unit_price, inventory_item_id')
+      .eq('work_order_id', id)
+      .order('created_at'),
+    // All unique service/custom descriptions across all work orders
+    admin.from('work_order_line_items')
+      .select('description')
+      .eq('organization_id', orgId)
+      .in('item_type', ['service', 'custom'])
+      .order('description'),
+    // All unique descriptions from invoices
+    admin.from('invoice_items')
+      .select('description')
+      .eq('organization_id', orgId)
+      .order('description'),
   ])
-
-  // Isolated so a missing table (pre-migration) never crashes the whole page
-  const lineItemsRaw = await (supabase as any)
-    .from('work_order_line_items')
-    .select('id, item_type, description, quantity, unit_price, inventory_item_id')
-    .eq('work_order_id', id)
-    .order('created_at')
 
   const systemUsers = (techniciansRaw.data ?? []) as unknown as { id: string; full_name: string; role: string }[]
   const staffMembers = (staffRaw.data ?? []) as unknown as { id: string; full_name: string; designation: string | null }[]
@@ -57,6 +69,14 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
   const existingParts = (lineItemsRaw.data ?? []) as unknown as {
     id: string; item_type: 'custom' | 'part' | 'service'; description: string; quantity: number; unit_price: number; inventory_item_id: string | null
   }[]
+
+  // Build unified list of previously-used service/custom labels (server-side dedup)
+  const customServices = [
+    ...new Set([
+      ...(woServicesRaw.data ?? []).map((r: { description: string }) => r.description),
+      ...(invServicesRaw.data ?? []).map((r: { description: string }) => r.description),
+    ]),
+  ].filter(Boolean).sort() as string[]
 
   return (
     <div className="animate-fade-in">
@@ -117,6 +137,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
             inventoryItems={inventoryItems}
             existingParts={existingParts}
             isCompleted={['invoiced', 'paid', 'cancelled'].includes(wo.status)}
+            customServices={customServices}
           />
 
           {/* Financials + schedule */}
