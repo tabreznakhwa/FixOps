@@ -26,7 +26,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
     priority: string; status: string; payment_status: string; service_category: string | null
     scheduled_date: string | null; estimated_hours: number | null; estimated_amount: number | null
     final_amount: number; notes: string | null; created_at: string
-    technician_name: string | null; assigned_staff_id: string | null
+    customer_id: string | null; technician_name: string | null; assigned_staff_id: string | null
     customers: { full_name: string; mobile_number: string; email: string | null; area: string | null; city: string | null } | null
     users: { id: string; full_name: string } | null
     complaints: { complaint_number: string; description: string } | null
@@ -206,6 +206,9 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
               wo.assigned_staff_id ? `staff:${wo.assigned_staff_id}` : null
             }
             technicians={technicians}
+            customerId={wo.customer_id}
+            finalAmount={wo.final_amount}
+            paymentStatus={wo.payment_status}
           />
         </div>
       </div>

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, ChevronDown, CheckCircle } from 'lucide-react'
+import { Loader2, ChevronDown, CheckCircle, Banknote, X } from 'lucide-react'
 
 interface Person { id: string; full_name: string; type: 'user' | 'staff'; role: string }
 
@@ -11,15 +11,30 @@ interface Props {
   currentStatus: string
   currentAssigneeKey: string | null
   technicians: Person[]
+  customerId: string | null
+  finalAmount: number
+  paymentStatus: string
 }
 
-export function WorkOrderActions({ workOrderId, currentStatus, currentAssigneeKey, technicians }: Props) {
+export function WorkOrderActions({
+  workOrderId, currentStatus, currentAssigneeKey, technicians,
+  customerId, finalAmount, paymentStatus,
+}: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [assigneeKey, setAssigneeKey] = useState(currentAssigneeKey ?? '')
 
+  // Payment collection state
+  const [showPayForm, setShowPayForm] = useState(false)
+  const [payAmount, setPayAmount] = useState('')
+  const [payMode, setPayMode] = useState('cash')
+  const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0])
+  const [payError, setPayError] = useState('')
+  const [payingSaving, setPayingSaving] = useState(false)
+
   const isCompleted = currentStatus === 'completed'
   const isCancelled = currentStatus === 'cancelled'
+  const isPaid = paymentStatus === 'paid'
 
   const update = async (payload: Record<string, unknown>) => {
     const key = String(Object.keys(payload)[0])
@@ -48,6 +63,32 @@ export function WorkOrderActions({ workOrderId, currentStatus, currentAssigneeKe
       technician_name: person?.full_name ?? null,
       status: person && currentStatus === 'new' ? 'assigned' : currentStatus,
     })
+  }
+
+  async function handleCollectPayment(e: React.FormEvent) {
+    e.preventDefault()
+    setPayError('')
+    const amt = parseFloat(payAmount)
+    if (isNaN(amt) || amt <= 0) { setPayError('Enter a valid amount'); return }
+    if (!customerId) { setPayError('No customer linked to this work order'); return }
+
+    setPayingSaving(true)
+    try {
+      const res = await fetch(`/api/work-orders/${workOrderId}/collect-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: amt, payment_mode: payMode, payment_date: payDate }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to record payment')
+      setShowPayForm(false)
+      setPayAmount('')
+      router.refresh()
+    } catch (err: unknown) {
+      setPayError(err instanceof Error ? err.message : 'Failed to record payment')
+    } finally {
+      setPayingSaving(false)
+    }
   }
 
   const systemUsers = technicians.filter(t => t.type === 'user')
@@ -116,6 +157,83 @@ export function WorkOrderActions({ workOrderId, currentStatus, currentAssigneeKe
         <div className="flex items-center gap-2 text-green-700 bg-green-50 rounded-lg px-3 py-2.5">
           <CheckCircle className="w-4 h-4" />
           <span className="text-sm font-semibold">Job Completed</span>
+        </div>
+      )}
+
+      {/* Collect Payment */}
+      {!isCancelled && !isPaid && customerId && (
+        <div className="border-t border-slate-100 pt-4">
+          {!showPayForm ? (
+            <button
+              onClick={() => {
+                setPayAmount(finalAmount > 0 ? finalAmount.toFixed(3) : '')
+                setShowPayForm(true)
+              }}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
+            >
+              <Banknote className="w-4 h-4" />
+              Collect Payment
+            </button>
+          ) : (
+            <form onSubmit={handleCollectPayment} className="space-y-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Collect Payment</span>
+                <button type="button" onClick={() => { setShowPayForm(false); setPayError('') }}
+                  className="text-slate-400 hover:text-slate-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Amount (KWD)</label>
+                <input
+                  type="number" step="0.001" min="0.001"
+                  value={payAmount}
+                  onChange={e => setPayAmount(e.target.value)}
+                  placeholder="0.000"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Payment Mode</label>
+                <select
+                  value={payMode}
+                  onChange={e => setPayMode(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="knet">KNET</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={payDate}
+                  onChange={e => setPayDate(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              {payError && <p className="text-xs text-red-600">{payError}</p>}
+              <button
+                type="submit"
+                disabled={payingSaving}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {payingSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
+                Record Payment
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
+      {isPaid && (
+        <div className="border-t border-slate-100 pt-4 flex items-center gap-2 text-blue-700 bg-blue-50 rounded-lg px-3 py-2.5">
+          <Banknote className="w-4 h-4" />
+          <span className="text-sm font-semibold">Payment Received</span>
         </div>
       )}
 
