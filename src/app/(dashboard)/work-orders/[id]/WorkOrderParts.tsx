@@ -273,17 +273,30 @@ function ServiceCombobox({ value, onChange }: { value: string; onChange: (label:
             </div>
           </div>
           <ul className="max-h-60 overflow-y-auto py-1">
+            {/* Always-visible custom entry at the top */}
+            {!showAddCustom && (
+              <li>
+                <button type="button" onClick={() => {
+                  const name = query.trim() || ''
+                  if (name) { select(name) } else { inputRef.current?.focus() }
+                }}
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors text-blue-600 font-semibold flex items-center gap-2 border-b border-slate-100">
+                  <Plus className="w-4 h-4" />
+                  {query.trim() ? `Use "${query.trim()}" as custom service` : 'Type above to add a custom service'}
+                </button>
+              </li>
+            )}
             {showAddCustom && (
               <li>
                 <button type="button" onClick={() => select(query.trim())}
-                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors text-blue-700 font-semibold flex items-center gap-2">
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors text-blue-700 font-semibold flex items-center gap-2 border-b border-slate-100">
                   <Plus className="w-4 h-4" />
                   Add &quot;{query.trim()}&quot; as new service
                 </button>
               </li>
             )}
-            {totalFiltered === 0 && !showAddCustom && (
-              <li className="px-4 py-3 text-sm text-slate-400 text-center">No services match</li>
+            {totalFiltered === 0 && (
+              <li className="px-4 py-3 text-sm text-slate-400 text-center">No preset services match</li>
             )}
             {filteredGroups.map(group => (
               <li key={group.group}>
