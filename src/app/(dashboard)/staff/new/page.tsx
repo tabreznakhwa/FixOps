@@ -24,6 +24,7 @@ export default function NewStaffPage() {
     joining_date: '',
     basic_salary: '',
     food_allowance: '',
+    allowance_name: 'Allowance',
     other_allowance: '',
     fixed_overtime_monthly: '',
     visa_expiry_date: '',
@@ -52,6 +53,7 @@ export default function NewStaffPage() {
           housing_allowance: 0,
           transport_allowance: 0,
           food_allowance: form.food_allowance ? Number(form.food_allowance) : 0,
+          allowance_name: form.allowance_name || 'Allowance',
           other_allowance: form.other_allowance ? Number(form.other_allowance) : 0,
           fixed_overtime_monthly: form.fixed_overtime_monthly ? Number(form.fixed_overtime_monthly) : 0,
         }),
@@ -172,13 +174,17 @@ export default function NewStaffPage() {
                 <input type="number" min="0" step="0.001" value={form.food_allowance} onChange={set('food_allowance')} placeholder="0.000" className={inputClass} />
               </div>
               <div>
-                <label className={labelClass}>Allowance</label>
-                <input type="number" min="0" step="0.001" value={form.other_allowance} onChange={set('other_allowance')} placeholder="0.000" className={inputClass} />
+                <label className={labelClass}>Allowance Name</label>
+                <input type="text" value={form.allowance_name} onChange={set('allowance_name')} placeholder="e.g. Fuel Allowance" className={inputClass} />
               </div>
               <div>
+                <label className={labelClass}>Allowance Amount</label>
+                <input type="number" min="0" step="0.001" value={form.other_allowance} onChange={set('other_allowance')} placeholder="0.000" className={inputClass} />
+              </div>
+              <div className="col-span-2">
                 <label className={labelClass}>Fixed Overtime (KWD/month)</label>
                 <input type="number" min="0" step="0.001" value={form.fixed_overtime_monthly} onChange={set('fixed_overtime_monthly')} placeholder="0.000" className={inputClass} />
-                <p className="text-xs text-slate-400 mt-1">Mandatory OT 5:30–8:00 PM — set by HR</p>
+                <p className="text-xs text-slate-400 mt-1">Fixed monthly OT — deducted proportionally for absent days</p>
               </div>
             </div>
 

@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils'
 import { PrintButton } from './PrintButton'
 import Link from 'next/link'
@@ -9,16 +9,16 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
 
 export default async function PayslipPage({ params }: { params: Promise<{ runId: string; staffId: string }> }) {
   const { runId, staffId } = await params
-  const supabase = await createClient()
+  const admin = createAdminClient() as any
 
-  const { data: runRaw } = await (supabase as any)
+  const { data: runRaw } = await admin
     .from('salary_runs')
     .select('salary_month, salary_year, status')
     .eq('id', runId)
     .single()
   const run = runRaw as { salary_month: number; salary_year: number; status: string } | null
 
-  const { data: slipRaw } = await (supabase as any)
+  const { data: slipRaw } = await admin
     .from('salary_slips')
     .select('*')
     .eq('salary_run_id', runId)
@@ -26,13 +26,14 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
     .maybeSingle()
   const slip = slipRaw as {
     basic_salary: number; housing_allowance: number; transport_allowance: number
-    food_allowance: number | null; other_allowance: number
+    food_allowance: number | null; other_allowance: number; allowance_name: string | null
     overtime_amount: number; normal_overtime: number | null; friday_overtime: number | null
     gross_salary: number; deductions: number; advance_deduction: number; net_salary: number
+    absent_days: number | null; absent_deduction: number | null; food_deduction: number | null
     payment_status: string; payment_date: string | null; payment_mode: string | null
   } | null
 
-  const { data: staffRaw } = await (supabase as any)
+  const { data: staffRaw } = await admin
     .from('staff')
     .select('staff_code, full_name, designation, department, joining_date, bank_name, iban, emirates_id')
     .eq('id', staffId)
@@ -42,7 +43,6 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
     joining_date: string; bank_name: string | null; iban: string | null; emirates_id: string | null
   } | null
 
-  // Show a meaningful error instead of a blank page
   if (!run || !slip || !staff) {
     return (
       <div className="animate-fade-in p-6">
@@ -64,37 +64,47 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
     )
   }
 
-  const { data: orgRaw } = await (supabase as any)
+  const { data: orgRaw } = await admin
     .from('organizations')
     .select('name, address, phone, email')
     .limit(1).single()
   const org = (orgRaw ?? {}) as { name: string; address: string | null; phone: string | null; email: string | null }
 
   const monthLabel = `${MONTHS[run.salary_month - 1]} ${run.salary_year}`
+  const allowanceName = slip.allowance_name ?? 'Allowance'
 
+  // Earnings: allowance = housing(0) + transport(0) + other
   const allowance = (slip.housing_allowance ?? 0) + (slip.transport_allowance ?? 0) + (slip.other_allowance ?? 0)
+  const absentDays = slip.absent_days ?? 0
+  const absentDeduction = slip.absent_deduction ?? 0
+  const foodDeduction = slip.food_deduction ?? 0
+
   const earnings = [
     { label: 'Basic', amount: slip.basic_salary },
-    { label: 'Allowance', amount: allowance },
+    { label: allowanceName, amount: allowance },
     { label: 'Food Allowance', amount: slip.food_allowance ?? 0 },
     { label: 'Fixed Over Time', amount: slip.overtime_amount ?? 0 },
     { label: 'Normal Overtime', amount: slip.normal_overtime ?? 0 },
     { label: 'Friday Overtime', amount: slip.friday_overtime ?? 0 },
   ].filter((e) => e.amount > 0)
 
-  // Fetch current advance balance to show remaining on payslip
-  const { data: staffBalanceRaw } = await (supabase as any)
+  // Fetch current advance balance
+  const { data: staffBalanceRaw } = await admin
     .from('staff').select('advance_balance').eq('id', staffId).maybeSingle()
   const remainingAdvance = (staffBalanceRaw as { advance_balance: number | null } | null)?.advance_balance ?? 0
 
   const deductions = [
-    ...(slip.deductions > 0 ? [{ label: 'Deductions', amount: slip.deductions }] : []),
+    ...(absentDeduction > 0 ? [{
+      label: `Absent ${absentDays} Day${absentDays !== 1 ? 's' : ''} (Basic + ${allowanceName} + Fixed OT)`,
+      amount: absentDeduction,
+    }] : []),
+    ...(foodDeduction > 0 ? [{ label: `Food Deduction (${absentDays} Day${absentDays !== 1 ? 's' : ''})`, amount: foodDeduction }] : []),
     ...(slip.advance_deduction > 0 ? [{ label: 'Advance Recovery', amount: slip.advance_deduction }] : []),
   ]
+  const totalDeductionsAmt = absentDeduction + foodDeduction + (slip.advance_deduction ?? 0)
 
   return (
     <div className="animate-fade-in">
-      {/* Screen nav — hidden on print */}
       <div className="print:hidden p-6 flex items-center gap-3">
         <Link href={`/payroll/process`}
           className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
@@ -103,7 +113,6 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
         <PrintButton />
       </div>
 
-      {/* Payslip — printable */}
       <div className="max-w-2xl mx-auto p-6 print:p-0 print:max-w-none">
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden print:border-0 print:rounded-none">
           {/* Header */}
@@ -133,6 +142,13 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
                 <p className="text-sm text-slate-500">Joined: {staff.joining_date ? new Date(staff.joining_date).toLocaleDateString('en-GB') : '—'}</p>
               </div>
             </div>
+            {absentDays > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-200">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-red-50 text-red-700 border border-red-200 px-3 py-1 rounded-full">
+                  ⚠️ Absent: {absentDays} day{absentDays !== 1 ? 's' : ''} — Deduction: {formatCurrency(absentDeduction + foodDeduction)}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Earnings & Deductions */}
@@ -163,15 +179,15 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
                 <div className="space-y-2">
                   {deductions.map((d) => (
                     <div key={d.label} className="flex justify-between text-sm">
-                      <span className="text-slate-600">{d.label}</span>
-                      <span className="font-semibold text-red-600">{formatCurrency(d.amount)}</span>
+                      <span className="text-slate-600 text-xs leading-tight max-w-[140px]">{d.label}</span>
+                      <span className="font-semibold text-red-600 flex-shrink-0 ml-2">{formatCurrency(d.amount)}</span>
                     </div>
                   ))}
                 </div>
               )}
               <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between text-sm font-bold">
                 <span className="text-slate-700">Total Deductions</span>
-                <span className="text-red-600">{formatCurrency((slip.deductions ?? 0) + (slip.advance_deduction ?? 0))}</span>
+                <span className="text-red-600">{formatCurrency(totalDeductionsAmt)}</span>
               </div>
               {slip.advance_deduction > 0 && (
                 <div className="mt-2 flex justify-between text-xs text-slate-500">
@@ -217,7 +233,6 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
             </div>
           )}
 
-          {/* Footer */}
           <div className="px-8 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
             <span>This is a computer-generated payslip and does not require a signature.</span>
             <span>{new Date().toLocaleDateString('en-GB')}</span>

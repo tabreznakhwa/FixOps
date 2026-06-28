@@ -25,7 +25,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
     id: string; staff_code: string; full_name: string; designation: string | null; department: string | null
     joining_date: string; employment_status: string; basic_salary: number
     housing_allowance: number; transport_allowance: number; food_allowance: number
-    other_allowance: number; fixed_overtime_monthly: number; overtime_eligible: boolean
+    other_allowance: number; allowance_name: string | null; fixed_overtime_monthly: number; overtime_eligible: boolean
     mobile_number: string | null; email: string | null; nationality: string | null
     passport_number: string | null; visa_number: string | null; emirates_id: string | null
     visa_expiry_date: string | null; passport_expiry_date: string | null
@@ -185,7 +185,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
                 <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
                   {[
                     { label: 'Basic Salary', value: s.basic_salary },
-                    { label: 'Allowance', value: (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + s.other_allowance },
+                    { label: s.allowance_name ?? 'Allowance', value: (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + s.other_allowance },
                     { label: 'Food Allowance', value: s.food_allowance },
                     ...(s.fixed_overtime_monthly > 0 ? [{ label: 'Fixed OT (Monthly)', value: s.fixed_overtime_monthly }] : []),
                   ].filter((r) => r.value > 0).map(({ label, value }) => (
