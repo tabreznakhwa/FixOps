@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Plus, Trash2, Loader2, AlertCircle, Search, ChevronDown, X } from 'lucide-react'
+import { Plus, Trash2, Loader2, AlertCircle, Search, ChevronDown, X, Banknote } from 'lucide-react'
 
 interface Supplier { id: string; supplier_name: string; supplier_code: string }
 interface Entry {
-  id: string; bill_ref: string; bill_date: string; due_date: string | null
+  id: string; supplier_id: string; bill_ref: string; bill_date: string; due_date: string | null
   amount: number; balance_due: number; notes: string | null
   suppliers: { supplier_name: string; supplier_code: string } | null
 }
@@ -158,6 +158,57 @@ export function OpeningPayablesForm({ suppliers, entries: initialEntries }: Prop
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
 
+  // Payment state
+  const [payingId, setPayingId] = useState<string | null>(null)
+  const [payAmount, setPayAmount] = useState('')
+  const [payMode, setPayMode] = useState('cash')
+  const [payDate, setPayDate] = useState(today)
+  const [payError, setPayError] = useState('')
+  const [payingSaving, setPayingSaving] = useState(false)
+
+  function openPayment(entry: Entry) {
+    setPayingId(entry.id)
+    setPayAmount(entry.balance_due.toFixed(3))
+    setPayMode('cash')
+    setPayDate(today)
+    setPayError('')
+  }
+
+  async function handlePayment(e: React.FormEvent) {
+    e.preventDefault()
+    const amount = parseFloat(payAmount)
+    if (!amount || amount <= 0) { setPayError('Enter a valid amount'); return }
+    const entry = entries.find(e => e.id === payingId)
+    if (!entry) return
+    setPayingSaving(true)
+    setPayError('')
+    try {
+      const res = await fetch('/api/opening-payables', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: payingId,
+          payment_amount: amount,
+          payment_mode: payMode,
+          payment_date: payDate,
+          supplier_id: entry.supplier_id,
+          bill_ref: entry.bill_ref,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setEntries(prev => prev.map(e =>
+        e.id === payingId ? { ...e, balance_due: data.balance_due } : e
+      ).filter(e => e.balance_due > 0))
+      setPayingId(null)
+      router.refresh()
+    } catch (err: unknown) {
+      setPayError(err instanceof Error ? err.message : 'Payment failed')
+    } finally {
+      setPayingSaving(false)
+    }
+  }
+
   const [form, setForm] = useState({
     supplier_id: '',
     bill_ref: '',
@@ -274,25 +325,76 @@ export function OpeningPayablesForm({ suppliers, entries: initialEntries }: Prop
                     </tr>
                   ) : (
                     filtered.map(e => (
-                      <tr key={e.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-5 py-3">
-                          <p className="text-sm font-semibold text-slate-800">{e.suppliers?.supplier_name ?? '—'}</p>
-                          <p className="text-xs text-slate-400">{e.suppliers?.supplier_code}</p>
-                        </td>
-                        <td className="px-4 py-3 text-sm font-mono text-slate-700">{e.bill_ref}</td>
-                        <td className="px-4 py-3 text-sm text-slate-600">{formatDate(e.bill_date)}</td>
-                        <td className="px-4 py-3 text-sm text-slate-600">{e.due_date ? formatDate(e.due_date) : '—'}</td>
-                        <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(e.balance_due)}</td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => handleDelete(e.id)}
-                            disabled={deleting === e.id}
-                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
-                          >
-                            {deleting === e.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                          </button>
-                        </td>
-                      </tr>
+                      <React.Fragment key={e.id}>
+                        <tr className="hover:bg-slate-50 transition-colors">
+                          <td className="px-5 py-3">
+                            <p className="text-sm font-semibold text-slate-800">{e.suppliers?.supplier_name ?? '—'}</p>
+                            <p className="text-xs text-slate-400">{e.suppliers?.supplier_code}</p>
+                          </td>
+                          <td className="px-4 py-3 text-sm font-mono text-slate-700">{e.bill_ref}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{formatDate(e.bill_date)}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{e.due_date ? formatDate(e.due_date) : '—'}</td>
+                          <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(e.balance_due)}</td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => payingId === e.id ? setPayingId(null) : openPayment(e)}
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg transition ${payingId === e.id ? 'bg-slate-100 text-slate-600' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}
+                              >
+                                <Banknote className="w-3.5 h-3.5" />
+                                {payingId === e.id ? 'Cancel' : 'Pay'}
+                              </button>
+                              <button
+                                onClick={() => handleDelete(e.id)}
+                                disabled={deleting === e.id}
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                              >
+                                {deleting === e.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        {payingId === e.id && (
+                          <tr className="bg-green-50">
+                            <td colSpan={6} className="px-5 py-4">
+                              <form onSubmit={handlePayment} className="flex items-end gap-3 flex-wrap">
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-1">Amount (KWD)</label>
+                                  <input
+                                    type="number" min="0.001" max={e.balance_due} step="0.001"
+                                    value={payAmount} onChange={ev => setPayAmount(ev.target.value)}
+                                    className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 w-36 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                                    autoFocus
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-1">Payment Mode</label>
+                                  <select value={payMode} onChange={ev => setPayMode(ev.target.value)}
+                                    className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                                    <option value="cash">Cash</option>
+                                    <option value="bank_transfer">Bank Transfer</option>
+                                    <option value="cheque">Cheque</option>
+                                    <option value="knet">KNET</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-600 mb-1">Date</label>
+                                  <input type="date" value={payDate} onChange={ev => setPayDate(ev.target.value)}
+                                    className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                                  />
+                                </div>
+                                {payError && <p className="text-xs text-red-600 self-center">{payError}</p>}
+                                <button type="submit" disabled={payingSaving}
+                                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 disabled:opacity-60 transition">
+                                  {payingSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
+                                  Confirm Payment
+                                </button>
+                                <p className="text-xs text-slate-500 self-center">Balance: {formatCurrency(e.balance_due)}</p>
+                              </form>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))
                   )}
                 </tbody>

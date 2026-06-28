@@ -52,6 +52,66 @@ export async function POST(request: Request) {
   return NextResponse.json(data)
 }
 
+export async function PATCH(request: Request) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
+  const profile = await getOrgId()
+  if (!profile) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  if (!['owner', 'admin', 'manager'].includes(profile.role))
+    return NextResponse.json({ error: 'Permission denied' }, { status: 403 })
+
+  const { id, payment_amount, payment_mode, payment_date, supplier_id, bill_ref } = await request.json()
+  if (!id || !payment_amount || payment_amount <= 0)
+    return NextResponse.json({ error: 'Invalid payment amount' }, { status: 400 })
+  if (!payment_mode) return NextResponse.json({ error: 'Payment mode is required' }, { status: 400 })
+  if (!supplier_id) return NextResponse.json({ error: 'Supplier is required' }, { status: 400 })
+
+  const admin = createAdminClient() as any
+  const pDate = payment_date || new Date().toISOString().split('T')[0]
+
+  const { data: entry, error: fetchErr } = await admin
+    .from('opening_payables')
+    .select('balance_due')
+    .eq('id', id)
+    .eq('organization_id', profile.organization_id)
+    .single()
+
+  if (fetchErr || !entry) return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
+  if (payment_amount > entry.balance_due)
+    return NextResponse.json({ error: `Payment exceeds balance due (${entry.balance_due})` }, { status: 400 })
+
+  const new_balance = Math.max(0, entry.balance_due - payment_amount)
+
+  // 1. Reduce balance_due
+  const { error: updateErr } = await admin
+    .from('opening_payables')
+    .update({ balance_due: new_balance })
+    .eq('id', id)
+
+  if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
+
+  // 2. Insert into supplier_payments (feeds Cash Book / Bank Book)
+  const { error: payErr } = await admin
+    .from('supplier_payments')
+    .insert({
+      organization_id: profile.organization_id,
+      supplier_id,
+      purchase_order_id: null,
+      payment_date: pDate,
+      amount_paid: payment_amount,
+      payment_mode,
+      reference_number: bill_ref ?? null,
+      notes: `Opening payable payment — ${bill_ref ?? ''}`.trim(),
+      paid_by: user.id,
+    })
+
+  if (payErr) return NextResponse.json({ error: payErr.message }, { status: 500 })
+
+  return NextResponse.json({ success: true, balance_due: new_balance })
+}
+
 export async function DELETE(request: Request) {
   const profile = await getOrgId()
   if (!profile) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })

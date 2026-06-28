@@ -56,6 +56,8 @@ const navGroups: Array<{
       { href: '/suppliers', label: 'Suppliers & PO', icon: Building2, exact: true, excludeRoles: ['technician'] },
       { href: '/suppliers/purchase-register', label: 'Purchase Register', icon: ShoppingCart, excludeRoles: ['technician'] },
       { href: '/suppliers/vendor-payments', label: 'Vendor Payments', icon: TrendingDown, excludeRoles: ['technician'] },
+      { href: '/suppliers/vendor-outstanding', label: 'Vendor Outstanding', icon: TrendingDown, excludeRoles: ['technician'] },
+      { href: '/suppliers/vendor-ledger', label: 'Vendor Ledger', icon: TrendingDown, excludeRoles: ['technician'] },
       { href: '/suppliers/opening-payables', label: 'Opening Payables', icon: TrendingDown, excludeRoles: ['technician'] },
     ],
   },
