@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2 } from 'lucide-react'
+import { Loader2, CalendarX } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
 interface StaffRow {
@@ -25,20 +25,21 @@ interface Props {
   month: number
   year: number
   staff: StaffRow[]
+  absentDaysMap: Record<string, number>
 }
 
 interface EntryState {
   normal_overtime: string
   friday_overtime: string
   advance_deduction: string
-  absent_days: string
-  food_deduction: string
+  absent_days: string   // pre-filled from attendance, editable for correction
+  food_deduction: string  // manual only — not auto-filled
 }
 
 const inputCls = 'w-24 text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
 const inputSmCls = 'w-20 text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
 
-export function PayrollEntryForm({ month, year, staff }: Props) {
+export function PayrollEntryForm({ month, year, staff, absentDaysMap }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -48,28 +49,14 @@ export function PayrollEntryForm({ month, year, staff }: Props) {
       normal_overtime: '',
       friday_overtime: '',
       advance_deduction: '',
-      absent_days: '',
+      // Pre-fill absent days from attendance records
+      absent_days: absentDaysMap[s.id] ? String(absentDaysMap[s.id]) : '',
       food_deduction: '',
     }]))
   )
 
   function setEntry(staffId: string, field: keyof EntryState, value: string) {
-    setEntries((prev) => {
-      const current = prev[staffId]
-      const updated = { ...current, [field]: value }
-
-      // When absent_days changes, auto-calculate food deduction
-      if (field === 'absent_days') {
-        const staffRecord = staff.find(s => s.id === staffId)
-        if (staffRecord) {
-          const food = staffRecord.food_allowance ?? 0
-          const days = parseFloat(value) || 0
-          updated.food_deduction = days > 0 ? (food / 30 * days).toFixed(3) : ''
-        }
-      }
-
-      return { ...prev, [staffId]: updated }
-    })
+    setEntries((prev) => ({ ...prev, [staffId]: { ...prev[staffId], [field]: value } }))
   }
 
   function calcOT(basic: number, hrs: number, multiplier: number) {
@@ -110,6 +97,7 @@ export function PayrollEntryForm({ month, year, staff }: Props) {
   }
 
   const hasAdvances = staff.some(s => (s.advance_balance ?? 0) > 0)
+  const hasAnyAbsent = Object.values(absentDaysMap).some(d => d > 0)
 
   return (
     <div className="space-y-4">
@@ -117,14 +105,20 @@ export function PayrollEntryForm({ month, year, staff }: Props) {
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>
       )}
 
+      {hasAnyAbsent && (
+        <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3">
+          <CalendarX className="w-4 h-4 flex-shrink-0" />
+          <span>Absent days have been auto-filled from attendance records. Basic, Allowance and Fixed OT will be deducted proportionally. Food deduction is manual — enter if applicable.</span>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-4">
           <div>
             <h3 className="font-semibold text-slate-900">Enter Payroll — {staff.length} Employees</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Basic, Allowances, Food and Fixed OT are pre-filled from staff profiles.
-              Enter absent days to auto-calculate deductions. Food deduction is editable.
-              Enter Normal OT (×1.25) and Friday OT (×1.5) hours{hasAdvances ? ', and Advance Recovery' : ''}.
+              Absent days are pulled from attendance. Basic + Allowance + Fixed OT deducted automatically.
+              Food deduction is manual. Enter Normal OT (×1.25), Friday OT (×1.5) hours{hasAdvances ? ', and Advance Recovery' : ''}.
             </p>
           </div>
           <button
@@ -137,7 +131,7 @@ export function PayrollEntryForm({ month, year, staff }: Props) {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1400px]">
+          <table className="w-full min-w-[1300px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Employee</th>
@@ -187,6 +181,7 @@ export function PayrollEntryForm({ month, year, staff }: Props) {
                 const net = gross - advDeduct - absentDeduct - foodDeduct
                 const advBalance = s.advance_balance ?? 0
                 const allowanceName = s.allowance_name ?? 'Allowance'
+                const fromAttendance = absentDays > 0 && (absentDaysMap[s.id] ?? 0) === absentDays
 
                 return (
                   <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
@@ -201,10 +196,10 @@ export function PayrollEntryForm({ month, year, staff }: Props) {
                           <span className="text-slate-600">{formatCurrency(allowance)}</span>
                           {allowanceName !== 'Allowance' && <p className="text-xs text-slate-400">{allowanceName}</p>}
                         </div>
-                      ) : '—'}
+                      ) : <span className="text-slate-300">—</span>}
                     </td>
-                    <td className="px-3 py-3 text-right text-sm text-slate-600">{food > 0 ? formatCurrency(food) : '—'}</td>
-                    <td className="px-3 py-3 text-right text-sm text-slate-600">{fixedOT > 0 ? formatCurrency(fixedOT) : '—'}</td>
+                    <td className="px-3 py-3 text-right text-sm text-slate-600">{food > 0 ? formatCurrency(food) : <span className="text-slate-300">—</span>}</td>
+                    <td className="px-3 py-3 text-right text-sm text-slate-600">{fixedOT > 0 ? formatCurrency(fixedOT) : <span className="text-slate-300">—</span>}</td>
                     <td className="px-3 py-3 text-right">
                       <input type="number" min="0" step="0.5" placeholder="0"
                         value={entries[s.id]?.normal_overtime}
@@ -219,20 +214,25 @@ export function PayrollEntryForm({ month, year, staff }: Props) {
                         className={inputCls} />
                       {fridayOTHrs > 0 && <p className="text-xs text-blue-600 mt-0.5">{formatCurrency(fridayOT)}</p>}
                     </td>
-                    {/* Absent Days */}
+                    {/* Absent Days — pre-filled from attendance, editable for correction */}
                     <td className="px-3 py-3 text-right">
-                      <input type="number" min="0" max="31" step="1" placeholder="0"
+                      <input type="number" min="0" max="31" step="0.5" placeholder="0"
                         value={entries[s.id]?.absent_days}
                         onChange={(e) => setEntry(s.id, 'absent_days', e.target.value)}
-                        className={`${inputSmCls} ${absentDays > 0 ? 'border-red-300 text-red-700' : ''}`} />
-                      {absentDays > 0 && <p className="text-xs text-red-500 mt-0.5">−{formatCurrency(absentDeduct)}</p>}
+                        className={`${inputSmCls} ${absentDays > 0 ? 'border-red-300 bg-red-50 text-red-700' : ''}`} />
+                      {absentDays > 0 && (
+                        <p className="text-xs text-red-500 mt-0.5">
+                          −{formatCurrency(absentDeduct)}
+                          {fromAttendance && <span className="ml-1 text-slate-400">↑att</span>}
+                        </p>
+                      )}
                     </td>
-                    {/* Food deduction — editable, auto-filled from absent days */}
+                    {/* Food deduction — manual only, no auto-fill */}
                     <td className="px-3 py-3 text-right">
                       <input type="number" min="0" step="0.001" placeholder="0.000"
                         value={entries[s.id]?.food_deduction}
                         onChange={(e) => setEntry(s.id, 'food_deduction', e.target.value)}
-                        className={`${inputSmCls} ${foodDeduct > 0 ? 'border-red-300 text-red-700' : ''}`} />
+                        className={`${inputSmCls} ${foodDeduct > 0 ? 'border-red-300 bg-red-50 text-red-700' : ''}`} />
                       {foodDeduct > 0 && <p className="text-xs text-red-500 mt-0.5">food</p>}
                     </td>
                     {hasAdvances && (
@@ -256,7 +256,7 @@ export function PayrollEntryForm({ month, year, staff }: Props) {
                         {formatCurrency(net)}
                       </span>
                       {(absentDeduct > 0 || foodDeduct > 0) && (
-                        <p className="text-xs text-red-400 mt-0.5">−{formatCurrency(absentDeduct + foodDeduct)} absent</p>
+                        <p className="text-xs text-red-400 mt-0.5">−{formatCurrency(absentDeduct + foodDeduct)} deducted</p>
                       )}
                     </td>
                   </tr>

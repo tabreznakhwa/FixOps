@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
@@ -27,6 +27,7 @@ export default async function PayrollProcessPage({
   const year = parseInt(params.year ?? String(now.getFullYear()))
 
   const supabase = await createClient()
+  const admin = createAdminClient() as any
 
   // Check if a run exists for this month/year
   const { data: runRaw } = await (supabase as any)
@@ -47,6 +48,26 @@ export default async function PayrollProcessPage({
     .select('*')
     .eq('employment_status', 'active')
     .order('full_name')
+
+  // Attendance for this month — count absent and half_day per staff
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+  const { data: attendanceRaw } = await admin
+    .from('attendance')
+    .select('staff_id, status')
+    .gte('date', startDate)
+    .lte('date', endDate)
+
+  // Build absent-day count per staff: absent=1, half_day=0.5
+  const absentDaysMap: Record<string, number> = {}
+  for (const rec of (attendanceRaw ?? []) as Array<{ staff_id: string; status: string }>) {
+    if (rec.status === 'absent') {
+      absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 1
+    } else if (rec.status === 'half_day') {
+      absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 0.5
+    }
+  }
 
   const staff = (staffRaw ?? []) as Array<{
     id: string; staff_code: string; full_name: string; designation: string | null; department: string | null
@@ -144,7 +165,7 @@ export default async function PayrollProcessPage({
         </form>
 
         {!run && (
-          <PayrollEntryForm month={month} year={year} staff={staff} />
+          <PayrollEntryForm month={month} year={year} staff={staff} absentDaysMap={absentDaysMap} />
         )}
 
         {run && (
