@@ -53,6 +53,7 @@ export async function createCustomer(
     city: (formData.get('city') as string)?.trim() || null,
     payment_terms: parseInt(formData.get('payment_terms') as string) || 0,
     credit_limit: parseFloat(formData.get('credit_limit') as string) || 0,
+    print_name: (formData.get('print_name') as string)?.trim() || null,
     notes: (formData.get('notes') as string)?.trim() || null,
     status: 'active',
     created_by: user.id,
@@ -115,6 +116,7 @@ export async function updateCustomer(
     city: (formData.get('city') as string)?.trim() || null,
     payment_terms: parseInt(formData.get('payment_terms') as string) || 0,
     credit_limit: parseFloat(formData.get('credit_limit') as string) || 0,
+    print_name: (formData.get('print_name') as string)?.trim() || null,
     notes: (formData.get('notes') as string)?.trim() || null,
     status: (formData.get('status') as string) || 'active',
   }).eq('id', id).eq('organization_id', profile.organization_id)

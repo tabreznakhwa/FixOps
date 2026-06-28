@@ -89,6 +89,18 @@ export default function NewCustomerPage() {
                 />
               </div>
 
+              <div className={isCompanyType ? '' : 'sm:col-span-2'}>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Print Name <span className="text-slate-400 font-normal text-xs">(shown on invoices instead of Full Name)</span>
+                </label>
+                <input
+                  type="text"
+                  name="print_name"
+                  placeholder="Leave blank to use Full Name"
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
               {isCompanyType && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Company Name</label>

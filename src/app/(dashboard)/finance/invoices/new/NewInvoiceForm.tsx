@@ -396,7 +396,6 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
   const [dueDate, setDueDate] = useState('')
   const [workOrderId, setWorkOrderId] = useState('')
   const [refNumber, setRefNumber] = useState('')
-  const [printName, setPrintName] = useState('')
   const [items, setItems] = useState<LineItem[]>([emptyItem()])
   const [discountAmount, setDiscountAmount] = useState('0')
   const [notes, setNotes] = useState('')
@@ -536,7 +535,6 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
             inventory_item_id: it.inventory_item_id || null,
           })),
           ref_number: refNumber.trim() || null,
-          print_name: printName.trim() || null,
           discount_amount: discount,
           tax_rate: 0,
           notes: notes.trim() || null,
@@ -598,7 +596,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
             <input type="date" className={inputClass} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
 
-          <div>
+          <div className="md:col-span-2">
             <label className={labelClass}>REF Number <span className="text-slate-400 font-normal">(optional)</span></label>
             <input
               type="text"
@@ -606,19 +604,6 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
               className={inputClass}
               value={refNumber}
               onChange={(e) => setRefNumber(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className={labelClass}>
-              Print Name <span className="text-slate-400 font-normal">(optional — overrides customer name on invoice)</span>
-            </label>
-            <input
-              type="text"
-              placeholder="Name to print on the invoice…"
-              className={inputClass}
-              value={printName}
-              onChange={(e) => setPrintName(e.target.value)}
             />
           </div>
 

@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Edit, Plus, Building2, User } from 'lucide-react'
+import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Edit, Plus, Building2, User, Printer } from 'lucide-react'
 import { formatDate, getStatusColor, getPriorityColor, formatStatus } from '@/lib/utils'
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -36,7 +36,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   if (!customerRaw) notFound()
 
   const customer = customerRaw as {
-    id: string; customer_code: string; full_name: string; company_name: string | null;
+    id: string; customer_code: string; full_name: string; print_name: string | null; company_name: string | null;
     contact_person: string | null; customer_type: string; mobile_number: string;
     whatsapp_number: string | null; email: string | null; address: string | null;
     block: string | null; street: string | null; avenue: string | null; house_number: string | null;
@@ -128,6 +128,14 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                   {customer.mobile_number}
                 </a>
               </div>
+              {customer.print_name && (
+                <div className="flex items-center gap-2.5 text-sm text-slate-700">
+                  <Printer className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <span className="text-slate-600">
+                    Prints as: <span className="font-semibold text-slate-800">{customer.print_name}</span>
+                  </span>
+                </div>
+              )}
               {customer.whatsapp_number && (
                 <div className="flex items-center gap-2.5 text-sm text-slate-700">
                   <MessageCircle className="w-4 h-4 text-green-500 flex-shrink-0" />

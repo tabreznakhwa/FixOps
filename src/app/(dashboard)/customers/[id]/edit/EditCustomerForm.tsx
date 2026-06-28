@@ -17,7 +17,7 @@ const inputCls = 'w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-s
 const labelCls = 'block text-sm font-medium text-slate-700 mb-1.5'
 
 interface Customer {
-  id: string; customer_type: string; full_name: string; company_name: string | null;
+  id: string; customer_type: string; full_name: string; print_name: string | null; company_name: string | null;
   contact_person: string | null; mobile_number: string; whatsapp_number: string | null;
   email: string | null; address: string | null; block: string | null; street: string | null;
   avenue: string | null; house_number: string | null; area: string | null; city: string | null;
@@ -76,6 +76,12 @@ export function EditCustomerForm({ customer }: { customer: Customer }) {
           <div className={isCompanyType ? '' : 'sm:col-span-2'}>
             <label className={labelCls}>Full Name <span className="text-red-500">*</span></label>
             <input type="text" name="full_name" required defaultValue={customer.full_name} className={inputCls} />
+          </div>
+          <div className={isCompanyType ? '' : 'sm:col-span-2'}>
+            <label className={labelCls}>
+              Print Name <span className="text-slate-400 font-normal text-xs">(shown on invoices instead of Full Name)</span>
+            </label>
+            <input type="text" name="print_name" defaultValue={customer.print_name ?? ''} placeholder="Leave blank to use Full Name" className={inputCls} />
           </div>
           {isCompanyType && (
             <div>
