@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Plus, MessageSquare, Filter } from 'lucide-react'
-import { getPriorityColor, getStatusColor, formatStatus, formatDateTime } from '@/lib/utils'
+import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
 
 export const metadata = { title: 'Complaints' }
 
@@ -14,7 +14,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
 
   let query = supabase
     .from('complaints')
-    .select('id, complaint_number, description, priority, status, service_category, created_at, customers(full_name, mobile_number), users!complaints_assigned_to_fkey(full_name)')
+    .select('id, complaint_number, description, priority, status, service_category, created_at, preferred_date, preferred_time, customers(full_name, mobile_number), users!complaints_assigned_to_fkey(full_name)')
     .order('created_at', { ascending: false })
 
   if (params.status) query = query.eq('status', params.status)
@@ -25,6 +25,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   const complaints = complaintsRaw as unknown as Array<{
     id: string; complaint_number: string; description: string; priority: string; status: string;
     service_category: string | string[]; created_at: string;
+    preferred_date: string | null; preferred_time: string | null;
     customers: { full_name: string; mobile_number: string } | null;
     users: { full_name: string } | null
   }>
@@ -131,6 +132,11 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
                       <span>👤 {customer?.full_name}</span>
                       {assignee && <span>🔧 {assignee.full_name}</span>}
                       <span>🕒 {formatDateTime(c.created_at)}</span>
+                      {c.preferred_date && (
+                        <span className="flex items-center gap-1 bg-amber-100 text-amber-700 font-semibold px-2 py-0.5 rounded-full">
+                          📅 {formatDate(c.preferred_date)}{c.preferred_time ? ` ${c.preferred_time}` : ''}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex-shrink-0">

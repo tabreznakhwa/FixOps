@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, ClipboardList, Plus, Edit } from 'lucide-react'
+import { ArrowLeft, ClipboardList, Plus, Edit, CalendarClock } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
 import { ComplaintActions } from './ComplaintActions'
 
@@ -161,6 +161,30 @@ export default async function ComplaintDetailPage({ params }: { params: Promise<
 
         {/* Right column - customer + actions */}
         <div className="space-y-5">
+
+          {/* Preferred Visit — prominent card for technician */}
+          {(complaint.preferred_date || complaint.preferred_time) && (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <CalendarClock className="w-5 h-5 text-amber-600" />
+                <h2 className="font-bold text-amber-900 text-base">Preferred Visit</h2>
+              </div>
+              {complaint.preferred_date && (
+                <p className="text-2xl font-bold text-amber-800 leading-tight">
+                  {formatDate(complaint.preferred_date)}
+                </p>
+              )}
+              {complaint.preferred_time && (
+                <p className="text-lg font-semibold text-amber-700 mt-1">
+                  🕐 {complaint.preferred_time}
+                </p>
+              )}
+              {!complaint.preferred_date && complaint.preferred_time && (
+                <p className="text-lg font-semibold text-amber-700">🕐 {complaint.preferred_time}</p>
+              )}
+            </div>
+          )}
+
           {/* Customer */}
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <h2 className="font-semibold text-slate-900 mb-3">Customer</h2>
