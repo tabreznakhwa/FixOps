@@ -14,6 +14,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
 
     const body = await request.json()
+
+    // Full edit (description, category, etc.)
+    if (body.edit === true) {
+      const { service_category, priority, description, location, preferred_date, preferred_time, notes } = body
+      if (!description?.trim()) return NextResponse.json({ error: 'Description is required' }, { status: 400 })
+      const supabase = createAdminClient()
+      const { error } = await (supabase as any).from('complaints').update({
+        service_category: Array.isArray(service_category) ? service_category : [service_category],
+        priority: priority ?? 'medium',
+        description: description.trim(),
+        location: location?.trim() || null,
+        preferred_date: preferred_date || null,
+        preferred_time: preferred_time || null,
+        notes: notes?.trim() || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id)
+      if (error) throw error
+      return NextResponse.json({ success: true })
+    }
+
     const allowed = ['status', 'assigned_to', 'assigned_staff_id', 'technician_name', 'priority', 'notes']
     const updates: Record<string, string | null> = {}
     for (const key of allowed) {
