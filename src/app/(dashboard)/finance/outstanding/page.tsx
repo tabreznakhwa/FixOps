@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AlertCircle } from 'lucide-react'
@@ -15,21 +15,28 @@ export default async function OutstandingPage({
 }) {
   const params = await searchParams
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = await (supabase as any).from('users').select('organization_id').eq('id', user!.id).single()
+  const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
 
-  let query = (supabase as any)
+  const admin = createAdminClient() as any
+
+  let query = admin
     .from('invoices')
     .select('id, invoice_number, invoice_date, due_date, total_amount, amount_paid, balance_due, status, customers(id, full_name, company_name, customer_code, mobile_number)')
+    .eq('organization_id', orgId)
     .gt('balance_due', 0)
     .not('status', 'in', '(cancelled,written_off,paid)')
     .order('due_date', { ascending: true })
 
   if (params.customer) query = query.eq('customer_id', params.customer)
 
-  let openingQuery = (supabase as any)
+  let openingQuery = admin
     .from('opening_receivables')
     .select('id, invoice_ref, invoice_date, due_date, amount, balance_due, customers(id, full_name, company_name, customer_code, mobile_number)')
+    .eq('organization_id', orgId)
     .gt('balance_due', 0)
-    .order('due_date', { ascending: true })
+    .order('invoice_date', { ascending: true })
 
   if (params.customer) openingQuery = openingQuery.eq('customer_id', params.customer)
 
