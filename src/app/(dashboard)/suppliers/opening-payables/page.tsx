@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -14,14 +14,16 @@ export default async function OpeningPayablesPage() {
     .from('users').select('organization_id').eq('id', user!.id).single()
   const profile = profileRaw as { organization_id: string } | null
 
+  const admin = createAdminClient() as any
+
   const [suppliersRes, entriesRes] = await Promise.all([
-    (supabase as any)
+    admin
       .from('suppliers')
       .select('id, supplier_name, supplier_code')
       .eq('organization_id', profile?.organization_id)
       .eq('status', 'active')
       .order('supplier_name'),
-    (supabase as any)
+    admin
       .from('opening_payables')
       .select('*, suppliers(supplier_name, supplier_code)')
       .eq('organization_id', profile?.organization_id)
