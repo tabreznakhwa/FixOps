@@ -32,12 +32,18 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
     complaints: { complaint_number: string; description: string } | null
   }
 
-  const [techniciansRaw, staffRaw, inventoryRaw, partsRaw] = await Promise.all([
+  const [techniciansRaw, staffRaw, inventoryRaw] = await Promise.all([
     supabase.from('users').select('id, full_name, role').in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
     supabase.from('staff').select('id, full_name, designation').eq('employment_status', 'active'),
     (supabase as any).from('inventory_items').select('id, item_code, item_name, unit_of_measure, current_stock, selling_price').eq('is_active', true).order('item_name'),
-    (supabase as any).from('work_order_line_items').select('id, item_type, description, quantity, unit_price, inventory_item_id').eq('work_order_id', id).order('created_at'),
   ])
+
+  // Isolated so a missing table (pre-migration) never crashes the whole page
+  const lineItemsRaw = await (supabase as any)
+    .from('work_order_line_items')
+    .select('id, item_type, description, quantity, unit_price, inventory_item_id')
+    .eq('work_order_id', id)
+    .order('created_at')
 
   const systemUsers = (techniciansRaw.data ?? []) as unknown as { id: string; full_name: string; role: string }[]
   const staffMembers = (staffRaw.data ?? []) as unknown as { id: string; full_name: string; designation: string | null }[]
@@ -48,7 +54,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
   const inventoryItems = (inventoryRaw.data ?? []) as unknown as {
     id: string; item_code: string; item_name: string; unit_of_measure: string; current_stock: number; selling_price: number
   }[]
-  const existingParts = (partsRaw.data ?? []) as unknown as {
+  const existingParts = (lineItemsRaw.data ?? []) as unknown as {
     id: string; item_type: 'custom' | 'part' | 'service'; description: string; quantity: number; unit_price: number; inventory_item_id: string | null
   }[]
 
