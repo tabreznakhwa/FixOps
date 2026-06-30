@@ -16,9 +16,6 @@ export async function POST(request: NextRequest) {
     const profile = profileRaw as { organization_id: string; role: string } | null
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
-    if (!['owner', 'admin', 'manager'].includes(profile.role)) {
-      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
-    }
 
     const body = await request.json()
     const { expense_date, category, description, amount, payment_method, reference_number, notes } = body
@@ -60,6 +57,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data)
   } catch (err) {
     console.error('Expense POST error:', err)
-    return NextResponse.json({ error: 'Failed to create expense' }, { status: 500 })
+    const msg = err instanceof Error ? err.message : JSON.stringify(err)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
