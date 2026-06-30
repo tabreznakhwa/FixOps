@@ -22,14 +22,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { supplier_id, purchase_order_id, invoice_ids, opening_payable_ids, payment_date, amount_paid, payment_mode, reference_number, notes } = body
+    const { supplier_id, purchase_order_id, invoice_ids, opening_payable_ids, payment_date, amount_paid, discount_amount, payment_mode, reference_number, notes } = body
 
     if (!supplier_id) return NextResponse.json({ error: 'Supplier is required' }, { status: 400 })
     if (!amount_paid || Number(amount_paid) <= 0) return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
+    if (discount_amount && Number(discount_amount) < 0) return NextResponse.json({ error: 'Invalid discount' }, { status: 400 })
 
     const admin = createAdminClient() as any
     const invoiceIds: string[] = Array.isArray(invoice_ids) ? invoice_ids.filter(Boolean) : []
     const payableIds: string[] = Array.isArray(opening_payable_ids) ? opening_payable_ids.filter(Boolean) : []
+    const discount = Number(discount_amount || 0)
 
     // Pay against one or more purchase invoices / opening payables: allocate the amount across them oldest-first
     if (invoiceIds.length > 0 || payableIds.length > 0) {
@@ -67,18 +69,23 @@ export async function POST(request: NextRequest) {
       lines.sort((a, b) => a.date.localeCompare(b.date))
 
       const totalBalance = lines.reduce((s, l) => s + l.balance_due, 0)
-      if (Number(amount_paid) > totalBalance + 0.001) {
-        return NextResponse.json({ error: `Amount exceeds total selected balance (${totalBalance.toFixed(3)})` }, { status: 400 })
+      const settlementTotal = Number(amount_paid) + discount
+      if (settlementTotal > totalBalance + 0.001) {
+        return NextResponse.json({ error: `Amount + discount exceeds total selected balance (${totalBalance.toFixed(3)})` }, { status: 400 })
       }
 
-      let remaining = Number(amount_paid)
+      // Allocate cash and discount across lines oldest-first; discount is consumed first per line
+      let remainingCash = Number(amount_paid)
+      let remainingDiscount = discount
       const paidLabels: string[] = []
       let firstPaymentId: string | null = null
 
       for (const line of lines) {
-        if (remaining <= 0) break
-        const applied = Math.min(remaining, line.balance_due)
+        if (remainingCash <= 0 && remainingDiscount <= 0) break
+        const applied = Math.min(remainingCash + remainingDiscount, line.balance_due)
         if (applied <= 0) continue
+        const appliedDiscount = Math.min(remainingDiscount, applied)
+        const appliedCash = applied - appliedDiscount
 
         if (line.type === 'invoice') {
           const newAmountPaid = (line.amount_paid ?? 0) + applied
@@ -101,7 +108,8 @@ export async function POST(request: NextRequest) {
             supplier_id,
             purchase_invoice_id: line.type === 'invoice' ? line.id : null,
             payment_date,
-            amount_paid: applied,
+            amount_paid: appliedCash,
+            discount_amount: appliedDiscount,
             payment_mode: payment_mode || 'bank_transfer',
             reference_number: reference_number || (line.type === 'opening' ? line.label : null),
             notes: line.type === 'opening' ? `Opening payable payment — ${line.label}` : (notes || null),
@@ -113,7 +121,8 @@ export async function POST(request: NextRequest) {
         firstPaymentId ??= payRow.id
 
         paidLabels.push(line.label)
-        remaining -= applied
+        remainingDiscount -= appliedDiscount
+        remainingCash -= appliedCash
       }
 
       await logAudit({
@@ -123,7 +132,7 @@ export async function POST(request: NextRequest) {
         action: 'create',
         entityType: 'vendor_payment',
         entityId: firstPaymentId ?? supplier_id,
-        entityLabel: `Payment of ${amount_paid} to supplier against ${paidLabels.length > 1 ? 'bills' : 'bill'} ${paidLabels.join(', ')}`,
+        entityLabel: `Payment of ${amount_paid}${discount > 0 ? ` (+ ${discount} discount)` : ''} to supplier against ${paidLabels.length > 1 ? 'bills' : 'bill'} ${paidLabels.join(', ')}`,
       })
 
       return NextResponse.json({ id: firstPaymentId })
@@ -138,6 +147,7 @@ export async function POST(request: NextRequest) {
         purchase_order_id: purchase_order_id || null,
         payment_date,
         amount_paid: Number(amount_paid),
+        discount_amount: discount,
         payment_mode: payment_mode || 'bank_transfer',
         reference_number: reference_number || null,
         notes: notes || null,
@@ -148,7 +158,7 @@ export async function POST(request: NextRequest) {
 
     if (payErr) throw payErr
 
-    // Update purchase_order balance if linked
+    // Update purchase_order balance if linked (discount settles the PO too, without being real cash)
     if (purchase_order_id) {
       const { data: poRaw } = await admin
         .from('purchase_orders')
@@ -157,7 +167,7 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (poRaw) {
-        const newAmountPaid = Number(poRaw.amount_paid) + Number(amount_paid)
+        const newAmountPaid = Number(poRaw.amount_paid) + Number(amount_paid) + discount
         const newBalance = Number(poRaw.total_amount) - newAmountPaid
         const newPaymentStatus = newBalance <= 0 ? 'paid' : newAmountPaid > 0 ? 'partial' : 'unpaid'
 
@@ -176,7 +186,7 @@ export async function POST(request: NextRequest) {
       action: 'create',
       entityType: 'vendor_payment',
       entityId: payment.id,
-      entityLabel: `Payment of ${amount_paid} to supplier`,
+      entityLabel: `Payment of ${amount_paid}${discount > 0 ? ` (+ ${discount} discount)` : ''} to supplier`,
     })
 
     return NextResponse.json({ id: payment.id })

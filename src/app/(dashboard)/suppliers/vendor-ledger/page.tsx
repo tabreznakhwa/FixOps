@@ -64,10 +64,10 @@ export default async function VendorLedgerPage({
     if (toDate) poQuery = poQuery.lte('purchase_date', toDate)
     const { data: posRaw } = await poQuery
 
-    // Supplier payments (credit — we paid them)
+    // Supplier payments (credit — we paid them; discount also settles the bill without being cash)
     let payQuery = admin
       .from('supplier_payments')
-      .select('id, payment_date, amount_paid, payment_mode, reference_number')
+      .select('id, payment_date, amount_paid, discount_amount, payment_mode, reference_number')
       .eq('supplier_id', params.supplier_id)
       .eq('organization_id', orgId)
       .order('payment_date', { ascending: true })
@@ -77,7 +77,7 @@ export default async function VendorLedgerPage({
 
     const openingEntries = (openingRaw ?? []) as Array<{ id: string; bill_ref: string; bill_date: string; amount: number }>
     const pos = (posRaw ?? []) as Array<{ id: string; po_number: string; purchase_date: string; total_amount: number; status: string }>
-    const payments = (paymentsRaw ?? []) as Array<{ id: string; payment_date: string; amount_paid: number; payment_mode: string; reference_number: string | null }>
+    const payments = (paymentsRaw ?? []) as Array<{ id: string; payment_date: string; amount_paid: number; discount_amount: number | null; payment_mode: string; reference_number: string | null }>
 
     type RawEntry = { date: string; description: string; type: string; reference: string | null; debit: number; credit: number }
     const merged: RawEntry[] = [
@@ -99,11 +99,11 @@ export default async function VendorLedgerPage({
       })),
       ...payments.map(pay => ({
         date: pay.payment_date,
-        description: `Payment — ${pay.payment_mode.replace(/_/g, ' ')}${pay.reference_number ? ` (${pay.reference_number})` : ''}`,
+        description: `Payment — ${pay.payment_mode.replace(/_/g, ' ')}${pay.reference_number ? ` (${pay.reference_number})` : ''}${pay.discount_amount ? ` incl. ${formatCurrency(pay.discount_amount)} discount` : ''}`,
         type: 'payment',
         reference: pay.reference_number,
         debit: 0,
-        credit: pay.amount_paid,
+        credit: pay.amount_paid + Number(pay.discount_amount ?? 0),
       })),
     ].sort((a, b) => a.date.localeCompare(b.date))
 

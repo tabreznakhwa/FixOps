@@ -35,20 +35,21 @@ export default async function VendorPaymentsPage({
 
   const { data: paymentsRaw } = await (supabase as any)
     .from('supplier_payments')
-    .select('id, payment_date, amount_paid, payment_mode, reference_number, notes, suppliers(supplier_name, supplier_code), purchase_orders(po_number)')
+    .select('id, payment_date, amount_paid, discount_amount, payment_mode, reference_number, notes, suppliers(supplier_name, supplier_code), purchase_orders(po_number)')
     .gte('payment_date', from)
     .lte('payment_date', to)
     .order('payment_date', { ascending: false })
     .limit(200)
 
   const payments = (paymentsRaw ?? []) as Array<{
-    id: string; payment_date: string; amount_paid: number; payment_mode: string
+    id: string; payment_date: string; amount_paid: number; discount_amount: number | null; payment_mode: string
     reference_number: string | null; notes: string | null
     suppliers: { supplier_name: string; supplier_code: string } | null
     purchase_orders: { po_number: string } | null
   }>
 
   const totalPaid = payments.reduce((s, p) => s + p.amount_paid, 0)
+  const totalDiscount = payments.reduce((s, p) => s + Number(p.discount_amount ?? 0), 0)
 
   // Group by mode
   const byMode = payments.reduce<Record<string, number>>((acc, p) => {
@@ -93,7 +94,10 @@ export default async function VendorPaymentsPage({
           <div className="bg-white rounded-xl border border-slate-200 p-4 sm:col-span-2">
             <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Total Paid</p>
             <p className="text-2xl font-bold text-red-600">{formatCurrency(totalPaid)}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{payments.length} payments · {formatDate(from)} to {formatDate(to)}</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {payments.length} payments · {formatDate(from)} to {formatDate(to)}
+              {totalDiscount > 0 && <> · {formatCurrency(totalDiscount)} discount</>}
+            </p>
           </div>
           {Object.entries(byMode).map(([mode, amt]) => (
             <div key={mode} className="bg-white rounded-xl border border-slate-200 p-4">
@@ -125,6 +129,7 @@ export default async function VendorPaymentsPage({
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">PO #</th>
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Mode</th>
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Reference</th>
+                    <th className="text-right text-xs font-semibold text-amber-600 uppercase tracking-wider px-4 py-3">Discount</th>
                     <th className="text-right text-xs font-semibold text-red-600 uppercase tracking-wider px-5 py-3">Amount Paid</th>
                   </tr>
                 </thead>
@@ -143,6 +148,9 @@ export default async function VendorPaymentsPage({
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-400 font-mono">{p.reference_number ?? '—'}</td>
+                      <td className="px-4 py-3 text-right text-sm font-medium text-amber-600">
+                        {p.discount_amount ? formatCurrency(p.discount_amount) : '—'}
+                      </td>
                       <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(p.amount_paid)}</td>
                     </tr>
                   ))}
@@ -150,6 +158,7 @@ export default async function VendorPaymentsPage({
                 <tfoot>
                   <tr className="bg-slate-50 border-t border-slate-200">
                     <td colSpan={5} className="px-5 py-3 text-sm font-bold text-slate-700">Total</td>
+                    <td className="px-4 py-3 text-right text-sm font-bold text-amber-600">{formatCurrency(totalDiscount)}</td>
                     <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(totalPaid)}</td>
                   </tr>
                 </tfoot>

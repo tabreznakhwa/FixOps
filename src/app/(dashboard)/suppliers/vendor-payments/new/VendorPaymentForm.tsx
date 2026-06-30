@@ -49,6 +49,7 @@ export function VendorPaymentForm({ suppliers, openPOs, defaultPO, openInvoices,
   const [poId, setPoId] = useState(defaultPO?.id ?? '')
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
   const [amount, setAmount] = useState(defaultPO?.balance_due ? String(defaultPO.balance_due) : '')
+  const [discount, setDiscount] = useState('')
   const [mode, setMode] = useState('bank_transfer')
   const [reference, setReference] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
@@ -87,24 +88,39 @@ export function VendorPaymentForm({ suppliers, openPOs, defaultPO, openInvoices,
       ].sort((a, b) => a.date.localeCompare(b.date))
     : []
 
-  // When PO is selected, auto-fill amount with balance due, and clear any selected lines
+  // When PO is selected, auto-fill amount with balance due (less any discount), and clear any selected lines
   useEffect(() => {
     if (!poId) return
     const po = openPOs.find((p) => p.id === poId)
-    if (po) setAmount(String(po.balance_due))
+    if (po) setAmount(Math.max(0, po.balance_due - Number(discount || 0)).toFixed(3))
     setSelectedKeys([])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [poId, openPOs])
 
-  // When lines are selected, auto-fill amount with total balance due, and clear PO
+  // When lines are selected, auto-fill amount with total balance due (less any discount), and clear PO
   useEffect(() => {
     if (selectedKeys.length === 0) return
     const total = payableLines
       .filter((l) => selectedKeys.includes(l.key))
       .reduce((s, l) => s + l.balance, 0)
-    setAmount(total.toFixed(3))
+    setAmount(Math.max(0, total - Number(discount || 0)).toFixed(3))
     setPoId('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedKeys])
+
+  // When discount changes, re-derive amount from the selected bill(s)/PO total
+  useEffect(() => {
+    if (selectedKeys.length > 0) {
+      const total = payableLines
+        .filter((l) => selectedKeys.includes(l.key))
+        .reduce((s, l) => s + l.balance, 0)
+      setAmount(Math.max(0, total - Number(discount || 0)).toFixed(3))
+    } else if (poId) {
+      const po = openPOs.find((p) => p.id === poId)
+      if (po) setAmount(Math.max(0, po.balance_due - Number(discount || 0)).toFixed(3))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [discount])
 
   // When supplier changes, clear PO/line selections that don't belong to new supplier
   useEffect(() => {
@@ -146,6 +162,7 @@ export function VendorPaymentForm({ suppliers, openPOs, defaultPO, openInvoices,
           opening_payable_ids,
           payment_date: date,
           amount_paid: Number(amount),
+          discount_amount: Number(discount || 0),
           payment_mode: mode,
           reference_number: reference.trim() || null,
           notes: notes.trim() || null,
@@ -234,6 +251,17 @@ export function VendorPaymentForm({ suppliers, openPOs, defaultPO, openInvoices,
           <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
             min="0.001" step="0.001" required placeholder="0.000" className={`${inputClass} text-right font-semibold`} />
         </div>
+      </div>
+
+      <div>
+        <label className={labelClass}>Discount <span className="text-slate-400 font-normal">(optional — write-off / early-payment discount given by supplier)</span></label>
+        <input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)}
+          min="0" step="0.001" placeholder="0.000" className={`${inputClass} text-right`} />
+        {(selectedKeys.length > 0 || poId) && Number(discount || 0) > 0 && (
+          <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
+            Bill fully settled with {formatCurrency(Number(amount || 0))} cash + {formatCurrency(Number(discount || 0))} discount
+          </p>
+        )}
       </div>
 
       <div>
