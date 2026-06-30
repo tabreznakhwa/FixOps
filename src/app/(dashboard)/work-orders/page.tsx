@@ -23,8 +23,10 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
   // the user is looking back at a specific period rather than the active queue.
   if (!hasDateFilter) query = query.not('status', 'in', '(invoiced,paid,cancelled)')
   if (params.status) query = (query as any).eq('status', params.status)
-  if (params.from) query = query.gte('created_at', `${params.from}T00:00:00`)
-  if (params.to) query = query.lte('created_at', `${params.to}T23:59:59`)
+  // Filter by scheduled_date (the job date shown in the list), not created_at
+  // (when the record was entered into the system) — those can differ.
+  if (params.from) query = query.gte('scheduled_date', params.from)
+  if (params.to) query = query.lte('scheduled_date', params.to)
 
   const { data: workOrdersRaw } = await query
   const workOrders = workOrdersRaw as unknown as Array<{
