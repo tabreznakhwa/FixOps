@@ -44,6 +44,20 @@ export default async function NewVendorPaymentPage({
     id: string; po_number: string; supplier_id: string; balance_due: number; total_amount: number
   }>
 
+  // Fetch open purchase invoices (credit, with balance due) for the invoice checklist
+  const { data: openInvoicesRaw } = await (supabase as any)
+    .from('purchase_invoices')
+    .select('id, invoice_number, supplier_invoice_number, supplier_id, invoice_date, balance_due, total_amount')
+    .gt('balance_due', 0)
+    .eq('payment_type', 'credit')
+    .eq('status', 'confirmed')
+    .order('invoice_date', { ascending: true })
+    .limit(200)
+  const openInvoices = (openInvoicesRaw ?? []) as Array<{
+    id: string; invoice_number: string; supplier_invoice_number: string | null
+    supplier_id: string; invoice_date: string; balance_due: number; total_amount: number
+  }>
+
   return (
     <div className="animate-fade-in">
       <Header
@@ -56,7 +70,7 @@ export default async function NewVendorPaymentPage({
         }
       />
       <div className="p-6 max-w-xl">
-        <VendorPaymentForm suppliers={suppliers} openPOs={openPOs} defaultPO={defaultPO} />
+        <VendorPaymentForm suppliers={suppliers} openPOs={openPOs} defaultPO={defaultPO} openInvoices={openInvoices} />
       </div>
     </div>
   )
