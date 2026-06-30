@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
@@ -13,6 +13,11 @@ export default async function NewVendorPaymentPage({
 }) {
   const { po: poId } = await searchParams
   const supabase = await createClient()
+  const admin = createAdminClient() as any
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = await admin.from('users').select('organization_id').eq('id', user!.id).single()
+  const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
 
   // Fetch all suppliers for dropdown
   const { data: suppliersRaw } = await (supabase as any)
@@ -45,9 +50,11 @@ export default async function NewVendorPaymentPage({
   }>
 
   // Fetch open purchase invoices (credit, with balance due) for the invoice checklist
-  const { data: openInvoicesRaw } = await (supabase as any)
+  // Uses admin client: purchase_invoices only has service_role grants, not anon/authenticated
+  const { data: openInvoicesRaw } = await admin
     .from('purchase_invoices')
     .select('id, invoice_number, supplier_invoice_number, supplier_id, invoice_date, balance_due, total_amount')
+    .eq('organization_id', orgId)
     .gt('balance_due', 0)
     .eq('payment_type', 'credit')
     .eq('status', 'confirmed')
