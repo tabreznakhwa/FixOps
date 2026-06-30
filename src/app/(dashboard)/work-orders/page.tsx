@@ -3,21 +3,28 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Plus, ClipboardList } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDate, formatCurrency } from '@/lib/utils'
+import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 
 export const metadata = { title: 'Work Orders' }
 
-export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; from?: string; to?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
+  const hasDateFilter = Boolean(params.from || params.to)
 
   let query = supabase
     .from('work_orders')
     .select('id, work_order_number, job_description, priority, status, payment_status, scheduled_date, final_amount, customers(full_name), users!work_orders_assigned_to_fkey(full_name)')
-    .not('status', 'in', '(invoiced,paid,cancelled)')
     .order('created_at', { ascending: false })
-    .limit(100)
+    .limit(hasDateFilter ? 1000 : 100)
 
+  // Without a date filter, keep the list short by hiding already-closed-out work orders.
+  // With a date filter, show everything in range (including invoiced/paid/cancelled) since
+  // the user is looking back at a specific period rather than the active queue.
+  if (!hasDateFilter) query = query.not('status', 'in', '(invoiced,paid,cancelled)')
   if (params.status) query = (query as any).eq('status', params.status)
+  if (params.from) query = query.gte('created_at', `${params.from}T00:00:00`)
+  if (params.to) query = query.lte('created_at', `${params.to}T23:59:59`)
 
   const { data: workOrdersRaw } = await query
   const workOrders = workOrdersRaw as unknown as Array<{
@@ -41,7 +48,9 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
         }
       />
 
-      <div className="p-6">
+      <div className="p-6 space-y-5">
+        <DateRangeFilter basePath="/work-orders" from={params.from} to={params.to} />
+
         {!workOrders?.length ? (
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
             <ClipboardList className="w-10 h-10 text-slate-300 mx-auto mb-3" />

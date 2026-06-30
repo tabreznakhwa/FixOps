@@ -3,7 +3,7 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Plus, MessageSquare, Filter } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
-import { ComplaintsDateFilter } from './ComplaintsDateFilter'
+import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 
 export const metadata = { title: 'Complaints' }
 
@@ -90,7 +90,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
         </div>
 
         {/* Date Range Filter */}
-        <ComplaintsDateFilter from={params.from} to={params.to} />
+        <DateRangeFilter basePath="/complaints" from={params.from} to={params.to} />
 
         {/* Priority Filter */}
         <div className="flex gap-2">

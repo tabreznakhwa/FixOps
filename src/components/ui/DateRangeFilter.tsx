@@ -23,7 +23,7 @@ const PRESETS: { label: string; range: () => { from: string; to: string } }[] = 
   { label: 'This Year', range: () => { const t = new Date(); return { from: toISODate(new Date(t.getFullYear(), 0, 1)), to: toISODate(t) } } },
 ]
 
-export function ComplaintsDateFilter({ from, to }: { from?: string; to?: string }) {
+export function DateRangeFilter({ basePath, from, to }: { basePath: string; from?: string; to?: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [customFrom, setCustomFrom] = useState(from ?? '')
@@ -33,7 +33,7 @@ export function ComplaintsDateFilter({ from, to }: { from?: string; to?: string 
     const params = new URLSearchParams(searchParams.toString())
     if (newFrom) params.set('from', newFrom); else params.delete('from')
     if (newTo) params.set('to', newTo); else params.delete('to')
-    router.push(`/complaints?${params.toString()}`)
+    router.push(`${basePath}?${params.toString()}`)
   }
 
   const activePreset = PRESETS.find((p) => {
