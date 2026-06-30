@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, ChevronDown, CheckCircle, Banknote, X } from 'lucide-react'
+import Link from 'next/link'
+import { Loader2, ChevronDown, CheckCircle, Banknote, X, FileText } from 'lucide-react'
 
 interface Person { id: string; full_name: string; type: 'user' | 'staff'; role: string }
 
@@ -14,11 +15,12 @@ interface Props {
   customerId: string | null
   finalAmount: number
   paymentStatus: string
+  existingInvoiceId: string | null
 }
 
 export function WorkOrderActions({
   workOrderId, currentStatus, currentAssigneeKey, technicians,
-  customerId, finalAmount, paymentStatus,
+  customerId, finalAmount, paymentStatus, existingInvoiceId,
 }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
@@ -234,6 +236,29 @@ export function WorkOrderActions({
         <div className="border-t border-slate-100 pt-4 flex items-center gap-2 text-blue-700 bg-blue-50 rounded-lg px-3 py-2.5">
           <Banknote className="w-4 h-4" />
           <span className="text-sm font-semibold">Payment Received</span>
+        </div>
+      )}
+
+      {/* Invoice */}
+      {!isCancelled && (
+        <div className="border-t border-slate-100 pt-4">
+          {existingInvoiceId ? (
+            <Link
+              href={`/finance/invoices/${existingInvoiceId}`}
+              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              View Invoice
+            </Link>
+          ) : isCompleted ? (
+            <Link
+              href={`/finance/invoices/new?work_order_id=${workOrderId}`}
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              Create Invoice
+            </Link>
+          ) : null}
         </div>
       )}
 

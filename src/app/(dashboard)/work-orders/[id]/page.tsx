@@ -35,7 +35,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
 
   const orgId = wo.organization_id
 
-  const [techniciansRaw, staffRaw, inventoryRaw, lineItemsRaw, woServicesRaw, invServicesRaw] = await Promise.all([
+  const [techniciansRaw, staffRaw, inventoryRaw, lineItemsRaw, woServicesRaw, invServicesRaw, invoiceRaw] = await Promise.all([
     supabase.from('users').select('id, full_name, role').in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
     supabase.from('staff').select('id, full_name, designation').eq('employment_status', 'active'),
     admin.from('inventory_items').select('id, item_code, item_name, unit_of_measure, current_stock, selling_price').eq('is_active', true).order('item_name'),
@@ -55,6 +55,8 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
       .select('description')
       .eq('organization_id', orgId)
       .order('description'),
+    // Has this work order already been invoiced?
+    admin.from('invoices').select('id').eq('work_order_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ])
 
   const systemUsers = (techniciansRaw.data ?? []) as unknown as { id: string; full_name: string; role: string }[]
@@ -77,6 +79,8 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
       ...(invServicesRaw.data ?? []).map((r: { description: string }) => r.description),
     ]),
   ].filter(Boolean).sort() as string[]
+
+  const existingInvoiceId = (invoiceRaw.data as { id: string } | null)?.id ?? null
 
   return (
     <div className="animate-fade-in">
@@ -230,6 +234,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
             customerId={wo.customer_id}
             finalAmount={wo.final_amount}
             paymentStatus={wo.payment_status}
+            existingInvoiceId={existingInvoiceId}
           />
         </div>
       </div>

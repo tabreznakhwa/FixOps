@@ -52,6 +52,7 @@ interface Props {
   workOrders: WorkOrder[]
   inventoryItems: InventoryItem[]
   customServices: string[]
+  initialWorkOrderId?: string
 }
 
 const PRESET_SERVICES = [
@@ -389,7 +390,7 @@ function emptyItem(): LineItem {
   }
 }
 
-export function NewInvoiceForm({ customers, workOrders, inventoryItems, customServices }: Props) {
+export function NewInvoiceForm({ customers, workOrders, inventoryItems, customServices, initialWorkOrderId }: Props) {
   const [customerId, setCustomerId] = useState('')
   const [invoiceType, setInvoiceType] = useState('service')
   const [invoiceDate, setInvoiceDate] = useState(TODAY)
@@ -407,6 +408,37 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
   const filteredWorkOrders = customerId
     ? workOrders.filter((wo) => wo.customer_id === customerId)
     : workOrders
+
+  const applyWorkOrder = useCallback((id: string) => {
+    setWorkOrderId(id)
+    setWoItemsImported(false)
+    if (id) {
+      const wo = workOrders.find((w) => w.id === id)
+      if (wo) {
+        setCustomerId(wo.customer_id)
+        if (wo.line_items.length > 0) {
+          setItems(wo.line_items.map((li) => ({
+            type: li.item_type === 'part' ? 'inventory' as LineType
+              : li.item_type === 'service' ? 'service' as LineType
+              : 'custom' as LineType,
+            inventory_item_id: li.item_type === 'part' ? (li.inventory_item_id ?? '') : '',
+            service_label: li.item_type === 'service' ? li.description : '',
+            description: li.description,
+            quantity: String(li.quantity),
+            unit_price: String(li.unit_price),
+          })))
+          setWoItemsImported(true)
+        }
+      }
+    } else {
+      setItems([emptyItem()])
+    }
+  }, [workOrders])
+
+  useEffect(() => {
+    if (initialWorkOrderId) applyWorkOrder(initialWorkOrderId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialWorkOrderId])
 
   // Group inventory by category for optgroups
   const invByCategory = useMemo(() => {
@@ -613,32 +645,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
               <select
                 className={inputClass}
                 value={workOrderId}
-                onChange={(e) => {
-                  const id = e.target.value
-                  setWorkOrderId(id)
-                  setWoItemsImported(false)
-                  if (id) {
-                    const wo = workOrders.find((w) => w.id === id)
-                    if (wo) {
-                      setCustomerId(wo.customer_id)
-                      if (wo.line_items.length > 0) {
-                        setItems(wo.line_items.map((li) => ({
-                          type: li.item_type === 'part' ? 'inventory' as LineType
-                            : li.item_type === 'service' ? 'service' as LineType
-                            : 'custom' as LineType,
-                          inventory_item_id: li.item_type === 'part' ? (li.inventory_item_id ?? '') : '',
-                          service_label: li.item_type === 'service' ? li.description : '',
-                          description: li.description,
-                          quantity: String(li.quantity),
-                          unit_price: String(li.unit_price),
-                        })))
-                        setWoItemsImported(true)
-                      }
-                    }
-                  } else {
-                    setItems([emptyItem()])
-                  }
-                }}
+                onChange={(e) => applyWorkOrder(e.target.value)}
               >
                 <option value="">No work order</option>
                 {filteredWorkOrders.map((wo) => (

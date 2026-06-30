@@ -167,6 +167,26 @@ export async function POST(request: NextRequest) {
 
     if (ledgerError) throw ledgerError
 
+    // If this invoice is for a work order, auto-apply any payment already collected
+    // for it (e.g. via the work order's "Collect Payment" action) that isn't linked
+    // to an invoice yet — the trg_invoice_balance trigger recalculates amount_paid/
+    // balance_due/status on the invoice once invoice_id is set.
+    if (work_order_id) {
+      const { data: unlinkedPayments } = await (supabase as any)
+        .from('payments')
+        .select('id')
+        .eq('work_order_id', work_order_id)
+        .is('invoice_id', null)
+        .eq('is_cancelled', false)
+
+      if (unlinkedPayments && unlinkedPayments.length > 0) {
+        await (supabase as any)
+          .from('payments')
+          .update({ invoice_id: invoice.id })
+          .in('id', unlinkedPayments.map((p: { id: string }) => p.id))
+      }
+    }
+
     await logAudit({
       orgId: profile.organization_id,
       userId: user.id,

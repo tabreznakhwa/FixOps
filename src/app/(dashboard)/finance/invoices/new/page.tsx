@@ -6,7 +6,12 @@ import { NewInvoiceForm } from './NewInvoiceForm'
 
 export const metadata = { title: 'New Invoice' }
 
-export default async function NewInvoicePage() {
+export default async function NewInvoicePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ work_order_id?: string }>
+}) {
+  const params = await searchParams
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -28,19 +33,29 @@ export default async function NewInvoicePage() {
     company_name: string | null
   }>
 
+  // Work orders that already have an invoice should not be offered again,
+  // regardless of payment_status — payment can be collected (cash job) before invoicing.
+  const { data: invoicedWoIdsRaw } = await admin
+    .from('invoices')
+    .select('work_order_id')
+    .eq('organization_id', orgId)
+    .not('work_order_id', 'is', null)
+  const invoicedWoIds = new Set(
+    ((invoicedWoIdsRaw ?? []) as Array<{ work_order_id: string }>).map((r) => r.work_order_id)
+  )
+
   const { data: workOrdersRaw } = await (supabase as any)
     .from('work_orders')
     .select('id, work_order_number, final_amount, customer_id')
     .in('status', ['completed', 'verified'])
-    .not('payment_status', 'eq', 'paid')
     .order('created_at', { ascending: false })
 
-  const workOrders = (workOrdersRaw ?? []) as unknown as Array<{
+  const workOrders = ((workOrdersRaw ?? []) as unknown as Array<{
     id: string
     work_order_number: string
     final_amount: number
     customer_id: string
-  }>
+  }>).filter((wo) => !invoicedWoIds.has(wo.id))
 
   const woIds = workOrders.map(wo => wo.id)
 
@@ -107,7 +122,7 @@ export default async function NewInvoicePage() {
       />
 
       <div className="p-6">
-        <NewInvoiceForm customers={customers} workOrders={workOrdersWithItems} inventoryItems={inventoryItems} customServices={customServices} />
+        <NewInvoiceForm customers={customers} workOrders={workOrdersWithItems} inventoryItems={inventoryItems} customServices={customServices} initialWorkOrderId={params.work_order_id} />
       </div>
     </div>
   )

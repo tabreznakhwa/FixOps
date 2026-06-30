@@ -46,6 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .insert({
         organization_id: wo.organization_id,
         customer_id: wo.customer_id,
+        work_order_id: workOrderId,
         payment_number: paymentNumber,
         payment_date: pDate,
         amount_received: amount,

@@ -3,12 +3,13 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Plus, MessageSquare, Filter } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
+import { ComplaintsDateFilter } from './ComplaintsDateFilter'
 
 export const metadata = { title: 'Complaints' }
 
 const STATUSES = ['new', 'assigned', 'accepted', 'on_the_way', 'work_started', 'waiting_parts', 'waiting_approval', 'completed']
 
-export default async function ComplaintsPage({ searchParams }: { searchParams: Promise<{ status?: string; priority?: string; q?: string }> }) {
+export default async function ComplaintsPage({ searchParams }: { searchParams: Promise<{ status?: string; priority?: string; q?: string; from?: string; to?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
 
@@ -20,8 +21,10 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   if (params.status) query = query.eq('status', params.status)
   if (params.priority) query = query.eq('priority', params.priority)
   if (params.q) query = query.ilike('description', `%${params.q}%`)
+  if (params.from) query = query.gte('created_at', `${params.from}T00:00:00`)
+  if (params.to) query = query.lte('created_at', `${params.to}T23:59:59`)
 
-  const { data: complaintsRaw } = await query.limit(50)
+  const { data: complaintsRaw } = await query.limit(params.from || params.to ? 1000 : 50)
   const complaints = complaintsRaw as unknown as Array<{
     id: string; complaint_number: string; description: string; priority: string; status: string;
     service_category: string | string[]; created_at: string;
@@ -38,6 +41,12 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
 
   const statusCounts: Record<string, number> = {}
   counts?.forEach((c: { status: string }) => { statusCounts[c.status] = (statusCounts[c.status] ?? 0) + 1 })
+
+  const dateQS = [
+    params.from ? `from=${params.from}` : '',
+    params.to ? `to=${params.to}` : '',
+  ].filter(Boolean).join('&')
+  const withDate = (qs: string) => [qs, dateQS].filter(Boolean).join('&')
 
   const categoryIcons: Record<string, string> = {
     ac_maintenance: '❄️', plumbing: '🔧', electrical: '⚡',
@@ -64,7 +73,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
         {/* Status tabs */}
         <div className="flex gap-2 overflow-x-auto pb-1">
           <Link
-            href="/complaints"
+            href={`/complaints${dateQS ? `?${dateQS}` : ''}`}
             className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${!params.status ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
           >
             All ({counts?.length ?? 0})
@@ -72,7 +81,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
           {['new', 'assigned', 'accepted', 'on_the_way', 'work_started', 'waiting_parts', 'waiting_approval', 'completed'].map((s) => (
             <Link
               key={s}
-              href={`/complaints?status=${s}`}
+              href={`/complaints?${withDate(`status=${s}`)}`}
               className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-colors capitalize ${params.status === s ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
             >
               {formatStatus(s)} {statusCounts[s] ? `(${statusCounts[s]})` : ''}
@@ -80,12 +89,17 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
           ))}
         </div>
 
+        {/* Date Range Filter */}
+        <ComplaintsDateFilter from={params.from} to={params.to} />
+
         {/* Priority Filter */}
         <div className="flex gap-2">
           {['emergency', 'high', 'medium', 'low'].map((p) => (
             <Link
               key={p}
-              href={params.priority === p ? '/complaints' + (params.status ? `?status=${params.status}` : '') : `/complaints?priority=${p}${params.status ? `&status=${params.status}` : ''}`}
+              href={params.priority === p
+                ? `/complaints${params.status || dateQS ? `?${withDate(params.status ? `status=${params.status}` : '')}` : ''}`
+                : `/complaints?${withDate(`priority=${p}${params.status ? `&status=${params.status}` : ''}`)}`}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors capitalize ${params.priority === p ? 'ring-2 ring-slate-900' : ''} ${getPriorityColor(p)}`}
             >
               {p === 'emergency' && '🚨 '}
