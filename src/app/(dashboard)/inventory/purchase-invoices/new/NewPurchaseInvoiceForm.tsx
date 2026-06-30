@@ -16,6 +16,7 @@ interface LineItem {
   unit_of_measure: string
   quantity: string
   unit_cost: string
+  isNonInventory: boolean
 }
 
 const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
@@ -23,7 +24,11 @@ const labelCls = 'block text-sm font-medium text-slate-700 mb-1.5'
 const TODAY = new Date().toISOString().split('T')[0]
 
 function emptyLine(): LineItem {
-  return { inventory_item_id: '', description: '', unit_of_measure: '', quantity: '1', unit_cost: '' }
+  return { inventory_item_id: '', description: '', unit_of_measure: '', quantity: '1', unit_cost: '', isNonInventory: false }
+}
+
+function emptyNonInventoryLine(): LineItem {
+  return { inventory_item_id: '', description: '', unit_of_measure: '', quantity: '1', unit_cost: '', isNonInventory: true }
 }
 
 // ── Inventory Item Combobox ────────────────────────────────
@@ -132,10 +137,12 @@ export function NewPurchaseInvoiceForm({
 
   const [supplierId, setSupplierId] = useState('')
   const [supplierName, setSupplierName] = useState('')
+  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('')
   const [invoiceDate, setInvoiceDate] = useState(TODAY)
   const [dueDate, setDueDate] = useState('')
   const [paymentType, setPaymentType] = useState<'cash' | 'credit'>('credit')
   const [paymentMode, setPaymentMode] = useState('cash')
+  const [discount, setDiscount] = useState('')
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<LineItem[]>([emptyLine()])
   const [loading, setLoading] = useState(false)
@@ -164,16 +171,24 @@ export function NewPurchaseInvoiceForm({
   }, [])
 
   const addLine = () => setLines(prev => [...prev, emptyLine()])
+  const addNonInventoryLine = () => setLines(prev => [...prev, emptyNonInventoryLine()])
   const removeLine = (idx: number) => { if (lines.length > 1) setLines(prev => prev.filter((_, i) => i !== idx)) }
 
   const subtotal = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unit_cost) || 0), 0)
+  const discountAmt = parseFloat(discount) || 0
+  const total = Math.max(0, subtotal - discountAmt)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
 
     for (const l of lines) {
-      if (!l.inventory_item_id) { setError('All line items must have an inventory item selected'); return }
+      if (l.isNonInventory) {
+        if (!l.description.trim()) { setError('All non-inventory items must have a description'); return }
+      } else if (!l.inventory_item_id) {
+        setError('All line items must have an inventory item selected, or be marked as Non-Inventory')
+        return
+      }
       if (!l.quantity || parseFloat(l.quantity) <= 0) { setError('All quantities must be greater than 0'); return }
       if (l.unit_cost === '' || parseFloat(l.unit_cost) < 0) { setError('All unit costs must be 0 or greater'); return }
     }
@@ -186,14 +201,17 @@ export function NewPurchaseInvoiceForm({
         body: JSON.stringify({
           supplier_id: supplierId || null,
           supplier_name: supplierId ? null : supplierName.trim() || null,
+          supplier_invoice_number: supplierInvoiceNumber.trim() || null,
           invoice_date: invoiceDate,
           due_date: paymentType === 'credit' ? (dueDate || null) : null,
           payment_type: paymentType,
           payment_mode: paymentType === 'cash' ? paymentMode : null,
+          discount_amount: discountAmt,
           notes: notes.trim() || null,
           items: lines.map(l => ({
-            inventory_item_id: l.inventory_item_id,
+            inventory_item_id: l.isNonInventory ? null : l.inventory_item_id,
             description: l.description,
+            unit_of_measure: l.unit_of_measure,
             quantity: parseFloat(l.quantity) || 1,
             unit_cost: parseFloat(l.unit_cost) || 0,
           })),
@@ -256,6 +274,17 @@ export function NewPurchaseInvoiceForm({
             <label className={labelCls}>Invoice Date <span className="text-red-500">*</span></label>
             <input type="date" required value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className={inputCls} />
           </div>
+
+          <div>
+            <label className={labelCls}>Supplier Invoice No. <span className="text-slate-400 font-normal text-xs">(optional)</span></label>
+            <input
+              type="text"
+              value={supplierInvoiceNumber}
+              onChange={e => setSupplierInvoiceNumber(e.target.value)}
+              placeholder="e.g. INV-232496"
+              className={inputCls}
+            />
+          </div>
         </div>
 
         {/* Payment Type */}
@@ -310,13 +339,13 @@ export function NewPurchaseInvoiceForm({
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-slate-700">Items Purchased</h2>
-          <span className="text-xs text-slate-500">All items must exist in Inventory</span>
+          <span className="text-xs text-slate-500">Inventory items update stock; non-inventory items (e.g. delivery, services) do not</span>
         </div>
 
         <div className="space-y-3">
           {/* Column headers */}
           <div className="hidden sm:grid sm:grid-cols-12 gap-3 px-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            <div className="col-span-5">Inventory Item</div>
+            <div className="col-span-5">Item</div>
             <div className="col-span-2">Qty</div>
             <div className="col-span-2">Unit</div>
             <div className="col-span-2">Unit Cost (KWD)</div>
@@ -327,11 +356,26 @@ export function NewPurchaseInvoiceForm({
             <div key={idx} className="sm:grid sm:grid-cols-12 gap-3 items-center space-y-2 sm:space-y-0 p-3 sm:p-0 bg-slate-50 sm:bg-transparent rounded-lg sm:rounded-none">
               {/* Item Selector */}
               <div className="sm:col-span-5">
-                <ItemCombobox
-                  items={inventoryItems}
-                  value={line.inventory_item_id}
-                  onChange={item => selectItem(idx, item)}
-                />
+                {line.isNonInventory ? (
+                  <div className="space-y-1">
+                    <input
+                      type="text"
+                      value={line.description}
+                      onChange={e => updateLine(idx, 'description', e.target.value)}
+                      placeholder="Description (e.g. Delivery charges)"
+                      className={inputCls}
+                    />
+                    <span className="inline-block text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                      Non-Inventory
+                    </span>
+                  </div>
+                ) : (
+                  <ItemCombobox
+                    items={inventoryItems}
+                    value={line.inventory_item_id}
+                    onChange={item => selectItem(idx, item)}
+                  />
+                )}
               </div>
 
               {/* Qty */}
@@ -347,12 +391,22 @@ export function NewPurchaseInvoiceForm({
 
               {/* Unit */}
               <div className="sm:col-span-2">
-                <input
-                  type="text" readOnly
-                  value={line.unit_of_measure}
-                  placeholder="—"
-                  className="w-full border border-slate-100 rounded-lg px-3 py-2.5 text-sm text-slate-500 bg-slate-50"
-                />
+                {line.isNonInventory ? (
+                  <input
+                    type="text"
+                    value={line.unit_of_measure}
+                    onChange={e => updateLine(idx, 'unit_of_measure', e.target.value)}
+                    placeholder="e.g. pcs"
+                    className={inputCls}
+                  />
+                ) : (
+                  <input
+                    type="text" readOnly
+                    value={line.unit_of_measure}
+                    placeholder="—"
+                    className="w-full border border-slate-100 rounded-lg px-3 py-2.5 text-sm text-slate-500 bg-slate-50"
+                  />
+                )}
               </div>
 
               {/* Unit Cost */}
@@ -381,10 +435,16 @@ export function NewPurchaseInvoiceForm({
             </div>
           ))}
 
-          <button type="button" onClick={addLine}
-            className="flex items-center gap-2 text-sm text-blue-600 font-semibold hover:text-blue-700 transition-colors px-1 py-1">
-            <Plus className="w-4 h-4" /> Add Item
-          </button>
+          <div className="flex items-center gap-4">
+            <button type="button" onClick={addLine}
+              className="flex items-center gap-2 text-sm text-blue-600 font-semibold hover:text-blue-700 transition-colors px-1 py-1">
+              <Plus className="w-4 h-4" /> Add Item
+            </button>
+            <button type="button" onClick={addNonInventoryLine}
+              className="flex items-center gap-2 text-sm text-amber-700 font-semibold hover:text-amber-800 transition-colors px-1 py-1">
+              <Plus className="w-4 h-4" /> Add Non-Inventory Item
+            </button>
+          </div>
         </div>
 
         {/* Totals */}
@@ -394,9 +454,19 @@ export function NewPurchaseInvoiceForm({
               <span>Subtotal</span>
               <span className="font-medium">KWD {subtotal.toFixed(3)}</span>
             </div>
+            <div className="flex items-center justify-between text-slate-600">
+              <span>Discount</span>
+              <input
+                type="number" min="0" step="0.001"
+                value={discount}
+                onChange={e => setDiscount(e.target.value)}
+                placeholder="0.000"
+                className="w-28 text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
             <div className="flex justify-between font-bold text-slate-900 border-t border-slate-200 pt-2 text-base">
               <span>Total</span>
-              <span>KWD {subtotal.toFixed(3)}</span>
+              <span>KWD {total.toFixed(3)}</span>
             </div>
             {paymentType === 'cash' && (
               <div className="flex justify-between text-green-700 font-semibold">
@@ -407,7 +477,7 @@ export function NewPurchaseInvoiceForm({
             {paymentType === 'credit' && (
               <div className="flex justify-between text-amber-600 font-semibold">
                 <span>Balance Due</span>
-                <span>KWD {subtotal.toFixed(3)}</span>
+                <span>KWD {total.toFixed(3)}</span>
               </div>
             )}
           </div>

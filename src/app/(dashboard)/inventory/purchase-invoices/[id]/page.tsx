@@ -37,6 +37,7 @@ export default async function PurchaseInvoiceDetailPage({ params }: { params: Pr
 
   const items = (itemsRaw ?? []) as Array<{
     id: string; description: string; quantity: number; unit_cost: number; total_cost: number
+    unit_of_measure: string | null
     inventory_items: { item_name: string; item_code: string; unit_of_measure: string; current_stock: number } | null
   }>
 
@@ -124,7 +125,7 @@ export default async function PurchaseInvoiceDetailPage({ params }: { params: Pr
                   {item.inventory_items && <div className="text-xs text-slate-400">{item.inventory_items.item_code}</div>}
                 </td>
                 <td className="px-4 py-2.5 text-sm text-right text-slate-700">{item.quantity}</td>
-                <td className="px-4 py-2.5 text-sm text-right text-slate-500">{item.inventory_items?.unit_of_measure ?? ''}</td>
+                <td className="px-4 py-2.5 text-sm text-right text-slate-500">{item.inventory_items?.unit_of_measure ?? item.unit_of_measure ?? ''}</td>
                 <td className="px-4 py-2.5 text-sm text-right text-slate-700">{formatCurrency(item.unit_cost)}</td>
                 <td className="px-4 py-2.5 text-sm text-right font-semibold text-slate-900">{formatCurrency(item.total_cost)}</td>
               </tr>
