@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getPriorityColor, getStatusColor, formatStatus, formatDate } from '@/lib/utils'
 import { Wrench, MapPin, Phone, Clock, CheckCircle2, PlayCircle, Navigation, Package, LogOut, ChevronRight, LogIn, AlertCircle } from 'lucide-react'
@@ -52,15 +52,28 @@ export function TechnicianDashboard({
   const [attendanceError, setAttendanceError] = useState('')
   const supabase = createClient()
   const router = useRouter()
+  const pingTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  function getLocation(): Promise<{ lat: number; lng: number; accuracy: number } | null> {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) return resolve(null)
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+      )
+    })
+  }
 
   async function clockAction(action: 'clock_in' | 'clock_out') {
     setAttendanceLoading(true)
     setAttendanceError('')
     try {
+      const loc = await getLocation()
       const res = await fetch('/api/technician/attendance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, lat: loc?.lat, lng: loc?.lng }),
       })
       const data = await res.json()
       if (!res.ok) { setAttendanceError(data.error ?? 'Failed'); return }
@@ -71,6 +84,27 @@ export function TechnicianDashboard({
       setAttendanceLoading(false)
     }
   }
+
+  // While clocked in and this tab stays open, periodically share location for live tracking.
+  const onDuty = !!attendance?.check_in && !attendance?.check_out
+  useEffect(() => {
+    if (!onDuty) {
+      if (pingTimer.current) { clearInterval(pingTimer.current); pingTimer.current = null }
+      return
+    }
+    async function ping() {
+      const loc = await getLocation()
+      if (!loc) return
+      fetch('/api/technician/location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loc),
+      }).catch(() => {})
+    }
+    ping()
+    pingTimer.current = setInterval(ping, 3 * 60 * 1000)
+    return () => { if (pingTimer.current) { clearInterval(pingTimer.current); pingTimer.current = null } }
+  }, [onDuty])
 
   async function updateStatus(jobId: string, newStatus: string) {
     setUpdating(true)

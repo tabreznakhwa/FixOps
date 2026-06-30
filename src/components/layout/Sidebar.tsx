@@ -7,7 +7,7 @@ import {
   CreditCard, Package, UserCheck, DollarSign, BarChart3, Settings,
   Wrench, ChevronDown, LogOut, Menu, X, FileBarChart, ShieldCheck,
   Building2, Hammer, CalendarCheck, Banknote, Landmark, AlertCircle,
-  ShoppingCart, TrendingDown, Layers, Printer, BookOpen, Receipt
+  ShoppingCart, TrendingDown, Layers, Printer, BookOpen, Receipt, MapPin
 } from 'lucide-react'
 import { useState, type ElementType } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -67,6 +67,7 @@ const navGroups: Array<{
     module: 'hr' as const,
     items: [
       { href: '/staff', label: 'Staff', icon: UserCheck },
+      { href: '/staff/locations', label: 'Technician Locations', icon: MapPin, excludeRoles: ['technician'] },
       { href: '/attendance', label: 'Attendance', icon: CalendarCheck },
       { href: '/payroll', label: 'Payroll', icon: BarChart3 },
       { href: '/payroll/process', label: 'Payslips', icon: Printer },

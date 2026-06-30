@@ -43,10 +43,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Your login is not linked to a staff profile yet. Contact HR.' }, { status: 400 })
     }
 
-    const { action } = await request.json()
+    const { action, lat, lng } = await request.json()
     if (action !== 'clock_in' && action !== 'clock_out') {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
+    const hasCoords = typeof lat === 'number' && typeof lng === 'number'
 
     const admin = createAdminClient() as any
     const today = kuwaitISODate()
@@ -70,6 +71,7 @@ export async function POST(request: NextRequest) {
           check_in: nowTime,
           status: 'present',
           created_by: user.id,
+          ...(hasCoords ? { check_in_lat: lat, check_in_lng: lng } : {}),
         })
         .select('id, check_in, check_out, hours_worked, overtime_hours')
         .single()
@@ -92,6 +94,7 @@ export async function POST(request: NextRequest) {
         check_out: nowTime,
         hours_worked: breakdown?.hoursWorked ?? 0,
         overtime_hours: breakdown?.normalOtPaidHrs ?? 0,
+        ...(hasCoords ? { check_out_lat: lat, check_out_lng: lng } : {}),
       })
       .eq('id', existing.id)
       .select('id, check_in, check_out, hours_worked, overtime_hours')
