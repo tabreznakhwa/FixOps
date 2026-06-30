@@ -65,6 +65,18 @@ export default async function NewVendorPaymentPage({
     supplier_id: string; invoice_date: string; balance_due: number; total_amount: number
   }>
 
+  // Fetch open opening payables (pre-system / brought-forward balances) for the checklist
+  const { data: openPayablesRaw } = await admin
+    .from('opening_payables')
+    .select('id, bill_ref, supplier_id, bill_date, balance_due, amount')
+    .eq('organization_id', orgId)
+    .gt('balance_due', 0)
+    .order('bill_date', { ascending: true })
+    .limit(200)
+  const openPayables = (openPayablesRaw ?? []) as Array<{
+    id: string; bill_ref: string; supplier_id: string; bill_date: string; balance_due: number; amount: number
+  }>
+
   return (
     <div className="animate-fade-in">
       <Header
@@ -77,7 +89,7 @@ export default async function NewVendorPaymentPage({
         }
       />
       <div className="p-6 max-w-xl">
-        <VendorPaymentForm suppliers={suppliers} openPOs={openPOs} defaultPO={defaultPO} openInvoices={openInvoices} />
+        <VendorPaymentForm suppliers={suppliers} openPOs={openPOs} defaultPO={defaultPO} openInvoices={openInvoices} openPayables={openPayables} />
       </div>
     </div>
   )
