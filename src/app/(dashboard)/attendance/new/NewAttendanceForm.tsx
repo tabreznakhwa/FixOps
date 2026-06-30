@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { calcAttendanceBreakdown, DUTY_START, DUTY_END } from '@/lib/attendance'
 
 interface StaffMember {
   id: string
@@ -12,64 +13,14 @@ interface Props {
   staff: StaffMember[]
 }
 
-// Kuwait company rules
-const DUTY_START = '08:30'    // 8:30 AM
-const DUTY_END = '17:30'      // 5:30 PM
-const LUNCH_START_M = 13 * 60 // 1:00 PM in minutes
-const LUNCH_END_M = 14 * 60   // 2:00 PM in minutes
-const FIXED_OT_END_M = 20 * 60 // 8:00 PM in minutes
-const STANDARD_HOURS = 8
-const OT_MULTIPLIER = 1.25    // Normal OT: 1 hr = 1.25 paid hrs
+const OT_MULTIPLIER = 1.25 // Normal OT: 1 hr = 1.25 paid hrs (display only — calc lives in @/lib/attendance)
 
 const inputClass =
   'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
-function toMins(t: string): number {
-  const [h, m] = t.split(':').map(Number)
-  return h * 60 + m
-}
-
 function fmtHrs(h: number): string {
   return h % 1 === 0 ? `${h}h` : `${h.toFixed(2)}h`
-}
-
-function calcBreakdown(checkIn: string, checkOut: string) {
-  if (!checkIn || !checkOut) return null
-
-  let inM = toMins(checkIn)
-  let outM = toMins(checkOut)
-  if (outM <= inM) outM += 24 * 60 // overnight
-
-  // Lunch deduction: 1 hour if shift spans 1-2 PM
-  let lunchDeduct = 0
-  if (inM < LUNCH_END_M && outM > LUNCH_START_M) {
-    const overlapStart = Math.max(inM, LUNCH_START_M)
-    const overlapEnd = Math.min(outM, LUNCH_END_M)
-    lunchDeduct = Math.max(0, overlapEnd - overlapStart)
-  }
-
-  const netMins = outM - inM - lunchDeduct
-  const hoursWorked = Math.round((netMins / 60) * 4) / 4 // round to 0.25h
-
-  // Fixed OT: time between DUTY_END (17:30) and FIXED_OT_END (20:00)
-  const dutyEndM = toMins(DUTY_END)
-  const fixedOtStart = Math.max(outM > dutyEndM ? dutyEndM : outM, dutyEndM)
-  const fixedOtEnd = Math.min(outM, FIXED_OT_END_M)
-  const fixedOtActualHrs = Math.round((Math.max(0, fixedOtEnd - fixedOtStart) / 60) * 4) / 4
-
-  // Normal OT: time after 8 PM (20:00), multiplied by 1.25
-  const normalOtStart = Math.max(outM, FIXED_OT_END_M)
-  const normalOtActualHrs = Math.max(0, (normalOtStart > FIXED_OT_END_M ? outM - FIXED_OT_END_M : 0)) / 60
-  const normalOtPaidHrs = Math.round(normalOtActualHrs * OT_MULTIPLIER * 4) / 4
-
-  return {
-    hoursWorked: Math.max(0, Math.min(hoursWorked, STANDARD_HOURS)),
-    lunchDeducted: lunchDeduct > 0,
-    fixedOtHrs: fixedOtActualHrs,
-    normalOtActualHrs: Math.round(normalOtActualHrs * 4) / 4,
-    normalOtPaidHrs,
-  }
 }
 
 export function NewAttendanceForm({ staff }: Props) {
@@ -81,7 +32,7 @@ export function NewAttendanceForm({ staff }: Props) {
 
   const today = new Date().toISOString().split('T')[0]
   const showTimes = status === 'present' || status === 'half_day'
-  const breakdown = showTimes ? calcBreakdown(checkIn, checkOut) : null
+  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut) : null
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()

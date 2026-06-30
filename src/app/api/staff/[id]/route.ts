@@ -34,6 +34,23 @@ export async function PATCH(
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
+    // Link/unlink to a login account — handled separately since it's a partial update from StaffLoginLink
+    if ('user_id' in body && Object.keys(body).length === 1) {
+      if (body.user_id) {
+        const { data: targetUser } = await admin.from('users').select('organization_id').eq('id', body.user_id).single()
+        if (!targetUser || targetUser.organization_id !== profile.organization_id) {
+          return NextResponse.json({ error: 'User not found in this organization' }, { status: 400 })
+        }
+        const { data: alreadyLinked } = await admin.from('staff').select('id').eq('user_id', body.user_id).neq('id', staffId).maybeSingle()
+        if (alreadyLinked) {
+          return NextResponse.json({ error: 'That login is already linked to another staff member' }, { status: 400 })
+        }
+      }
+      const { error: linkError } = await admin.from('staff').update({ user_id: body.user_id || null }).eq('id', staffId)
+      if (linkError) throw linkError
+      return NextResponse.json({ success: true })
+    }
+
     const updates = {
       full_name: body.full_name,
       designation: body.designation || null,

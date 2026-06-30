@@ -6,6 +6,7 @@ import { ArrowLeft, Phone, Mail, CreditCard, Calendar, Briefcase, DollarSign, Al
 import { formatCurrency, formatDate, daysUntil } from '@/lib/utils'
 import { StaffEditForm } from './StaffEditForm'
 import { StaffAdvancePanel } from './StaffAdvancePanel'
+import { StaffLoginLink } from './StaffLoginLink'
 
 export const metadata = { title: 'Staff Profile' }
 
@@ -30,8 +31,29 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
     passport_number: string | null; visa_number: string | null; emirates_id: string | null
     visa_expiry_date: string | null; passport_expiry_date: string | null
     bank_name: string | null; iban: string | null; notes: string | null
-    advance_balance: number
+    advance_balance: number; user_id: string | null
   }
+
+  // Login accounts available to link — same org, not already linked to a different staff record
+  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { data: myProfileRaw } = await (supabase as any).from('users').select('organization_id').eq('id', authUser?.id).single()
+  const orgId = (myProfileRaw as { organization_id: string } | null)?.organization_id
+
+  const { data: candidateUsersRaw } = await (supabase as any)
+    .from('users')
+    .select('id, full_name, role')
+    .eq('organization_id', orgId)
+    .eq('status', 'active')
+    .order('full_name')
+  const { data: linkedStaffRaw } = await (supabase as any)
+    .from('staff')
+    .select('user_id')
+    .not('user_id', 'is', null)
+    .neq('id', s.id)
+  const linkedUserIds = new Set(((linkedStaffRaw ?? []) as Array<{ user_id: string }>).map((r) => r.user_id))
+  const allUsers = (candidateUsersRaw ?? []) as Array<{ id: string; full_name: string; role: string }>
+  const availableUsers = allUsers.filter((u) => !linkedUserIds.has(u.id))
+  const linkedUser = s.user_id ? allUsers.find((u) => u.id === s.user_id) ?? null : null
 
   const { data: slipsRaw } = await (supabase as any)
     .from('salary_slips')
@@ -175,6 +197,8 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
 
           {/* Right: salary + edit form + payslip history */}
           <div className="lg:col-span-2 space-y-5">
+            <StaffLoginLink staffId={s.id} linkedUser={linkedUser} availableUsers={availableUsers} />
+
             {/* Salary breakdown */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getPriorityColor, getStatusColor, formatStatus, formatDate } from '@/lib/utils'
-import { Wrench, MapPin, Phone, Clock, CheckCircle2, PlayCircle, Navigation, Package, LogOut, ChevronRight } from 'lucide-react'
+import { Wrench, MapPin, Phone, Clock, CheckCircle2, PlayCircle, Navigation, Package, LogOut, ChevronRight, LogIn, AlertCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface Job {
@@ -30,13 +30,47 @@ const TECHNICIAN_STATUSES = [
   { key: 'completed', label: 'Mark Complete', color: 'bg-green-600', next: null },
 ]
 
-export function TechnicianDashboard({ jobs, technicianName }: { jobs: Job[]; technicianName: string }) {
+interface Attendance {
+  check_in: string | null
+  check_out: string | null
+}
+
+export function TechnicianDashboard({
+  jobs, technicianName, staffLinked, initialAttendance,
+}: {
+  jobs: Job[]
+  technicianName: string
+  staffLinked?: boolean
+  initialAttendance?: Attendance | null
+}) {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null)
   const [updating, setUpdating] = useState(false)
   const [localJobs, setLocalJobs] = useState(jobs)
   const [notes, setNotes] = useState('')
+  const [attendance, setAttendance] = useState<Attendance | null>(initialAttendance ?? null)
+  const [attendanceLoading, setAttendanceLoading] = useState(false)
+  const [attendanceError, setAttendanceError] = useState('')
   const supabase = createClient()
   const router = useRouter()
+
+  async function clockAction(action: 'clock_in' | 'clock_out') {
+    setAttendanceLoading(true)
+    setAttendanceError('')
+    try {
+      const res = await fetch('/api/technician/attendance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setAttendanceError(data.error ?? 'Failed'); return }
+      setAttendance(data.record)
+    } catch {
+      setAttendanceError('Network error. Please try again.')
+    } finally {
+      setAttendanceLoading(false)
+    }
+  }
 
   async function updateStatus(jobId: string, newStatus: string) {
     setUpdating(true)
@@ -93,6 +127,44 @@ export function TechnicianDashboard({ jobs, technicianName }: { jobs: Job[]; tec
             <LogOut className="w-4 h-4 text-slate-400" />
           </button>
         </div>
+
+        {/* Clock In / Clock Out */}
+        {staffLinked === false ? (
+          <div className="mt-3 flex items-center gap-2 bg-amber-900/30 border border-amber-700/50 rounded-xl px-3 py-2 text-xs text-amber-300">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" /> Your login isn't linked to a staff profile — ask HR to link it so your hours count toward salary.
+          </div>
+        ) : (
+          <div className="mt-3 flex items-center justify-between gap-3 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5">
+            {attendanceError && <p className="text-xs text-red-400">{attendanceError}</p>}
+            {!attendance?.check_in ? (
+              <>
+                <span className="text-xs text-slate-400">Not clocked in yet</span>
+                <button
+                  onClick={() => clockAction('clock_in')}
+                  disabled={attendanceLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg text-xs font-bold transition-colors"
+                >
+                  <LogIn className="w-3.5 h-3.5" /> Clock In
+                </button>
+              </>
+            ) : !attendance.check_out ? (
+              <>
+                <span className="text-xs text-slate-300">Clocked in at <span className="font-bold text-white">{attendance.check_in}</span></span>
+                <button
+                  onClick={() => clockAction('clock_out')}
+                  disabled={attendanceLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg text-xs font-bold transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" /> Clock Out
+                </button>
+              </>
+            ) : (
+              <span className="text-xs text-green-400 font-semibold flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" /> {attendance.check_in} – {attendance.check_out} · Done for today
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {selectedJob ? (
