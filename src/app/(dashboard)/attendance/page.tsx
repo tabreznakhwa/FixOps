@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Plus, CalendarCheck, UserCheck, XCircle, Clock } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import { StaffFilterSelect } from './StaffFilterSelect'
 
 export const metadata = { title: 'Attendance' }
 
@@ -112,13 +113,6 @@ export default async function AttendancePage({
     return `/attendance?${qs.toString()}`
   }
 
-  const buildStaffHref = (sid: string) => {
-    const qs = new URLSearchParams()
-    qs.set('month', currentMonth)
-    if (sid) qs.set('staff_id', sid)
-    return `/attendance?${qs.toString()}`
-  }
-
   return (
     <div className="animate-fade-in">
       <Header
@@ -159,27 +153,7 @@ export default async function AttendancePage({
             </Link>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <Link
-              href={buildStaffHref('')}
-              className={`px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${
-                !selectedStaffId ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              All Staff
-            </Link>
-            {staffList.slice(0, 6).map((s) => (
-              <Link
-                key={s.id}
-                href={buildStaffHref(s.id)}
-                className={`px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${
-                  selectedStaffId === s.id ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {s.full_name.split(' ')[0]}
-              </Link>
-            ))}
-          </div>
+          <StaffFilterSelect staffList={staffList} selectedStaffId={selectedStaffId} currentMonth={currentMonth} />
         </div>
 
         {/* Summary Cards */}
