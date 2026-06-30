@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Plus, CreditCard, CheckCircle2 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 
 export const metadata = { title: 'Payments' }
 
@@ -11,9 +12,10 @@ const MODE_ICONS: Record<string, string> = {
   cheque: '📄', online: '🌐', other: '💰',
 }
 
-export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ mode?: string }> }) {
+export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ mode?: string; from?: string; to?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
+  const hasDateFilter = Boolean(params.from || params.to)
 
   let query = supabase
     .from('payments')
@@ -22,8 +24,10 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     .order('created_at', { ascending: false })
 
   if (params.mode) query = query.eq('payment_mode', params.mode)
+  if (params.from) query = query.gte('payment_date', params.from)
+  if (params.to) query = query.lte('payment_date', params.to)
 
-  const { data: paymentsRaw } = await query.limit(50)
+  const { data: paymentsRaw } = await query.limit(hasDateFilter ? 1000 : 50)
   const payments = paymentsRaw as unknown as Array<{
     id: string; payment_number: string; payment_date: string; amount_received: number; payment_mode: string;
     reference_number: string | null; is_advance: boolean; is_cancelled: boolean;
@@ -89,22 +93,32 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
 
         {/* Filter by mode */}
         <div className="flex gap-2 overflow-x-auto pb-1">
-          <Link
-            href="/finance/payments"
-            className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${!params.mode ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-          >
-            All
-          </Link>
-          {Object.keys(MODE_ICONS).map((mode) => (
-            <Link
-              key={mode}
-              href={`/finance/payments?mode=${mode}`}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors capitalize ${params.mode === mode ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-            >
-              {MODE_ICONS[mode]} {mode.replace('_', ' ')}
-            </Link>
-          ))}
+          {(() => {
+            const dateQS = [params.from ? `from=${params.from}` : '', params.to ? `to=${params.to}` : ''].filter(Boolean).join('&')
+            return (
+              <>
+                <Link
+                  href={dateQS ? `/finance/payments?${dateQS}` : '/finance/payments'}
+                  className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${!params.mode ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                >
+                  All
+                </Link>
+                {Object.keys(MODE_ICONS).map((mode) => (
+                  <Link
+                    key={mode}
+                    href={`/finance/payments?${[`mode=${mode}`, dateQS].filter(Boolean).join('&')}`}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors capitalize ${params.mode === mode ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    {MODE_ICONS[mode]} {mode.replace('_', ' ')}
+                  </Link>
+                ))}
+              </>
+            )
+          })()}
         </div>
+
+        {/* Date Filter */}
+        <DateRangeFilter basePath="/finance/payments" from={params.from} to={params.to} />
 
         {/* Payments table */}
         {!payments?.length ? (

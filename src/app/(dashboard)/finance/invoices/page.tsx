@@ -3,12 +3,14 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Plus, FileText, TrendingUp, Clock, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
+import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 
 export const metadata = { title: 'Invoices' }
 
-export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
+export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; from?: string; to?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
+  const hasDateFilter = Boolean(params.from || params.to)
 
   let query = supabase
     .from('invoices')
@@ -17,8 +19,10 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
 
   if (params.status) query = query.eq('status', params.status)
   if (params.q) query = query.ilike('invoice_number', `%${params.q}%`)
+  if (params.from) query = query.gte('invoice_date', params.from)
+  if (params.to) query = query.lte('invoice_date', params.to)
 
-  const { data: invoicesRaw } = await query.limit(50)
+  const { data: invoicesRaw } = await query.limit(hasDateFilter ? 1000 : 50)
   const invoices = invoicesRaw as unknown as Array<{
     id: string; invoice_number: string; invoice_date: string; due_date: string | null;
     total_amount: number; amount_paid: number; balance_due: number; status: string;
@@ -87,18 +91,25 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
             { label: 'Overdue', value: 'overdue' },
             { label: 'Paid', value: 'paid' },
             { label: 'Cancelled', value: 'cancelled' },
-          ].map(({ label, value }) => (
-            <Link
-              key={label}
-              href={value ? `/finance/invoices?status=${value}` : '/finance/invoices'}
-              className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                params.status === value || (!params.status && !value) ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {label}
-            </Link>
-          ))}
+          ].map(({ label, value }) => {
+            const qs = [value ? `status=${value}` : '', params.from ? `from=${params.from}` : '', params.to ? `to=${params.to}` : '']
+              .filter(Boolean).join('&')
+            return (
+              <Link
+                key={label}
+                href={qs ? `/finance/invoices?${qs}` : '/finance/invoices'}
+                className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                  params.status === value || (!params.status && !value) ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {label}
+              </Link>
+            )
+          })}
         </div>
+
+        {/* Date Filter */}
+        <DateRangeFilter basePath="/finance/invoices" from={params.from} to={params.to} />
 
         {/* Invoice Table */}
         {!invoices?.length ? (
