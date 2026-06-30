@@ -3,11 +3,10 @@ import { NextResponse } from 'next/server'
 
 interface StaffEntry {
   staff_id: string
-  normal_overtime: number
-  friday_overtime: number
-  advance_deduction: number
+  normal_ot_paid_hours: number  // sum of attendance.overtime_hours (already ×1.25)
   absent_days: number
   food_deduction: number
+  advance_deduction: number
 }
 
 export async function POST(request: Request) {
@@ -34,7 +33,7 @@ export async function POST(request: Request) {
     .eq('organization_id', orgId)
     .eq('salary_month', month)
     .eq('salary_year', year)
-    .single()
+    .maybeSingle()
   if (existingRun) return NextResponse.json({ error: 'Payroll already processed for this month' }, { status: 409 })
 
   const { data: staffRaw } = await adminDb
@@ -59,30 +58,30 @@ export async function POST(request: Request) {
   const slips = staff.map((s) => {
     const entry = entryMap.get(s.id)
     const basic = s.basic_salary ?? 0
-    // Housing/transport are legacy columns kept at 0; use other_allowance only
+    // housing/transport kept at 0; use other_allowance only
     const allowance = (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + (s.other_allowance ?? 0)
     const food = s.food_allowance ?? 0
     const fixedOT = s.fixed_overtime_monthly ?? 0
     const allowanceName = s.allowance_name ?? 'Allowance'
 
-    const normalOTHours = entry?.normal_overtime ?? 0
-    const fridayOTHours = entry?.friday_overtime ?? 0
+    // Normal OT: attendance.overtime_hours is already paid hours (actual × 1.25)
+    // So formula is just: hourlyRate × paidHours (no extra ×1.25)
+    const normalOtPaidHours = entry?.normal_ot_paid_hours ?? 0
     const hourlyRate = basic / 30 / 8
-    const normalOT = hourlyRate * 1.25 * normalOTHours
-    const fridayOT = hourlyRate * 1.5 * fridayOTHours
+    const normalOT = hourlyRate * normalOtPaidHours
 
     const advDeduct = Math.min(entry?.advance_deduction ?? 0, s.advance_balance ?? 0)
 
-    // Absent day deductions
+    // Absent deduction: (basic + allowance + fixedOT) / 30 × absentDays
     const absentDays = entry?.absent_days ?? 0
     const absentDeduction = absentDays > 0
       ? ((basic + allowance + fixedOT) / 30) * absentDays
       : 0
-    // Food deduction: use the user-provided value (which the form pre-fills and user can edit)
+
     const foodDeduction = entry?.food_deduction ?? 0
 
     const totalAllowance = allowance + food
-    const totalOT = fixedOT + normalOT + fridayOT
+    const totalOT = fixedOT + normalOT
     const gross = basic + totalAllowance + totalOT
     const totalAbsenceDeduction = absentDeduction + foodDeduction
     const net = gross - advDeduct - totalAbsenceDeduction
@@ -102,9 +101,9 @@ export async function POST(request: Request) {
       food_allowance: food,
       other_allowance: s.other_allowance ?? 0,
       allowance_name: allowanceName,
-      overtime_amount: fixedOT,
-      normal_overtime: normalOT,
-      friday_overtime: fridayOT,
+      overtime_amount: fixedOT,       // Fixed OT from profile
+      normal_overtime: normalOT,      // Normal OT from attendance
+      friday_overtime: 0,             // Merged into normal_overtime via attendance
       gross_salary: gross,
       absent_days: absentDays,
       absent_deduction: absentDeduction,

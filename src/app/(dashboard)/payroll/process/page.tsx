@@ -29,45 +29,31 @@ export default async function PayrollProcessPage({
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = await admin.from('users').select('organization_id').eq('id', user!.id).single()
+  const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
+
   // Check if a run exists for this month/year
-  const { data: runRaw } = await (supabase as any)
+  const { data: runRaw } = await admin
     .from('salary_runs')
     .select('id, status, total_basic, total_allowances, total_overtime, total_deductions, total_net, processed_at')
+    .eq('organization_id', orgId)
     .eq('salary_month', month)
     .eq('salary_year', year)
-    .single()
+    .maybeSingle()
 
   const run = runRaw as {
     id: string; status: string; total_basic: number; total_allowances: number
     total_overtime: number; total_deductions: number; total_net: number; processed_at: string
   } | null
 
-  // Staff list — use * so optional columns (food_allowance, fixed_overtime_monthly) don't break if not yet migrated
-  const { data: staffRaw } = await (supabase as any)
+  // Staff list
+  const { data: staffRaw } = await admin
     .from('staff')
     .select('*')
+    .eq('organization_id', orgId)
     .eq('employment_status', 'active')
     .order('full_name')
-
-  // Attendance for this month — count absent and half_day per staff
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-  const lastDay = new Date(year, month, 0).getDate()
-  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-  const { data: attendanceRaw } = await admin
-    .from('attendance')
-    .select('staff_id, status')
-    .gte('date', startDate)
-    .lte('date', endDate)
-
-  // Build absent-day count per staff: absent=1, half_day=0.5
-  const absentDaysMap: Record<string, number> = {}
-  for (const rec of (attendanceRaw ?? []) as Array<{ staff_id: string; status: string }>) {
-    if (rec.status === 'absent') {
-      absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 1
-    } else if (rec.status === 'half_day') {
-      absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 0.5
-    }
-  }
 
   const staff = (staffRaw ?? []) as Array<{
     id: string; staff_code: string; full_name: string; designation: string | null; department: string | null
@@ -77,16 +63,48 @@ export default async function PayrollProcessPage({
     overtime_eligible: boolean; bank_name: string | null; iban: string | null
   }>
 
+  // Attendance for this month — filter by this org's staff IDs
+  const staffIds = staff.map(s => s.id)
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+  const { data: attendanceRaw } = staffIds.length > 0
+    ? await admin
+        .from('attendance')
+        .select('staff_id, status, overtime_hours, date')
+        .in('staff_id', staffIds)
+        .gte('date', startDate)
+        .lte('date', endDate)
+    : { data: [] }
+
+  // Build attendance maps per staff
+  const absentDaysMap: Record<string, number> = {}
+  // overtime_hours in attendance = actualHrs × 1.25 (paid hours equivalent)
+  const normalOtPaidHoursMap: Record<string, number> = {}
+
+  for (const rec of (attendanceRaw ?? []) as Array<{ staff_id: string; status: string; overtime_hours: number; date: string }>) {
+    if (rec.status === 'absent') {
+      absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 1
+    } else if (rec.status === 'half_day') {
+      absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 0.5
+    }
+    // Sum paid OT hours (already × 1.25 from attendance form)
+    if ((rec.overtime_hours ?? 0) > 0) {
+      normalOtPaidHoursMap[rec.staff_id] = (normalOtPaidHoursMap[rec.staff_id] ?? 0) + (rec.overtime_hours ?? 0)
+    }
+  }
+
   // If run exists, load slips
   let slips: Array<{
     id: string; staff_id: string; basic_salary: number; housing_allowance: number
     transport_allowance: number; other_allowance: number; overtime_amount: number
     gross_salary: number; deductions: number; advance_deduction: number; net_salary: number
-    payment_status: string
+    payment_status: string; normal_overtime: number | null
   }> = []
 
   if (run) {
-    const { data: slipsRaw } = await (supabase as any)
+    const { data: slipsRaw } = await admin
       .from('salary_slips')
       .select('*')
       .eq('salary_run_id', run.id)
@@ -97,7 +115,7 @@ export default async function PayrollProcessPage({
   const rows = staff.map((s) => {
     const slip = slips.find((sl) => sl.staff_id === s.id)
     const allowances = (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + (s.food_allowance ?? 0) + (s.other_allowance ?? 0)
-    const overtime = slip?.overtime_amount ?? s.fixed_overtime_monthly ?? 0
+    const overtime = (slip?.overtime_amount ?? 0) + (slip?.normal_overtime ?? 0)
     const gross = (s.basic_salary ?? 0) + allowances + overtime
     return {
       ...s,
@@ -110,7 +128,6 @@ export default async function PayrollProcessPage({
   })
 
   const totalNet = rows.reduce((s, r) => s + r.net, 0)
-
   const years = Array.from({ length: 3 }, (_, i) => now.getFullYear() - i)
 
   return (
@@ -165,7 +182,13 @@ export default async function PayrollProcessPage({
         </form>
 
         {!run && (
-          <PayrollEntryForm month={month} year={year} staff={staff} absentDaysMap={absentDaysMap} />
+          <PayrollEntryForm
+            month={month}
+            year={year}
+            staff={staff}
+            absentDaysMap={absentDaysMap}
+            normalOtPaidHoursMap={normalOtPaidHoursMap}
+          />
         )}
 
         {run && (
@@ -223,8 +246,8 @@ export default async function PayrollProcessPage({
                       {r.overtime > 0 ? formatCurrency(r.overtime) : '—'}
                     </td>
                     <td className="px-4 py-3.5 text-right text-sm text-red-600">
-                      {r.slip?.deductions || r.slip?.advance_deduction
-                        ? formatCurrency((r.slip.deductions ?? 0) + (r.slip.advance_deduction ?? 0))
+                      {(r.slip?.deductions ?? 0) + (r.slip?.advance_deduction ?? 0) > 0
+                        ? formatCurrency((r.slip?.deductions ?? 0) + (r.slip?.advance_deduction ?? 0))
                         : '—'}
                     </td>
                     <td className="px-4 py-3.5 text-right text-sm font-bold text-slate-900">{formatCurrency(r.net)}</td>

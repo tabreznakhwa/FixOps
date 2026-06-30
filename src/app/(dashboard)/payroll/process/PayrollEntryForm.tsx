@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, CalendarX } from 'lucide-react'
+import { Loader2, CalendarX, Info } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
 interface StaffRow {
@@ -25,33 +25,24 @@ interface Props {
   month: number
   year: number
   staff: StaffRow[]
-  absentDaysMap: Record<string, number>
+  absentDaysMap: Record<string, number>       // from attendance: absent=1, half=0.5
+  normalOtPaidHoursMap: Record<string, number> // sum of attendance.overtime_hours (already ×1.25)
 }
 
 interface EntryState {
-  normal_overtime: string
-  friday_overtime: string
+  food_deduction: string
   advance_deduction: string
-  absent_days: string   // pre-filled from attendance, editable for correction
-  food_deduction: string  // manual only — not auto-filled
 }
 
-const inputCls = 'w-24 text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
-const inputSmCls = 'w-20 text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
-
-export function PayrollEntryForm({ month, year, staff, absentDaysMap }: Props) {
+export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPaidHoursMap }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const [entries, setEntries] = useState<Record<string, EntryState>>(
     Object.fromEntries(staff.map((s) => [s.id, {
-      normal_overtime: '',
-      friday_overtime: '',
-      advance_deduction: '',
-      // Pre-fill absent days from attendance records
-      absent_days: absentDaysMap[s.id] ? String(absentDaysMap[s.id]) : '',
       food_deduction: '',
+      advance_deduction: '',
     }]))
   )
 
@@ -59,14 +50,15 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap }: Props) {
     setEntries((prev) => ({ ...prev, [staffId]: { ...prev[staffId], [field]: value } }))
   }
 
-  function calcOT(basic: number, hrs: number, multiplier: number) {
-    return (basic / 30 / 8) * multiplier * hrs
+  // Normal OT: hourlyRate × normalOtPaidHours (no ×1.25 — attendance already applied it)
+  function calcNormalOT(basic: number, paidHours: number) {
+    return (basic / 30 / 8) * paidHours
   }
 
   function calcAbsentDeduction(s: StaffRow, absentDays: number) {
     const allowance = (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + (s.other_allowance ?? 0)
     const fixedOT = s.fixed_overtime_monthly ?? 0
-    return ((s.basic_salary ?? 0) + allowance + fixedOT) / 30 * absentDays
+    return absentDays > 0 ? ((s.basic_salary ?? 0) + allowance + fixedOT) / 30 * absentDays : 0
   }
 
   async function handleProcess() {
@@ -75,11 +67,10 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap }: Props) {
     try {
       const entriesArray = staff.map((s) => ({
         staff_id: s.id,
-        normal_overtime: parseFloat(entries[s.id]?.normal_overtime || '0') || 0,
-        friday_overtime: parseFloat(entries[s.id]?.friday_overtime || '0') || 0,
-        advance_deduction: parseFloat(entries[s.id]?.advance_deduction || '0') || 0,
-        absent_days: parseFloat(entries[s.id]?.absent_days || '0') || 0,
+        normal_ot_paid_hours: normalOtPaidHoursMap[s.id] ?? 0,
+        absent_days: absentDaysMap[s.id] ?? 0,
         food_deduction: parseFloat(entries[s.id]?.food_deduction || '0') || 0,
+        advance_deduction: parseFloat(entries[s.id]?.advance_deduction || '0') || 0,
       }))
       const res = await fetch('/api/payroll/process', {
         method: 'POST',
@@ -98,6 +89,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap }: Props) {
 
   const hasAdvances = staff.some(s => (s.advance_balance ?? 0) > 0)
   const hasAnyAbsent = Object.values(absentDaysMap).some(d => d > 0)
+  const hasAnyOT = Object.values(normalOtPaidHoursMap).some(h => h > 0)
 
   return (
     <div className="space-y-4">
@@ -105,20 +97,33 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap }: Props) {
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>
       )}
 
-      {hasAnyAbsent && (
-        <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3">
-          <CalendarX className="w-4 h-4 flex-shrink-0" />
-          <span>Absent days have been auto-filled from attendance records. Basic, Allowance and Fixed OT will be deducted proportionally. Food deduction is manual — enter if applicable.</span>
-        </div>
-      )}
+      <div className="flex gap-3 flex-wrap">
+        {hasAnyAbsent && (
+          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-2.5">
+            <CalendarX className="w-4 h-4 flex-shrink-0" />
+            <span>Absent days detected from attendance. Basic + Allowance + Fixed OT deducted proportionally.</span>
+          </div>
+        )}
+        {!hasAnyAbsent && !hasAnyOT && (
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 text-slate-600 text-sm rounded-xl px-4 py-2.5">
+            <Info className="w-4 h-4 flex-shrink-0" />
+            <span>No attendance records found for this month — full salary will be paid. Mark attendance first to apply OT and deductions.</span>
+          </div>
+        )}
+        {hasAnyOT && (
+          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-800 text-sm rounded-xl px-4 py-2.5">
+            <Info className="w-4 h-4 flex-shrink-0" />
+            <span>Normal OT auto-calculated from attendance (formula: Basic ÷ 30 ÷ 8 × OT paid hours). Fixed OT from staff profile.</span>
+          </div>
+        )}
+      </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-4">
           <div>
-            <h3 className="font-semibold text-slate-900">Enter Payroll — {staff.length} Employees</h3>
+            <h3 className="font-semibold text-slate-900">Review Payroll — {staff.length} Employees</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Absent days are pulled from attendance. Basic + Allowance + Fixed OT deducted automatically.
-              Food deduction is manual. Enter Normal OT (×1.25), Friday OT (×1.5) hours{hasAdvances ? ', and Advance Recovery' : ''}.
+              All values are auto-calculated from attendance. Only Food Deduction{hasAdvances ? ' and Advance Recovery' : ''} require manual entry.
             </p>
           </div>
           <button
@@ -131,7 +136,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap }: Props) {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1300px]">
+          <table className="w-full min-w-[1100px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Employee</th>
@@ -139,24 +144,18 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap }: Props) {
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 py-3">Allowance</th>
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 py-3">Food</th>
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 py-3">Fixed OT</th>
-                <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 py-3">
-                  Normal OT hrs <span className="text-blue-500">✎</span>
-                </th>
-                <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 py-3">
-                  Friday OT hrs <span className="text-blue-500">✎</span>
-                </th>
+                <th className="text-right text-xs font-semibold text-blue-500 uppercase tracking-wider px-3 py-3">Normal OT</th>
+                <th className="text-right text-xs font-semibold text-red-400 uppercase tracking-wider px-3 py-3">Absent</th>
+                <th className="text-right text-xs font-semibold text-red-400 uppercase tracking-wider px-3 py-3">Absent Deduct</th>
                 <th className="text-right text-xs font-semibold text-red-400 uppercase tracking-wider px-3 py-3">
-                  Absent Days <span className="text-blue-500">✎</span>
-                </th>
-                <th className="text-right text-xs font-semibold text-red-400 uppercase tracking-wider px-3 py-3">
-                  Food Deduct <span className="text-blue-500">✎</span>
+                  Food Deduct <span className="text-blue-500 normal-case">✎</span>
                 </th>
                 {hasAdvances && (
-                  <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 py-3">Adv. Bal.</th>
+                  <th className="text-right text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 py-3">Adv. Bal.</th>
                 )}
                 {hasAdvances && (
                   <th className="text-right text-xs font-semibold text-red-400 uppercase tracking-wider px-3 py-3">
-                    Adv. Deduct. <span className="text-blue-500">✎</span>
+                    Adv. Deduct <span className="text-blue-500 normal-case">✎</span>
                   </th>
                 )}
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Net</th>
@@ -164,27 +163,26 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap }: Props) {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {staff.map((s) => {
-                const normalOTHrs = parseFloat(entries[s.id]?.normal_overtime || '0') || 0
-                const fridayOTHrs = parseFloat(entries[s.id]?.friday_overtime || '0') || 0
-                const advDeduct = parseFloat(entries[s.id]?.advance_deduction || '0') || 0
-                const absentDays = parseFloat(entries[s.id]?.absent_days || '0') || 0
-                const foodDeduct = parseFloat(entries[s.id]?.food_deduction || '0') || 0
-
                 const allowance = (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + (s.other_allowance ?? 0)
                 const food = s.food_allowance ?? 0
                 const fixedOT = s.fixed_overtime_monthly ?? 0
-                const normalOT = calcOT(s.basic_salary ?? 0, normalOTHrs, 1.25)
-                const fridayOT = calcOT(s.basic_salary ?? 0, fridayOTHrs, 1.5)
-                const gross = (s.basic_salary ?? 0) + allowance + food + fixedOT + normalOT + fridayOT
 
-                const absentDeduct = absentDays > 0 ? calcAbsentDeduction(s, absentDays) : 0
-                const net = gross - advDeduct - absentDeduct - foodDeduct
+                const normalOtPaidHours = normalOtPaidHoursMap[s.id] ?? 0
+                const normalOT = calcNormalOT(s.basic_salary ?? 0, normalOtPaidHours)
+
+                const absentDays = absentDaysMap[s.id] ?? 0
+                const absentDeduct = calcAbsentDeduction(s, absentDays)
+
+                const foodDeduct = parseFloat(entries[s.id]?.food_deduction || '0') || 0
+                const advDeduct = parseFloat(entries[s.id]?.advance_deduction || '0') || 0
                 const advBalance = s.advance_balance ?? 0
+
+                const gross = (s.basic_salary ?? 0) + allowance + food + fixedOT + normalOT
+                const net = gross - absentDeduct - foodDeduct - advDeduct
                 const allowanceName = s.allowance_name ?? 'Allowance'
-                const fromAttendance = absentDays > 0 && (absentDaysMap[s.id] ?? 0) === absentDays
 
                 return (
-                  <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={s.id} className={`hover:bg-slate-50/50 transition-colors ${absentDays > 0 ? 'bg-red-50/20' : ''}`}>
                     <td className="px-5 py-3">
                       <p className="text-sm font-semibold text-slate-800">{s.full_name}</p>
                       <p className="text-xs text-slate-500">{s.designation ?? s.department ?? s.staff_code}</p>
@@ -198,42 +196,45 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap }: Props) {
                         </div>
                       ) : <span className="text-slate-300">—</span>}
                     </td>
-                    <td className="px-3 py-3 text-right text-sm text-slate-600">{food > 0 ? formatCurrency(food) : <span className="text-slate-300">—</span>}</td>
-                    <td className="px-3 py-3 text-right text-sm text-slate-600">{fixedOT > 0 ? formatCurrency(fixedOT) : <span className="text-slate-300">—</span>}</td>
-                    <td className="px-3 py-3 text-right">
-                      <input type="number" min="0" step="0.5" placeholder="0"
-                        value={entries[s.id]?.normal_overtime}
-                        onChange={(e) => setEntry(s.id, 'normal_overtime', e.target.value)}
-                        className={inputCls} />
-                      {normalOTHrs > 0 && <p className="text-xs text-blue-600 mt-0.5">{formatCurrency(normalOT)}</p>}
+                    <td className="px-3 py-3 text-right text-sm text-slate-600">
+                      {food > 0 ? formatCurrency(food) : <span className="text-slate-300">—</span>}
                     </td>
-                    <td className="px-3 py-3 text-right">
-                      <input type="number" min="0" step="0.5" placeholder="0"
-                        value={entries[s.id]?.friday_overtime}
-                        onChange={(e) => setEntry(s.id, 'friday_overtime', e.target.value)}
-                        className={inputCls} />
-                      {fridayOTHrs > 0 && <p className="text-xs text-blue-600 mt-0.5">{formatCurrency(fridayOT)}</p>}
+                    <td className="px-3 py-3 text-right text-sm text-slate-600">
+                      {fixedOT > 0 ? formatCurrency(fixedOT) : <span className="text-slate-300">—</span>}
                     </td>
-                    {/* Absent Days — pre-filled from attendance, editable for correction */}
+                    {/* Normal OT — auto from attendance */}
                     <td className="px-3 py-3 text-right">
-                      <input type="number" min="0" max="31" step="0.5" placeholder="0"
-                        value={entries[s.id]?.absent_days}
-                        onChange={(e) => setEntry(s.id, 'absent_days', e.target.value)}
-                        className={`${inputSmCls} ${absentDays > 0 ? 'border-red-300 bg-red-50 text-red-700' : ''}`} />
-                      {absentDays > 0 && (
-                        <p className="text-xs text-red-500 mt-0.5">
-                          −{formatCurrency(absentDeduct)}
-                          {fromAttendance && <span className="ml-1 text-slate-400">↑att</span>}
-                        </p>
-                      )}
+                      {normalOT > 0 ? (
+                        <div>
+                          <span className="text-sm font-semibold text-blue-700">{formatCurrency(normalOT)}</span>
+                          <p className="text-xs text-slate-400">{normalOtPaidHours.toFixed(2)}h paid</p>
+                        </div>
+                      ) : <span className="text-sm text-slate-300">—</span>}
                     </td>
-                    {/* Food deduction — manual only, no auto-fill */}
+                    {/* Absent days — read-only from attendance */}
                     <td className="px-3 py-3 text-right">
-                      <input type="number" min="0" step="0.001" placeholder="0.000"
+                      {absentDays > 0 ? (
+                        <span className="text-sm font-semibold text-red-600">
+                          {absentDays % 1 === 0 ? absentDays : absentDays.toFixed(1)} {absentDays === 0.5 ? 'half' : 'd'}
+                        </span>
+                      ) : <span className="text-sm text-slate-300">—</span>}
+                    </td>
+                    {/* Absent deduction — auto-calculated */}
+                    <td className="px-3 py-3 text-right">
+                      {absentDeduct > 0 ? (
+                        <span className="text-sm font-semibold text-red-600">−{formatCurrency(absentDeduct)}</span>
+                      ) : <span className="text-sm text-slate-300">—</span>}
+                    </td>
+                    {/* Food deduction — ONLY editable input for attendance-related deductions */}
+                    <td className="px-3 py-3 text-right">
+                      <input
+                        type="number" min="0" step="0.001" placeholder="0.000"
                         value={entries[s.id]?.food_deduction}
                         onChange={(e) => setEntry(s.id, 'food_deduction', e.target.value)}
-                        className={`${inputSmCls} ${foodDeduct > 0 ? 'border-red-300 bg-red-50 text-red-700' : ''}`} />
-                      {foodDeduct > 0 && <p className="text-xs text-red-500 mt-0.5">food</p>}
+                        className={`w-24 text-right border rounded-lg px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          foodDeduct > 0 ? 'border-red-300 bg-red-50 text-red-700' : 'border-slate-200 bg-white'
+                        }`}
+                      />
                     </td>
                     {hasAdvances && (
                       <td className="px-3 py-3 text-right text-sm">
@@ -244,18 +245,22 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap }: Props) {
                     )}
                     {hasAdvances && (
                       <td className="px-3 py-3 text-right">
-                        <input type="number" min="0" step="0.001" placeholder="0.000"
+                        <input
+                          type="number" min="0" step="0.001" placeholder="0.000"
                           max={advBalance > 0 ? advBalance : undefined}
                           value={entries[s.id]?.advance_deduction}
                           onChange={(e) => setEntry(s.id, 'advance_deduction', e.target.value)}
-                          className={`${inputCls} ${advDeduct > 0 ? 'border-red-300 text-red-700' : ''}`} />
+                          className={`w-24 text-right border rounded-lg px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            advDeduct > 0 ? 'border-red-300 text-red-700 bg-red-50' : 'border-slate-200 bg-white'
+                          }`}
+                        />
                       </td>
                     )}
                     <td className="px-5 py-3 text-right">
                       <span className={`text-sm font-bold ${net < 0 ? 'text-red-600' : 'text-slate-900'}`}>
-                        {formatCurrency(net)}
+                        {formatCurrency(Math.max(0, net))}
                       </span>
-                      {(absentDeduct > 0 || foodDeduct > 0) && (
+                      {(absentDeduct + foodDeduct) > 0 && (
                         <p className="text-xs text-red-400 mt-0.5">−{formatCurrency(absentDeduct + foodDeduct)} deducted</p>
                       )}
                     </td>
