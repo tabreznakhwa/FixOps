@@ -50,18 +50,11 @@ export default async function VendorOutstandingPage({
 
   if (params.supplier) openingQuery = openingQuery.eq('supplier_id', params.supplier)
 
-  const [
-    { data: posRaw },
-    { data: pisRaw, error: piError },
-    { data: openingRaw },
-  ] = await Promise.all([
+  const [{ data: posRaw }, { data: pisRaw }, { data: openingRaw }] = await Promise.all([
     poQuery.limit(200),
     piQuery.limit(200),
     openingQuery.limit(200),
   ])
-
-  if (piError) console.error('[VendorOutstanding] purchase_invoices query error:', piError)
-  console.log('[VendorOutstanding] orgId:', orgId, '| pisRaw count:', pisRaw?.length ?? 'null')
 
   const pos = (posRaw ?? []) as Array<{
     id: string; po_number: string; purchase_date: string; due_date: string | null
@@ -129,11 +122,6 @@ export default async function VendorOutstandingPage({
       />
 
       <div className="p-6 space-y-5">
-        {/* DEBUG — remove after diagnosis */}
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 text-xs font-mono text-yellow-800 print:hidden">
-          orgId: {orgId ?? 'undefined'} | purchase_invoices raw: {pisRaw?.length ?? 'null (error)'} | after filter: {pis.length}
-          {piError && <span className="ml-2 text-red-700">ERROR: {JSON.stringify(piError)}</span>}
-        </div>
         {/* Ageing summary */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
