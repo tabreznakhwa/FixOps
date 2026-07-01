@@ -244,9 +244,11 @@ export default async function CashBookPage({
                     <td colSpan={3} className="px-5 py-3 text-sm font-bold text-slate-700">Period Total</td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-green-700">{formatCurrency(periodReceipts)}</td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(periodPayments)}</td>
-                    <td className={`px-5 py-3 text-right text-sm font-bold ${closingBalance >= 0 ? 'text-blue-700' : 'text-red-600'}`}>
-                      {formatCurrency(closingBalance)}
-                    </td>
+                    {(() => { const pb = periodOpeningBalance + periodReceipts - periodPayments; return (
+                      <td className={`px-5 py-3 text-right text-sm font-bold ${pb >= 0 ? 'text-blue-700' : 'text-red-600'}`}>
+                        {formatCurrency(pb)}
+                      </td>
+                    )})()}
                   </tr>
                 </tfoot>
               </table>
