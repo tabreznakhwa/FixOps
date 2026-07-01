@@ -66,11 +66,11 @@ const navGroups: Array<{
     label: 'HR & Payroll',
     module: 'hr' as const,
     items: [
-      { href: '/staff', label: 'Staff', icon: UserCheck },
-      { href: '/staff/locations', label: 'Technician Locations', icon: MapPin, excludeRoles: ['technician'] },
+      { href: '/staff', label: 'Staff', icon: UserCheck, excludeRoles: ['technician', 'attendance_kiosk'] },
+      { href: '/staff/locations', label: 'Technician Locations', icon: MapPin, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/attendance', label: 'Attendance', icon: CalendarCheck },
-      { href: '/payroll', label: 'Payroll', icon: BarChart3 },
-      { href: '/payroll/process', label: 'Payslips', icon: Printer },
+      { href: '/payroll', label: 'Payroll', icon: BarChart3, excludeRoles: ['attendance_kiosk'] },
+      { href: '/payroll/process', label: 'Payslips', icon: Printer, excludeRoles: ['attendance_kiosk'] },
     ],
   },
   {

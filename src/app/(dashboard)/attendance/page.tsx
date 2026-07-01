@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { Plus, CalendarCheck, UserCheck, XCircle, Clock } from 'lucide-react'
+import { Plus, CalendarCheck, UserCheck, XCircle, Clock, Pencil } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { StaffFilterSelect } from './StaffFilterSelect'
 
@@ -52,6 +52,10 @@ export default async function AttendancePage({
   const selectedStaffId = params.staff_id ?? ''
 
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
+  const userRole = (profileRaw as { role: string } | null)?.role ?? ''
+  const canEdit = ['owner', 'admin', 'manager'].includes(userRole)
 
   const { data: staffRaw } = await supabase
     .from('staff')
@@ -200,6 +204,7 @@ export default async function AttendancePage({
                   <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Hours</th>
                   <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">OT Hrs</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3 hidden xl:table-cell">Notes</th>
+                  {canEdit && <th className="px-4 py-3" />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -227,6 +232,14 @@ export default async function AttendancePage({
                     <td className="px-5 py-3.5 text-sm text-slate-500 hidden xl:table-cell max-w-[180px] truncate">
                       {r.notes ?? '—'}
                     </td>
+                    {canEdit && (
+                      <td className="px-4 py-3.5">
+                        <Link href={`/attendance/${r.id}/edit`}
+                          className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
+                          <Pencil className="w-3.5 h-3.5" /> Edit
+                        </Link>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

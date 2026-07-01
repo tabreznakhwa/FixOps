@@ -62,6 +62,11 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard?error=unauthorized', request.url))
     }
 
+    // Attendance kiosk: only the /attendance route is allowed
+    if (profile.role === 'attendance_kiosk' && !pathname.startsWith('/attendance') && !pathname.startsWith('/api')) {
+      return NextResponse.redirect(new URL('/attendance', request.url))
+    }
+
     // Skip API routes (enforced at DB/RLS) and locked roles (always full access)
     if (!pathname.startsWith('/api') && !LOCKED_ROLES.includes(profile.role)) {
       const module = getRouteModule(pathname)
