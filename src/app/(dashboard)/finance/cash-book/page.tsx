@@ -9,6 +9,16 @@ import { Suspense } from 'react'
 
 export const metadata = { title: 'Cash Book' }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  rent: 'Rent', electricity: 'Electricity', water: 'Water', phone: 'Phone / Mobile',
+  internet: 'Internet', stationery: 'Stationery & Office', fuel: 'Fuel & Transport',
+  vehicle_maintenance: 'Vehicle Maintenance', tools_equipment: 'Tools & Equipment',
+  marketing: 'Marketing', bank_charges: 'Bank Charges', insurance: 'Insurance',
+  professional_services: 'Professional Services', food_entertainment: 'Food & Refreshments',
+  other: 'Miscellaneous',
+}
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
 export default async function CashBookPage({
   searchParams,
 }: {
@@ -22,100 +32,80 @@ export default async function CashBookPage({
   const from = params.from ?? today
   const to = params.to ?? today
 
-  // Opening balance from org settings
+  // Opening balance
   const { data: orgRaw } = await (supabase as any)
     .from('organizations').select('opening_cash_balance, opening_balance_date').limit(1).single()
   const org = (orgRaw ?? {}) as { opening_cash_balance: number | null; opening_balance_date: string | null }
   const openingCash = org.opening_cash_balance ?? 0
   const openingDate = org.opening_balance_date ?? null
 
-  // Period-filtered queries for the transaction table
-  const baseReceiptsQ = (supabase as any)
+  // Fetch ALL historical data in one pass — closing balance is always all-time
+  // Client-side filtering handles the period view for the table
+  const { data: allReceiptsRaw } = await (supabase as any)
     .from('payments')
-    .select('id, payment_date, payment_number, amount_received, reference_number, customers(full_name)')
+    .select('payment_date, payment_number, amount_received, reference_number, customers(full_name)')
     .eq('payment_mode', 'cash')
     .eq('is_cancelled', false)
     .order('payment_date', { ascending: true })
-  const { data: receiptsRaw } = await (allTime ? baseReceiptsQ : baseReceiptsQ.gte('payment_date', from).lte('payment_date', to))
+    .limit(5000)
 
-  const basePaymentsQ = (supabase as any)
+  const { data: allSupplierPaymentsRaw } = await (supabase as any)
     .from('supplier_payments')
-    .select('id, payment_date, amount_paid, reference_number, suppliers(supplier_name)')
+    .select('payment_date, amount_paid, reference_number, suppliers(supplier_name)')
     .eq('payment_mode', 'cash')
     .order('payment_date', { ascending: true })
-  const { data: paymentsRaw } = await (allTime ? basePaymentsQ : basePaymentsQ.gte('payment_date', from).lte('payment_date', to))
+    .limit(5000)
 
-  const baseExpensesQ = (supabase as any)
+  const { data: allExpensesRaw } = await (supabase as any)
     .from('expenses')
-    .select('id, expense_date, expense_number, category, description, amount, reference_number')
+    .select('expense_date, expense_number, category, description, amount, reference_number')
     .eq('payment_method', 'cash')
     .order('expense_date', { ascending: true })
-  const { data: expensesRaw } = await (allTime ? baseExpensesQ : baseExpensesQ.gte('expense_date', from).lte('expense_date', to))
+    .limit(5000)
 
-  const baseSalaryQ = (supabase as any)
+  const { data: allSalariesRaw } = await (supabase as any)
     .from('salary_slips')
-    .select('id, payment_date, net_salary, staff(full_name), salary_runs(salary_month, salary_year)')
+    .select('payment_date, net_salary, staff(full_name), salary_runs(salary_month, salary_year)')
     .eq('payment_status', 'paid')
     .eq('payment_mode', 'cash')
     .order('payment_date', { ascending: true })
-  const { data: salaryRaw } = await (allTime ? baseSalaryQ : baseSalaryQ.gte('payment_date', from).lte('payment_date', to))
+    .limit(5000)
 
-  // All-time totals for the closing balance card (always shows current running balance)
-  const [{ data: atR }, { data: atP }, { data: atE }, { data: atS }] = await Promise.all([
-    (supabase as any).from('payments').select('amount_received').eq('payment_mode', 'cash').eq('is_cancelled', false),
-    (supabase as any).from('supplier_payments').select('amount_paid').eq('payment_mode', 'cash'),
-    (supabase as any).from('expenses').select('amount').eq('payment_method', 'cash'),
-    (supabase as any).from('salary_slips').select('net_salary').eq('payment_status', 'paid').eq('payment_mode', 'cash'),
-  ])
-  const allTimeReceipts = ((atR ?? []) as Array<{ amount_received: number }>).reduce((s: number, r: { amount_received: number }) => s + r.amount_received, 0)
-  const allTimeOut = ((atP ?? []) as Array<{ amount_paid: number }>).reduce((s: number, r: { amount_paid: number }) => s + r.amount_paid, 0)
-    + ((atE ?? []) as Array<{ amount: number }>).reduce((s: number, r: { amount: number }) => s + r.amount, 0)
-    + ((atS ?? []) as Array<{ net_salary: number }>).reduce((s: number, r: { net_salary: number }) => s + r.net_salary, 0)
-  const closingBalance = openingCash + allTimeReceipts - allTimeOut
+  type Receipt = { payment_date: string; payment_number: string; amount_received: number; reference_number: string | null; customers: { full_name: string } | null }
+  type SupplierPay = { payment_date: string; amount_paid: number; reference_number: string | null; suppliers: { supplier_name: string } | null }
+  type Expense = { expense_date: string; expense_number: string; category: string; description: string; amount: number; reference_number: string | null }
+  type Salary = { payment_date: string; net_salary: number; staff: { full_name: string } | null; salary_runs: { salary_month: number; salary_year: number } | null }
 
-  const CATEGORY_LABELS: Record<string, string> = {
-    rent: 'Rent', electricity: 'Electricity', water: 'Water', phone: 'Phone / Mobile',
-    internet: 'Internet', stationery: 'Stationery & Office', fuel: 'Fuel & Transport',
-    vehicle_maintenance: 'Vehicle Maintenance', tools_equipment: 'Tools & Equipment',
-    marketing: 'Marketing', bank_charges: 'Bank Charges', insurance: 'Insurance',
-    professional_services: 'Professional Services', food_entertainment: 'Food & Refreshments',
-    other: 'Miscellaneous',
-  }
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const allReceipts = (allReceiptsRaw ?? []) as Receipt[]
+  const allSupplierPayments = (allSupplierPaymentsRaw ?? []) as SupplierPay[]
+  const allExpenses = (allExpensesRaw ?? []) as Expense[]
+  const allSalaries = (allSalariesRaw ?? []) as Salary[]
 
-  const receipts = (receiptsRaw ?? []) as Array<{
-    id: string; payment_date: string; payment_number: string; amount_received: number
-    reference_number: string | null; customers: { full_name: string } | null
-  }>
-  const payments = (paymentsRaw ?? []) as Array<{
-    id: string; payment_date: string; amount_paid: number
-    reference_number: string | null; suppliers: { supplier_name: string } | null
-  }>
-  const expenses = (expensesRaw ?? []) as Array<{
-    id: string; expense_date: string; expense_number: string; category: string
-    description: string; amount: number; reference_number: string | null
-  }>
-  const salaries = (salaryRaw ?? []) as Array<{
-    id: string; payment_date: string; net_salary: number
-    staff: { full_name: string } | null
-    salary_runs: { salary_month: number; salary_year: number } | null
-  }>
+  // Closing balance is always the all-time running total
+  const totalCashIn = allReceipts.reduce((s, r) => s + r.amount_received, 0)
+  const totalCashOut = allSupplierPayments.reduce((s, r) => s + r.amount_paid, 0)
+    + allExpenses.reduce((s, r) => s + r.amount, 0)
+    + allSalaries.reduce((s, r) => s + r.net_salary, 0)
+  const closingBalance = openingCash + totalCashIn - totalCashOut
+
+  // Filter to selected period for the transaction table
+  const inPeriod = (date: string) => allTime || (date >= from && date <= to)
 
   type Entry = { date: string; narration: string; receipts: number; payments: number; ref: string }
   const entries: Entry[] = [
-    ...receipts.map((r) => ({
+    ...allReceipts.filter((r) => inPeriod(r.payment_date)).map((r) => ({
       date: r.payment_date,
       narration: `Receipt from ${r.customers?.full_name ?? 'Customer'} (${r.payment_number})`,
       receipts: r.amount_received, payments: 0,
       ref: r.reference_number ?? '—',
     })),
-    ...payments.map((p) => ({
+    ...allSupplierPayments.filter((p) => inPeriod(p.payment_date)).map((p) => ({
       date: p.payment_date,
       narration: `Payment to ${p.suppliers?.supplier_name ?? 'Supplier'}`,
       receipts: 0, payments: p.amount_paid,
       ref: p.reference_number ?? '—',
     })),
-    ...salaries.map((s) => {
+    ...allSalaries.filter((s) => inPeriod(s.payment_date)).map((s) => {
       const run = s.salary_runs
       const period = run ? `${MONTHS[run.salary_month - 1]} ${run.salary_year}` : ''
       return {
@@ -124,7 +114,7 @@ export default async function CashBookPage({
         receipts: 0, payments: s.net_salary, ref: '—',
       }
     }),
-    ...expenses.map((e) => ({
+    ...allExpenses.filter((e) => inPeriod(e.expense_date)).map((e) => ({
       date: e.expense_date,
       narration: `Expense — ${CATEGORY_LABELS[e.category] ?? e.category}: ${e.description}`,
       receipts: 0, payments: e.amount,
@@ -174,7 +164,7 @@ export default async function CashBookPage({
             <p className={`text-xl font-bold ${closingBalance >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
               {formatCurrency(closingBalance)}
             </p>
-            <p className="text-xs text-slate-400 mt-1">All-time running total</p>
+            <p className="text-xs text-slate-400 mt-1">Opening {formatCurrency(openingCash)} + {formatCurrency(totalCashIn)} in − {formatCurrency(totalCashOut)} out</p>
           </div>
         </div>
 
