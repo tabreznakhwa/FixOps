@@ -182,12 +182,18 @@ export function NewPurchaseInvoiceForm({
     e.preventDefault()
     setError('')
 
-    for (const l of lines) {
+    // Strip untouched empty inventory placeholder rows before validating
+    const activeLines = lines.filter((l) =>
+      l.isNonInventory ? l.description.trim() !== '' : l.inventory_item_id !== ''
+    )
+    if (activeLines.length === 0) {
+      setError('Add at least one item before saving')
+      return
+    }
+
+    for (const l of activeLines) {
       if (l.isNonInventory) {
         if (!l.description.trim()) { setError('All non-inventory items must have a description'); return }
-      } else if (!l.inventory_item_id) {
-        setError('All line items must have an inventory item selected, or be marked as Non-Inventory')
-        return
       }
       if (!l.quantity || parseFloat(l.quantity) <= 0) { setError('All quantities must be greater than 0'); return }
       if (l.unit_cost === '' || parseFloat(l.unit_cost) < 0) { setError('All unit costs must be 0 or greater'); return }
@@ -208,7 +214,7 @@ export function NewPurchaseInvoiceForm({
           payment_mode: paymentType === 'cash' ? paymentMode : null,
           discount_amount: discountAmt,
           notes: notes.trim() || null,
-          items: lines.map(l => ({
+          items: activeLines.map(l => ({
             inventory_item_id: l.isNonInventory ? null : l.inventory_item_id,
             description: l.description,
             unit_of_measure: l.unit_of_measure,
