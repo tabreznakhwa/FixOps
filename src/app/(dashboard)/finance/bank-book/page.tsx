@@ -93,6 +93,20 @@ export default async function BankBookPage({
     + allSalaries.reduce((s, r) => s + r.net_salary, 0)
   const closingBalance = openingBank + totalBankIn - totalBankOut
 
+  // "Opening Balance b/f" for the table = balance at the START of the selected period
+  // (original opening + all transactions that occurred BEFORE the period start date)
+  const prePeriodIn = allTime ? 0 : allReceipts.filter((r) => r.payment_date < from).reduce((s, r) => s + r.amount_received, 0)
+  const prePeriodOut = allTime ? 0 : (
+    allSupplierPayments.filter((p) => p.payment_date < from).reduce((s, p) => s + p.amount_paid, 0)
+    + allExpenses.filter((e) => e.expense_date < from).reduce((s, e) => s + e.amount, 0)
+    + allSalaries.filter((s) => s.payment_date < from).reduce((s2, s) => s2 + s.net_salary, 0)
+  )
+  const periodOpeningBalance = openingBank + prePeriodIn - prePeriodOut
+  // Date label for the b/f row: one day before the period start
+  const periodOpeningDate = allTime ? openingDate : (() => {
+    const d = new Date(from); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]
+  })()
+
   // Filter to selected period for the transaction table
   const inPeriod = (date: string) => allTime || (date >= from && date <= to)
 
@@ -205,19 +219,17 @@ export default async function BankBookPage({
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {(() => {
-                    let running = openingBank
+                    let running = periodOpeningBalance
                     return [
-                      ...(openingBank > 0 ? [(
-                        <tr key="opening" className="bg-blue-50">
-                          <td className="px-5 py-3 text-sm text-slate-500 whitespace-nowrap">{openingDate ? formatDate(openingDate) : '—'}</td>
-                          <td className="px-4 py-3 text-sm font-semibold text-blue-700">Opening Balance b/f</td>
-                          <td className="px-4 py-3"><span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Opening</span></td>
-                          <td className="px-4 py-3 text-xs text-slate-400 font-mono">—</td>
-                          <td className="px-4 py-3 text-right text-sm font-semibold text-blue-700">{formatCurrency(openingBank)}</td>
-                          <td className="px-4 py-3 text-right text-sm text-slate-400">—</td>
-                          <td className="px-5 py-3 text-right text-sm font-bold text-blue-700">{formatCurrency(openingBank)}</td>
-                        </tr>
-                      )] : []),
+                      <tr key="opening" className="bg-blue-50">
+                        <td className="px-5 py-3 text-sm text-slate-500 whitespace-nowrap">{periodOpeningDate ? formatDate(periodOpeningDate) : '—'}</td>
+                        <td className="px-4 py-3 text-sm font-semibold text-blue-700">Opening Balance b/f</td>
+                        <td className="px-4 py-3"><span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Opening</span></td>
+                        <td className="px-4 py-3 text-xs text-slate-400 font-mono">—</td>
+                        <td className="px-4 py-3 text-right text-sm font-semibold text-blue-700">{formatCurrency(periodOpeningBalance)}</td>
+                        <td className="px-4 py-3 text-right text-sm text-slate-400">—</td>
+                        <td className="px-5 py-3 text-right text-sm font-bold text-blue-700">{formatCurrency(periodOpeningBalance)}</td>
+                      </tr>,
                       ...entries.map((e, i) => {
                         running += e.receipts - e.payments
                         return (
