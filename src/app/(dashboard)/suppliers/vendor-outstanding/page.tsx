@@ -5,6 +5,7 @@ import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
+import { SupplierFilter } from './SupplierFilter'
 
 export const metadata = { title: 'Vendor Bill-wise Outstanding' }
 
@@ -34,7 +35,7 @@ export default async function VendorOutstandingPage({
 
   let piQuery = admin
     .from('purchase_invoices')
-    .select('id, invoice_number, invoice_date, due_date, total_amount, amount_paid, balance_due, payment_status, supplier_id, supplier_name, status')
+    .select('id, invoice_number, invoice_date, due_date, total_amount, amount_paid, balance_due, payment_status, supplier_id, supplier_name, status, suppliers(supplier_name)')
     .eq('organization_id', orgId)
     .eq('payment_type', 'credit')
     .order('invoice_date', { ascending: true })
@@ -49,6 +50,15 @@ export default async function VendorOutstandingPage({
     .order('bill_date', { ascending: true })
 
   if (params.supplier) openingQuery = openingQuery.eq('supplier_id', params.supplier)
+
+  const suppliersRes = await admin
+    .from('suppliers')
+    .select('id, supplier_name, supplier_code')
+    .eq('organization_id', orgId)
+    .eq('is_active', true)
+    .order('supplier_name', { ascending: true })
+
+  const allSuppliers = (suppliersRes.data ?? []) as Array<{ id: string; supplier_name: string; supplier_code: string }>
 
   const [{ data: posRaw }, { data: pisRaw }, { data: openingRaw }] = await Promise.all([
     poQuery.limit(200),
@@ -67,6 +77,7 @@ export default async function VendorOutstandingPage({
     id: string; invoice_number: string; invoice_date: string; due_date: string | null
     total_amount: number; amount_paid: number; balance_due: number
     payment_status: string; supplier_id: string | null; supplier_name: string | null; status: string
+    suppliers: { supplier_name: string } | null
   }>).filter(p => p.status !== 'cancelled' && p.payment_status !== 'paid' && p.balance_due > 0)
 
   const openingEntries = (openingRaw ?? []) as Array<{
@@ -113,6 +124,7 @@ export default async function VendorOutstandingPage({
       <Header title="Vendor Bill-wise Outstanding" subtitle="Supplier bills with pending balances"
         actions={
           <div className="flex items-center gap-2 print:hidden">
+            <SupplierFilter suppliers={allSuppliers} selectedId={params.supplier} />
             <Link href="/suppliers/opening-payables" className="px-3 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
               Opening Payables
             </Link>
@@ -201,7 +213,7 @@ export default async function VendorOutstandingPage({
                           </Link>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="text-sm font-semibold text-slate-800">{pi.supplier_name ?? '—'}</p>
+                          <p className="text-sm font-semibold text-slate-800">{pi.suppliers?.supplier_name ?? pi.supplier_name ?? '—'}</p>
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-600">{formatDate(pi.invoice_date)}</td>
                         <td className={`px-4 py-3 text-sm ${isOverdue ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
