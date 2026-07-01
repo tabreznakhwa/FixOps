@@ -32,6 +32,17 @@ export default async function VendorOutstandingPage({
 
   if (params.supplier) poQuery = poQuery.eq('supplier_id', params.supplier)
 
+  let piQuery = admin
+    .from('purchase_invoices')
+    .select('id, invoice_number, invoice_date, due_date, total_amount, amount_paid, balance_due, payment_status, suppliers(id, supplier_name, supplier_code)')
+    .eq('organization_id', orgId)
+    .gt('balance_due', 0)
+    .not('status', 'eq', 'cancelled')
+    .not('payment_status', 'eq', 'paid')
+    .order('invoice_date', { ascending: true })
+
+  if (params.supplier) piQuery = piQuery.eq('supplier_id', params.supplier)
+
   let openingQuery = admin
     .from('opening_payables')
     .select('id, bill_ref, bill_date, due_date, amount, balance_due, suppliers(id, supplier_name, supplier_code)')
@@ -41,8 +52,9 @@ export default async function VendorOutstandingPage({
 
   if (params.supplier) openingQuery = openingQuery.eq('supplier_id', params.supplier)
 
-  const [{ data: posRaw }, { data: openingRaw }] = await Promise.all([
+  const [{ data: posRaw }, { data: pisRaw }, { data: openingRaw }] = await Promise.all([
     poQuery.limit(200),
+    piQuery.limit(200),
     openingQuery.limit(200),
   ])
 
@@ -53,6 +65,13 @@ export default async function VendorOutstandingPage({
     suppliers: { id: string; supplier_name: string; supplier_code: string } | null
   }>
 
+  const pis = (pisRaw ?? []) as Array<{
+    id: string; invoice_number: string; invoice_date: string; due_date: string | null
+    total_amount: number; amount_paid: number; balance_due: number
+    payment_status: string
+    suppliers: { id: string; supplier_name: string; supplier_code: string } | null
+  }>
+
   const openingEntries = (openingRaw ?? []) as Array<{
     id: string; bill_ref: string; bill_date: string; due_date: string | null
     amount: number; balance_due: number
@@ -60,11 +79,13 @@ export default async function VendorOutstandingPage({
   }>
 
   const totalOutstanding = pos.reduce((s, p) => s + p.balance_due, 0)
+    + pis.reduce((s, p) => s + p.balance_due, 0)
     + openingEntries.reduce((s, e) => s + e.balance_due, 0)
 
   const today = new Date()
   const allForAgeing = [
     ...pos.map(p => ({ balance_due: p.balance_due, due_date: p.due_date })),
+    ...pis.map(p => ({ balance_due: p.balance_due, due_date: p.due_date })),
     ...openingEntries.map(e => ({ balance_due: e.balance_due, due_date: e.due_date })),
   ]
   const ageing = allForAgeing.reduce(
@@ -124,12 +145,12 @@ export default async function VendorOutstandingPage({
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <h3 className="font-semibold text-slate-900">
               Outstanding Bills
-              <span className="ml-2 text-sm font-normal text-slate-500">({pos.length + openingEntries.length})</span>
+              <span className="ml-2 text-sm font-normal text-slate-500">({pos.length + pis.length + openingEntries.length})</span>
             </h3>
             <p className="text-sm font-bold text-red-600">Total: {formatCurrency(totalOutstanding)}</p>
           </div>
 
-          {pos.length === 0 && openingEntries.length === 0 ? (
+          {pos.length === 0 && pis.length === 0 && openingEntries.length === 0 ? (
             <div className="p-10 text-center">
               <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="text-sm text-slate-400">No outstanding supplier bills</p>
@@ -173,6 +194,35 @@ export default async function VendorOutstandingPage({
                       </tr>
                     )
                   })}
+                  {pis.map((pi) => {
+                    const isOverdue = pi.due_date && new Date(pi.due_date) < today
+                    return (
+                      <tr key={`pi-${pi.id}`} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-5 py-3">
+                          <Link href={`/inventory/purchase-invoices/${pi.id}`} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
+                            {pi.invoice_number}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-sm font-semibold text-slate-800">{pi.suppliers?.supplier_name}</p>
+                          <p className="text-xs text-slate-400">{pi.suppliers?.supplier_code}</p>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{formatDate(pi.invoice_date)}</td>
+                        <td className={`px-4 py-3 text-sm ${isOverdue ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
+                          {pi.due_date ? formatDate(pi.due_date) : '—'}
+                          {isOverdue && <span className="ml-1 text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">Overdue</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${pStatusColor[pi.payment_status] ?? 'bg-slate-100 text-slate-600'}`}>
+                            {pi.payment_status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm text-slate-700">{formatCurrency(pi.total_amount)}</td>
+                        <td className="px-4 py-3 text-right text-sm text-green-700">{formatCurrency(pi.amount_paid)}</td>
+                        <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(pi.balance_due)}</td>
+                      </tr>
+                    )
+                  })}
                   {pos.map((po) => {
                     const isOverdue = po.due_date && new Date(po.due_date) < today
                     return (
@@ -209,11 +259,15 @@ export default async function VendorOutstandingPage({
                     <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">
                       {formatCurrency(
                         pos.reduce((s, p) => s + p.total_amount, 0)
+                        + pis.reduce((s, p) => s + p.total_amount, 0)
                         + openingEntries.reduce((s, e) => s + e.amount, 0)
                       )}
                     </td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-green-700">
-                      {formatCurrency(pos.reduce((s, p) => s + p.amount_paid, 0))}
+                      {formatCurrency(
+                        pos.reduce((s, p) => s + p.amount_paid, 0)
+                        + pis.reduce((s, p) => s + p.amount_paid, 0)
+                      )}
                     </td>
                     <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(totalOutstanding)}</td>
                   </tr>
