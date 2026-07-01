@@ -55,7 +55,6 @@ export default async function VendorOutstandingPage({
     .from('suppliers')
     .select('id, supplier_name, supplier_code')
     .eq('organization_id', orgId)
-    .eq('status', 'active')
     .order('supplier_name', { ascending: true })
 
   const allSuppliers = (suppliersRes.data ?? []) as Array<{ id: string; supplier_name: string; supplier_code: string }>
