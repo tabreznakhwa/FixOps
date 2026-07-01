@@ -34,11 +34,9 @@ export default async function VendorOutstandingPage({
 
   let piQuery = admin
     .from('purchase_invoices')
-    .select('id, invoice_number, invoice_date, due_date, total_amount, amount_paid, balance_due, payment_status, supplier_id, supplier_name')
+    .select('id, invoice_number, invoice_date, due_date, total_amount, amount_paid, balance_due, payment_status, supplier_id, supplier_name, status')
     .eq('organization_id', orgId)
-    .gt('balance_due', 0)
-    .not('status', 'eq', 'cancelled')
-    .not('payment_status', 'eq', 'paid')
+    .eq('payment_type', 'credit')
     .order('invoice_date', { ascending: true })
 
   if (params.supplier) piQuery = piQuery.eq('supplier_id', params.supplier)
@@ -65,11 +63,11 @@ export default async function VendorOutstandingPage({
     suppliers: { id: string; supplier_name: string; supplier_code: string } | null
   }>
 
-  const pis = (pisRaw ?? []) as Array<{
+  const pis = ((pisRaw ?? []) as Array<{
     id: string; invoice_number: string; invoice_date: string; due_date: string | null
     total_amount: number; amount_paid: number; balance_due: number
-    payment_status: string; supplier_id: string | null; supplier_name: string | null
-  }>
+    payment_status: string; supplier_id: string | null; supplier_name: string | null; status: string
+  }>).filter(p => p.status !== 'cancelled' && p.payment_status !== 'paid' && p.balance_due > 0)
 
   const openingEntries = (openingRaw ?? []) as Array<{
     id: string; bill_ref: string; bill_date: string; due_date: string | null
