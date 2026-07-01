@@ -34,7 +34,7 @@ export default async function VendorOutstandingPage({
 
   let piQuery = admin
     .from('purchase_invoices')
-    .select('id, invoice_number, invoice_date, due_date, total_amount, amount_paid, balance_due, payment_status, suppliers(id, supplier_name, supplier_code)')
+    .select('id, invoice_number, invoice_date, due_date, total_amount, amount_paid, balance_due, payment_status, supplier_id, supplier_name')
     .eq('organization_id', orgId)
     .gt('balance_due', 0)
     .not('status', 'eq', 'cancelled')
@@ -68,8 +68,7 @@ export default async function VendorOutstandingPage({
   const pis = (pisRaw ?? []) as Array<{
     id: string; invoice_number: string; invoice_date: string; due_date: string | null
     total_amount: number; amount_paid: number; balance_due: number
-    payment_status: string
-    suppliers: { id: string; supplier_name: string; supplier_code: string } | null
+    payment_status: string; supplier_id: string | null; supplier_name: string | null
   }>
 
   const openingEntries = (openingRaw ?? []) as Array<{
@@ -204,8 +203,7 @@ export default async function VendorOutstandingPage({
                           </Link>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="text-sm font-semibold text-slate-800">{pi.suppliers?.supplier_name}</p>
-                          <p className="text-xs text-slate-400">{pi.suppliers?.supplier_code}</p>
+                          <p className="text-sm font-semibold text-slate-800">{pi.supplier_name ?? '—'}</p>
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-600">{formatDate(pi.invoice_date)}</td>
                         <td className={`px-4 py-3 text-sm ${isOverdue ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
