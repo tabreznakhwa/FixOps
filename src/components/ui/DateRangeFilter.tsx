@@ -18,6 +18,7 @@ function startOfWeek(d: Date) {
 
 const PRESETS: { label: string; range: () => { from: string; to: string } }[] = [
   { label: 'Today', range: () => { const t = new Date(); return { from: toISODate(t), to: toISODate(t) } } },
+  { label: 'Yesterday', range: () => { const t = new Date(); t.setDate(t.getDate() - 1); return { from: toISODate(t), to: toISODate(t) } } },
   { label: 'This Week', range: () => { const t = new Date(); return { from: toISODate(startOfWeek(t)), to: toISODate(t) } } },
   { label: 'This Month', range: () => { const t = new Date(); return { from: toISODate(new Date(t.getFullYear(), t.getMonth(), 1)), to: toISODate(t) } } },
   { label: 'This Year', range: () => { const t = new Date(); return { from: toISODate(new Date(t.getFullYear(), 0, 1)), to: toISODate(t) } } },
