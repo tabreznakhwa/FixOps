@@ -55,7 +55,16 @@ export default async function AttendancePage({
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
   const userRole = (profileRaw as { role: string } | null)?.role ?? ''
-  const canEdit = ['owner', 'admin', 'manager'].includes(userRole)
+  const isKiosk = userRole === 'attendance_kiosk'
+  const canEdit = ['owner', 'admin'].includes(userRole)
+
+  // Kiosk users see only their own records — look up their linked staff record
+  let kioskStaffId: string | null = null
+  if (isKiosk) {
+    const { data: kioskStaff } = await (supabase as any)
+      .from('staff').select('id').eq('user_id', user!.id).maybeSingle()
+    kioskStaffId = (kioskStaff as { id: string } | null)?.id ?? null
+  }
 
   const { data: staffRaw } = await supabase
     .from('staff')
@@ -78,7 +87,10 @@ export default async function AttendancePage({
     .lte('date', endDate)
     .order('date', { ascending: false })
 
-  if (selectedStaffId) {
+  // Kiosk: always force-filter to their own staff_id (ignore URL param)
+  if (isKiosk && kioskStaffId) {
+    query = query.eq('staff_id', kioskStaffId)
+  } else if (selectedStaffId) {
     query = query.eq('staff_id', selectedStaffId)
   }
 
@@ -123,12 +135,14 @@ export default async function AttendancePage({
         title="Attendance"
         subtitle="Track daily staff attendance"
         actions={
-          <Link
-            href="/attendance/new"
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Mark Attendance
-          </Link>
+          !isKiosk && (
+            <Link
+              href="/attendance/new"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Mark Attendance
+            </Link>
+          )
         }
       />
 
@@ -157,7 +171,7 @@ export default async function AttendancePage({
             </Link>
           </div>
 
-          <StaffFilterSelect staffList={staffList} selectedStaffId={selectedStaffId} currentMonth={currentMonth} />
+          {!isKiosk && <StaffFilterSelect staffList={staffList} selectedStaffId={selectedStaffId} currentMonth={currentMonth} />}
         </div>
 
         {/* Summary Cards */}
@@ -184,12 +198,14 @@ export default async function AttendancePage({
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
             <CalendarCheck className="w-10 h-10 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500 font-medium">No attendance records for {getMonthLabel(currentMonth)}</p>
-            <Link
-              href="/attendance/new"
-              className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> Mark Attendance
-            </Link>
+            {!isKiosk && (
+              <Link
+                href="/attendance/new"
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Mark Attendance
+              </Link>
+            )}
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

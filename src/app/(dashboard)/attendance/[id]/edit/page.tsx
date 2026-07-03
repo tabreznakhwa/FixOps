@@ -12,7 +12,7 @@ export default async function EditAttendancePage({ params }: { params: Promise<{
   const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
   const role = (profileRaw as { role: string } | null)?.role ?? ''
 
-  if (!['owner', 'admin', 'manager'].includes(role)) {
+  if (!['owner', 'admin'].includes(role)) {
     redirect('/attendance')
   }
 

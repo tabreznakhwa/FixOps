@@ -13,7 +13,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const profile = profileRaw as { organization_id: string; role: string } | null
     if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const allowed = ['owner', 'admin', 'manager']
+    const allowed = ['owner', 'admin']
     if (!allowed.includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
