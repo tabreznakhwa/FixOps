@@ -42,11 +42,13 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
     const admin = createAdminClient() as any
     const { data: invoicesRaw } = await admin
       .from('invoices')
-      .select('work_order_id, payment_status')
+      .select('work_order_id, status')
       .in('work_order_id', woIds)
-    for (const inv of (invoicesRaw ?? []) as Array<{ work_order_id: string; payment_status: string }>) {
-      // Use the most recent invoice status (last write wins if multiple invoices per WO)
-      invoiceStatusMap[inv.work_order_id] = inv.payment_status
+    for (const inv of (invoicesRaw ?? []) as Array<{ work_order_id: string; status: string }>) {
+      // Prefer 'paid' if any invoice for this WO is paid
+      if (inv.status === 'paid' || !invoiceStatusMap[inv.work_order_id]) {
+        invoiceStatusMap[inv.work_order_id] = inv.status
+      }
     }
   }
 

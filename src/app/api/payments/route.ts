@@ -90,11 +90,11 @@ export async function POST(request: NextRequest) {
     if (invoice_id) {
       const { data: invoiceData } = await (supabase as any)
         .from('invoices')
-        .select('id, total_amount, payment_status, work_order_id')
+        .select('id, total_amount, status, work_order_id')
         .eq('id', invoice_id)
         .single()
 
-      if (invoiceData && invoiceData.payment_status !== 'paid') {
+      if (invoiceData && invoiceData.status !== 'paid') {
         const { data: paymentsData } = await (supabase as any)
           .from('payments')
           .select('amount_received')
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
         if (totalPaid >= invoiceData.total_amount) {
           await (supabase as any)
             .from('invoices')
-            .update({ payment_status: 'paid' })
+            .update({ status: 'paid' })
             .eq('id', invoice_id)
 
           if (invoiceData.work_order_id) {
