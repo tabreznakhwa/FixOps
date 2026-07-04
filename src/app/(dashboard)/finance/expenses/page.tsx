@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
-import { Plus, Receipt, TrendingDown, Banknote, Landmark } from 'lucide-react'
+import { Plus, Receipt, TrendingDown, Banknote, Landmark, Pencil } from 'lucide-react'
+import { DeleteExpenseButton } from './DeleteExpenseButton'
 
 export const metadata = { title: 'Expenses' }
 
@@ -49,6 +50,10 @@ export default async function ExpensesPage({
 }) {
   const params = await searchParams
   const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
+  const canEditDelete = ['owner', 'admin', 'hr', 'manager'].includes((profileRaw as { role: string } | null)?.role ?? '')
 
   const today = new Date().toISOString().split('T')[0]
   const firstOfMonth = today.slice(0, 7) + '-01'
@@ -177,11 +182,12 @@ export default async function ExpensesPage({
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Description</th>
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Payment</th>
                     <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Amount</th>
+                    {canEditDelete && <th className="px-4 py-3" />}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {expenses.map((e) => (
-                    <tr key={e.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={e.id} className="hover:bg-slate-50 transition-colors group">
                       <td className="px-5 py-3.5 text-sm text-slate-600 whitespace-nowrap">{formatDate(e.expense_date)}</td>
                       <td className="px-4 py-3.5 text-xs text-slate-400 font-mono">{e.expense_number}</td>
                       <td className="px-4 py-3.5">
@@ -209,6 +215,20 @@ export default async function ExpensesPage({
                       <td className="px-5 py-3.5 text-right text-sm font-semibold text-red-600">
                         {formatCurrency(e.amount)}
                       </td>
+                      {canEditDelete && (
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Link
+                              href={`/finance/expenses/${e.id}/edit`}
+                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Link>
+                            <DeleteExpenseButton id={e.id} />
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -216,6 +236,7 @@ export default async function ExpensesPage({
                   <tr className="bg-slate-50 border-t border-slate-200">
                     <td colSpan={5} className="px-5 py-3 text-sm font-bold text-slate-700">Total</td>
                     <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(totalAmount)}</td>
+                    {canEditDelete && <td />}
                   </tr>
                 </tfoot>
               </table>

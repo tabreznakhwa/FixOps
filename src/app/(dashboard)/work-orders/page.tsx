@@ -14,7 +14,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
 
   let query = supabase
     .from('work_orders')
-    .select('id, work_order_number, job_description, priority, status, payment_status, scheduled_date, final_amount, customers(full_name), users!work_orders_assigned_to_fkey(full_name)')
+    .select('id, work_order_number, job_description, priority, status, payment_status, scheduled_date, final_amount, customers(full_name), users!work_orders_assigned_to_fkey(full_name), invoices(id, payment_status)')
     .order('created_at', { ascending: false })
     .limit(hasDateFilter ? 1000 : 100)
 
@@ -33,6 +33,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
     id: string; work_order_number: string; job_description: string | null; priority: string; status: string;
     payment_status: string; scheduled_date: string | null; final_amount: number;
     customers: { full_name: string } | null; users: { full_name: string } | null
+    invoices: Array<{ id: string; payment_status: string }> | null
   }>
 
   return (
@@ -105,7 +106,11 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                       </td>
                       <td className="px-4 py-3.5 hidden sm:table-cell">
                         <p className="text-sm font-bold text-slate-900">{formatCurrency(wo.final_amount)}</p>
-                        <p className={`text-xs ${getStatusColor(wo.payment_status)}`}>{wo.payment_status}</p>
+                        {(() => {
+                          const invoiceStatus = wo.invoices?.[0]?.payment_status
+                          const displayStatus = invoiceStatus ?? wo.payment_status
+                          return <p className={`text-xs ${getStatusColor(displayStatus)}`}>{displayStatus}</p>
+                        })()}
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <Link

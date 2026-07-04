@@ -86,6 +86,40 @@ export async function POST(request: NextRequest) {
 
     if (ledgerError) throw ledgerError
 
+    // If this payment is against an invoice, check if it's now fully paid and sync statuses
+    if (invoice_id) {
+      const { data: invoiceData } = await (supabase as any)
+        .from('invoices')
+        .select('id, total_amount, payment_status, work_order_id')
+        .eq('id', invoice_id)
+        .single()
+
+      if (invoiceData && invoiceData.payment_status !== 'paid') {
+        const { data: paymentsData } = await (supabase as any)
+          .from('payments')
+          .select('amount_received')
+          .eq('invoice_id', invoice_id)
+          .eq('is_cancelled', false)
+
+        const totalPaid = ((paymentsData ?? []) as Array<{ amount_received: number }>)
+          .reduce((sum, p) => sum + p.amount_received, 0)
+
+        if (totalPaid >= invoiceData.total_amount) {
+          await (supabase as any)
+            .from('invoices')
+            .update({ payment_status: 'paid' })
+            .eq('id', invoice_id)
+
+          if (invoiceData.work_order_id) {
+            await (supabase as any)
+              .from('work_orders')
+              .update({ payment_status: 'paid', status: 'paid' })
+              .eq('id', invoiceData.work_order_id)
+          }
+        }
+      }
+    }
+
     return NextResponse.json({ success: true, id: payment.id, paymentNumber: payment.payment_number })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : JSON.stringify(err)

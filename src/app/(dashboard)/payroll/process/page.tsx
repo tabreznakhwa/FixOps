@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Printer } from 'lucide-react'
 import { PayrollEntryForm } from './PayrollEntryForm'
 import { PaySalariesButton } from './PaySalariesButton'
+import { ResetRunButton } from './ResetRunButton'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
 
@@ -30,8 +31,10 @@ export default async function PayrollProcessPage({
   const admin = createAdminClient() as any
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileRaw } = await admin.from('users').select('organization_id').eq('id', user!.id).single()
-  const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
+  const { data: profileRaw } = await admin.from('users').select('organization_id, role').eq('id', user!.id).single()
+  const profile = profileRaw as { organization_id: string; role: string } | null
+  const orgId = profile?.organization_id
+  const canResetRun = ['owner', 'admin'].includes(profile?.role ?? '')
 
   // Check if a run exists for this month/year
   const { data: runRaw } = await admin
@@ -148,6 +151,9 @@ export default async function PayrollProcessPage({
               <div className="flex items-center gap-2">
                 {run && pendingCount > 0 && (
                   <PaySalariesButton runId={run.id} pendingCount={pendingCount} totalNet={totalNet} />
+                )}
+                {run && run.status !== 'paid' && canResetRun && (
+                  <ResetRunButton runId={run.id} />
                 )}
                 <PrintActions label="Print Summary" />
                 <Link href="/payroll" className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
