@@ -75,7 +75,7 @@ export default async function PayrollProcessPage({
   const { data: attendanceRaw } = staffIds.length > 0
     ? await admin
         .from('attendance')
-        .select('staff_id, status, overtime_hours, friday_ot_amount, date')
+        .select('staff_id, status, overtime_hours, friday_ot_amount, date, is_public_holiday')
         .in('staff_id', staffIds)
         .gte('date', startDate)
         .lte('date', endDate)
@@ -86,7 +86,12 @@ export default async function PayrollProcessPage({
   const normalOtPaidHoursMap: Record<string, number> = {}
   const fridayOtAmountMap: Record<string, number> = {}
 
-  for (const rec of (attendanceRaw ?? []) as Array<{ staff_id: string; status: string; overtime_hours: number; friday_ot_amount: number; date: string }>) {
+  const staffRateMap = Object.fromEntries(staff.map(s => [s.id, (s as any).friday_ot_amount ?? 0]))
+
+  for (const rec of (attendanceRaw ?? []) as Array<{
+    staff_id: string; status: string; overtime_hours: number
+    friday_ot_amount: number; date: string; is_public_holiday: boolean
+  }>) {
     if (rec.status === 'absent') {
       absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 1
     } else if (rec.status === 'half_day') {
@@ -95,8 +100,17 @@ export default async function PayrollProcessPage({
     if ((rec.overtime_hours ?? 0) > 0) {
       normalOtPaidHoursMap[rec.staff_id] = (normalOtPaidHoursMap[rec.staff_id] ?? 0) + (rec.overtime_hours ?? 0)
     }
-    if ((rec.friday_ot_amount ?? 0) > 0) {
-      fridayOtAmountMap[rec.staff_id] = (fridayOtAmountMap[rec.staff_id] ?? 0) + (rec.friday_ot_amount ?? 0)
+    // For Friday/holiday records: use stored amount if > 0, otherwise fall back to
+    // the staff profile rate (handles records created before the rate was set)
+    const [y, m, d] = rec.date.split('-').map(Number)
+    const isFridayOrHol = new Date(y, m - 1, d).getDay() === 5 || rec.is_public_holiday
+    if (isFridayOrHol && (rec.status === 'present' || rec.status === 'half_day')) {
+      const amount = (rec.friday_ot_amount ?? 0) > 0
+        ? rec.friday_ot_amount
+        : (staffRateMap[rec.staff_id] ?? 0)
+      if (amount > 0) {
+        fridayOtAmountMap[rec.staff_id] = (fridayOtAmountMap[rec.staff_id] ?? 0) + amount
+      }
     }
   }
 

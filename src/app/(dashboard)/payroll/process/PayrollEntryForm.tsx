@@ -33,7 +33,6 @@ interface Props {
 interface EntryState {
   food_deduction: string
   advance_deduction: string
-  friday_ot_override: string
 }
 
 export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPaidHoursMap, fridayOtAmountMap }: Props) {
@@ -45,10 +44,6 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
     Object.fromEntries(staff.map((s) => [s.id, {
       food_deduction: '',
       advance_deduction: '',
-      // Pre-fill from attendance if > 0, otherwise leave blank for manual entry
-      friday_ot_override: (fridayOtAmountMap[s.id] ?? 0) > 0
-        ? String(fridayOtAmountMap[s.id])
-        : '',
     }]))
   )
 
@@ -74,7 +69,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
       const entriesArray = staff.map((s) => ({
         staff_id: s.id,
         normal_ot_paid_hours: normalOtPaidHoursMap[s.id] ?? 0,
-        friday_ot_amount: parseFloat(entries[s.id]?.friday_ot_override || '0') || 0,
+        friday_ot_amount: fridayOtAmountMap[s.id] ?? 0,
         absent_days: absentDaysMap[s.id] ?? 0,
         food_deduction: parseFloat(entries[s.id]?.food_deduction || '0') || 0,
         advance_deduction: parseFloat(entries[s.id]?.advance_deduction || '0') || 0,
@@ -127,7 +122,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
         {hasAnyFridayOT && (
           <div className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-800 text-sm rounded-xl px-4 py-2.5">
             <Info className="w-4 h-4 flex-shrink-0" />
-            <span>Friday/Holiday OT pre-filled from attendance records. You can override any amount directly in the Fri/Hol OT column.</span>
+            <span>Friday/Holiday OT auto-calculated from the staff profile daily rate × number of Fridays/holidays worked.</span>
           </div>
         )}
       </div>
@@ -137,7 +132,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
           <div>
             <h3 className="font-semibold text-slate-900">Review Payroll — {staff.length} Employees</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Normal OT is auto-calculated from attendance. Fri/Hol OT, Food Deduction{hasAdvances ? ', and Advance/Loan Recovery' : ''} can be entered or overridden manually.
+              All OT values are auto-calculated. Only Food Deduction{hasAdvances ? ' and Advance/Loan Recovery' : ''} require manual entry.
             </p>
           </div>
           <button
@@ -159,9 +154,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 py-3">Food</th>
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 py-3">Fixed OT</th>
                 <th className="text-right text-xs font-semibold text-blue-500 uppercase tracking-wider px-3 py-3">Normal OT</th>
-                <th className="text-right text-xs font-semibold text-purple-500 uppercase tracking-wider px-3 py-3">
-                  Fri/Hol OT <span className="text-blue-500 normal-case">✎</span>
-                </th>
+                <th className="text-right text-xs font-semibold text-purple-500 uppercase tracking-wider px-3 py-3">Fri/Hol OT</th>
                 <th className="text-right text-xs font-semibold text-red-400 uppercase tracking-wider px-3 py-3">Absent</th>
                 <th className="text-right text-xs font-semibold text-red-400 uppercase tracking-wider px-3 py-3">Absent Deduct</th>
                 <th className="text-right text-xs font-semibold text-red-400 uppercase tracking-wider px-3 py-3">
@@ -186,7 +179,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
 
                 const normalOtPaidHours = normalOtPaidHoursMap[s.id] ?? 0
                 const normalOT = calcNormalOT(s.basic_salary ?? 0, normalOtPaidHours)
-                const fridayOT = parseFloat(entries[s.id]?.friday_ot_override || '0') || 0
+                const fridayOT = fridayOtAmountMap[s.id] ?? 0
 
                 const absentDays = absentDaysMap[s.id] ?? 0
                 const absentDeduct = calcAbsentDeduction(s, absentDays)
@@ -229,16 +222,11 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
                         </div>
                       ) : <span className="text-sm text-slate-300">—</span>}
                     </td>
-                    {/* Friday/Holiday OT — editable, pre-filled from attendance */}
+                    {/* Friday/Holiday OT — auto from staff profile rate × days worked */}
                     <td className="px-3 py-3 text-right">
-                      <input
-                        type="number" min="0" step="0.001" placeholder="0.000"
-                        value={entries[s.id]?.friday_ot_override}
-                        onChange={(e) => setEntry(s.id, 'friday_ot_override', e.target.value)}
-                        className={`w-24 text-right border rounded-lg px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                          fridayOT > 0 ? 'border-purple-300 bg-purple-50 text-purple-700' : 'border-slate-200 bg-white'
-                        }`}
-                      />
+                      {fridayOT > 0 ? (
+                        <span className="text-sm font-semibold text-purple-700">{formatCurrency(fridayOT)}</span>
+                      ) : <span className="text-sm text-slate-300">—</span>}
                     </td>
                     {/* Absent days — read-only from attendance */}
                     <td className="px-3 py-3 text-right">
