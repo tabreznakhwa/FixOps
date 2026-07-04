@@ -91,7 +91,12 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                 {workOrders.map((wo) => {
                   const customer = wo.customers as { full_name: string } | null
                   const assignee = wo.users as { full_name: string } | null
-                  const displayPaymentStatus = invoiceStatusMap[wo.id] ?? wo.payment_status
+                  const invoiceStatus = invoiceStatusMap[wo.id]
+                  // Show 'paid' if either the WO or its invoice is marked paid
+                  const displayPaymentStatus =
+                    wo.payment_status === 'paid' || invoiceStatus === 'paid'
+                      ? 'paid'
+                      : (invoiceStatus ?? wo.payment_status)
                   return (
                     <tr key={wo.id} className="hover:bg-slate-50 transition-colors group">
                       <td className="px-5 py-3.5">

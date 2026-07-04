@@ -82,6 +82,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .update({ payment_status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', workOrderId)
 
+    // Also sync the linked invoice status so the list view stays consistent
+    if (newStatus === 'paid') {
+      await supabase
+        .from('invoices')
+        .update({ payment_status: 'paid' })
+        .eq('work_order_id', workOrderId)
+        .neq('payment_status', 'paid')
+    }
+
     return NextResponse.json({ success: true, payment_number: paymentNumber, payment_status: newStatus })
   } catch (err) {
     console.error('Collect payment error:', err)
