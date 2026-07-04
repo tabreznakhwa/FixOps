@@ -51,6 +51,8 @@ export default async function NewAttendancePage({
     friday_ot_amount: number
   }>
 
+  const dateLockedToToday = !['owner', 'admin', 'hr', 'manager'].includes(userRole)
+
   return (
     <div className="animate-fade-in">
       <Header
@@ -66,7 +68,7 @@ export default async function NewAttendancePage({
         }
       />
       <div className="p-6">
-        <NewAttendanceForm staff={staff} lockedStaffId={lockedStaffId} isKiosk={isKiosk} />
+        <NewAttendanceForm staff={staff} lockedStaffId={lockedStaffId} isKiosk={isKiosk} dateLockedToToday={dateLockedToToday} />
       </div>
     </div>
   )

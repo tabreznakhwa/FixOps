@@ -72,7 +72,7 @@ export default async function PayrollProcessPage({
   const { data: attendanceRaw } = staffIds.length > 0
     ? await admin
         .from('attendance')
-        .select('staff_id, status, overtime_hours, date')
+        .select('staff_id, status, overtime_hours, friday_ot_amount, date')
         .in('staff_id', staffIds)
         .gte('date', startDate)
         .lte('date', endDate)
@@ -80,18 +80,20 @@ export default async function PayrollProcessPage({
 
   // Build attendance maps per staff
   const absentDaysMap: Record<string, number> = {}
-  // overtime_hours in attendance = actualHrs × 1.25 (paid hours equivalent)
   const normalOtPaidHoursMap: Record<string, number> = {}
+  const fridayOtAmountMap: Record<string, number> = {}
 
-  for (const rec of (attendanceRaw ?? []) as Array<{ staff_id: string; status: string; overtime_hours: number; date: string }>) {
+  for (const rec of (attendanceRaw ?? []) as Array<{ staff_id: string; status: string; overtime_hours: number; friday_ot_amount: number; date: string }>) {
     if (rec.status === 'absent') {
       absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 1
     } else if (rec.status === 'half_day') {
       absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 0.5
     }
-    // Sum paid OT hours (already × 1.25 from attendance form)
     if ((rec.overtime_hours ?? 0) > 0) {
       normalOtPaidHoursMap[rec.staff_id] = (normalOtPaidHoursMap[rec.staff_id] ?? 0) + (rec.overtime_hours ?? 0)
+    }
+    if ((rec.friday_ot_amount ?? 0) > 0) {
+      fridayOtAmountMap[rec.staff_id] = (fridayOtAmountMap[rec.staff_id] ?? 0) + (rec.friday_ot_amount ?? 0)
     }
   }
 
@@ -188,6 +190,7 @@ export default async function PayrollProcessPage({
             staff={staff}
             absentDaysMap={absentDaysMap}
             normalOtPaidHoursMap={normalOtPaidHoursMap}
+            fridayOtAmountMap={fridayOtAmountMap}
           />
         )}
 

@@ -2,11 +2,22 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Plus, CalendarCheck, UserCheck, XCircle, Clock, Pencil } from 'lucide-react'
+import { DeleteAttendanceButton } from './DeleteAttendanceButton'
 import { formatDate } from '@/lib/utils'
 import { isFriday } from '@/lib/attendance'
 import { StaffFilterSelect } from './StaffFilterSelect'
 
 export const metadata = { title: 'Attendance' }
+
+function computeTotalHours(checkIn: string | null, checkOut: string | null): number {
+  if (!checkIn || !checkOut) return 0
+  const [inH, inM] = checkIn.split(':').map(Number)
+  const [outH, outM] = checkOut.split(':').map(Number)
+  let totalMins = (outH * 60 + outM) - (inH * 60 + inM)
+  if (totalMins < 0) totalMins += 24 * 60
+  if (inH * 60 + inM <= 13 * 60 && outH * 60 + outM >= 14 * 60) totalMins -= 60
+  return Math.round(totalMins / 60 * 10) / 10
+}
 
 function getMonthLabel(ym: string) {
   const [year, month] = ym.split('-').map(Number)
@@ -57,7 +68,7 @@ export default async function AttendancePage({
   const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
   const userRole = (profileRaw as { role: string } | null)?.role ?? ''
   const isKiosk = userRole === 'attendance_kiosk'
-  const canEdit = ['owner', 'admin'].includes(userRole)
+  const canEdit = ['owner', 'admin', 'hr', 'manager'].includes(userRole)
 
   // Kiosk users see only their own records — look up their linked staff record
   let kioskStaffId: string | null = null
@@ -245,8 +256,14 @@ export default async function AttendancePage({
                     </td>
                     <td className="px-4 py-3.5 text-sm text-slate-600 hidden md:table-cell">{r.check_in ?? '—'}</td>
                     <td className="px-4 py-3.5 text-sm text-slate-600 hidden md:table-cell">{r.check_out ?? '—'}</td>
-                    <td className="px-4 py-3.5 text-right text-sm text-slate-600 hidden lg:table-cell">
-                      {r.hours_worked > 0 ? `${r.hours_worked}h` : '—'}
+                    <td className="px-4 py-3.5 text-right hidden lg:table-cell">
+                      {r.hours_worked > 0 ? (
+                        <span className="text-sm text-slate-600">{r.hours_worked}h</span>
+                      ) : (r.is_public_holiday || isFriday(r.date)) && r.check_in && r.check_out ? (
+                        <span className="text-sm font-semibold text-purple-600">{computeTotalHours(r.check_in, r.check_out)}h OT</span>
+                      ) : (
+                        <span className="text-sm text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-right hidden lg:table-cell">
                       {(r.is_public_holiday || isFriday(r.date)) && r.friday_ot_amount > 0 ? (
@@ -267,10 +284,13 @@ export default async function AttendancePage({
                     </td>
                     {canEdit && (
                       <td className="px-4 py-3.5">
-                        <Link href={`/attendance/${r.id}/edit`}
-                          className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
-                          <Pencil className="w-3.5 h-3.5" /> Edit
-                        </Link>
+                        <div className="flex items-center gap-3">
+                          <Link href={`/attendance/${r.id}/edit`}
+                            className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
+                            <Pencil className="w-3.5 h-3.5" /> Edit
+                          </Link>
+                          <DeleteAttendanceButton id={r.id} />
+                        </div>
                       </td>
                     )}
                   </tr>

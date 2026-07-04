@@ -99,7 +99,7 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
       amount: absentDeduction,
     }] : []),
     ...(foodDeduction > 0 ? [{ label: `Food Deduction (${absentDays} Day${absentDays !== 1 ? 's' : ''})`, amount: foodDeduction }] : []),
-    ...(slip.advance_deduction > 0 ? [{ label: 'Advance Recovery', amount: slip.advance_deduction }] : []),
+    ...(slip.advance_deduction > 0 ? [{ label: 'Advance / Loan Recovery', amount: slip.advance_deduction }] : []),
   ]
   const totalDeductionsAmt = absentDeduction + foodDeduction + (slip.advance_deduction ?? 0)
 

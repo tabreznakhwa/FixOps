@@ -13,7 +13,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const profile = profileRaw as { organization_id: string; role: string } | null
     if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const allowed = ['owner', 'admin']
+    const allowed = ['owner', 'admin', 'hr', 'manager']
     if (!allowed.includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -38,6 +38,37 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         is_public_holiday: Boolean(is_public_holiday ?? false),
         friday_ot_amount: Number(body.friday_ot_amount ?? 0),
       })
+      .eq('id', id)
+      .eq('organization_id', profile.organization_id)
+
+    if (error) throw error
+    return NextResponse.json({ success: true })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : JSON.stringify(err)
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+}
+
+export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const supabaseUser = await createClient()
+    const { data: { user } } = await supabaseUser.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { data: profileRaw } = await (supabaseUser as any)
+      .from('users').select('organization_id, role').eq('id', user.id).single()
+    const profile = profileRaw as { organization_id: string; role: string } | null
+    if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    if (!['owner', 'admin', 'hr', 'manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const admin = createAdminClient() as any
+    const { error } = await admin
+      .from('attendance')
+      .delete()
       .eq('id', id)
       .eq('organization_id', profile.organization_id)
 

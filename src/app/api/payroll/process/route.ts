@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 interface StaffEntry {
   staff_id: string
   normal_ot_paid_hours: number  // sum of attendance.overtime_hours (already ×1.25)
+  friday_ot_amount: number      // sum of attendance.friday_ot_amount (KWD)
   absent_days: number
   food_deduction: number
   advance_deduction: number
@@ -64,15 +65,13 @@ export async function POST(request: Request) {
     const fixedOT = s.fixed_overtime_monthly ?? 0
     const allowanceName = s.allowance_name ?? 'Allowance'
 
-    // Normal OT: attendance.overtime_hours is already paid hours (actual × 1.25)
-    // So formula is just: hourlyRate × paidHours (no extra ×1.25)
     const normalOtPaidHours = entry?.normal_ot_paid_hours ?? 0
     const hourlyRate = basic / 30 / 8
     const normalOT = hourlyRate * normalOtPaidHours
+    const fridayOT = entry?.friday_ot_amount ?? 0
 
     const advDeduct = Math.min(entry?.advance_deduction ?? 0, s.advance_balance ?? 0)
 
-    // Absent deduction: (basic + allowance + fixedOT) / 30 × absentDays
     const absentDays = entry?.absent_days ?? 0
     const absentDeduction = absentDays > 0
       ? ((basic + allowance + fixedOT) / 30) * absentDays
@@ -81,7 +80,7 @@ export async function POST(request: Request) {
     const foodDeduction = entry?.food_deduction ?? 0
 
     const totalAllowance = allowance + food
-    const totalOT = fixedOT + normalOT
+    const totalOT = fixedOT + normalOT + fridayOT
     const gross = basic + totalAllowance + totalOT
     const totalAbsenceDeduction = absentDeduction + foodDeduction
     const net = gross - advDeduct - totalAbsenceDeduction
@@ -102,8 +101,8 @@ export async function POST(request: Request) {
       other_allowance: s.other_allowance ?? 0,
       allowance_name: allowanceName,
       overtime_amount: fixedOT,       // Fixed OT from profile
-      normal_overtime: normalOT,      // Normal OT from attendance
-      friday_overtime: 0,             // Merged into normal_overtime via attendance
+      normal_overtime: normalOT,      // Normal OT (after 8 PM on weekdays)
+      friday_overtime: fridayOT,      // Friday/Holiday OT from attendance records
       gross_salary: gross,
       absent_days: absentDays,
       absent_deduction: absentDeduction,

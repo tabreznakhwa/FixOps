@@ -25,8 +25,9 @@ interface Props {
   month: number
   year: number
   staff: StaffRow[]
-  absentDaysMap: Record<string, number>       // from attendance: absent=1, half=0.5
-  normalOtPaidHoursMap: Record<string, number> // sum of attendance.overtime_hours (already ×1.25)
+  absentDaysMap: Record<string, number>
+  normalOtPaidHoursMap: Record<string, number>
+  fridayOtAmountMap: Record<string, number>  // sum of attendance.friday_ot_amount (KWD)
 }
 
 interface EntryState {
@@ -34,7 +35,7 @@ interface EntryState {
   advance_deduction: string
 }
 
-export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPaidHoursMap }: Props) {
+export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPaidHoursMap, fridayOtAmountMap }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -68,6 +69,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
       const entriesArray = staff.map((s) => ({
         staff_id: s.id,
         normal_ot_paid_hours: normalOtPaidHoursMap[s.id] ?? 0,
+        friday_ot_amount: fridayOtAmountMap[s.id] ?? 0,
         absent_days: absentDaysMap[s.id] ?? 0,
         food_deduction: parseFloat(entries[s.id]?.food_deduction || '0') || 0,
         advance_deduction: parseFloat(entries[s.id]?.advance_deduction || '0') || 0,
@@ -90,6 +92,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
   const hasAdvances = staff.some(s => (s.advance_balance ?? 0) > 0)
   const hasAnyAbsent = Object.values(absentDaysMap).some(d => d > 0)
   const hasAnyOT = Object.values(normalOtPaidHoursMap).some(h => h > 0)
+  const hasAnyFridayOT = Object.values(fridayOtAmountMap).some(a => a > 0)
 
   return (
     <div className="space-y-4">
@@ -116,6 +119,12 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
             <span>Normal OT auto-calculated from attendance (formula: Basic ÷ 30 ÷ 8 × OT paid hours). Fixed OT from staff profile.</span>
           </div>
         )}
+        {hasAnyFridayOT && (
+          <div className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-800 text-sm rounded-xl px-4 py-2.5">
+            <Info className="w-4 h-4 flex-shrink-0" />
+            <span>Friday/Holiday OT summed from attendance records (KWD amount set per employee in staff profile).</span>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -123,7 +132,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
           <div>
             <h3 className="font-semibold text-slate-900">Review Payroll — {staff.length} Employees</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              All values are auto-calculated from attendance. Only Food Deduction{hasAdvances ? ' and Advance Recovery' : ''} require manual entry.
+              All OT values are auto-calculated from attendance. Only Food Deduction{hasAdvances ? ' and Advance/Loan Recovery' : ''} require manual entry.
             </p>
           </div>
           <button
@@ -145,6 +154,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 py-3">Food</th>
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 py-3">Fixed OT</th>
                 <th className="text-right text-xs font-semibold text-blue-500 uppercase tracking-wider px-3 py-3">Normal OT</th>
+                <th className="text-right text-xs font-semibold text-purple-500 uppercase tracking-wider px-3 py-3">Fri/Hol OT</th>
                 <th className="text-right text-xs font-semibold text-red-400 uppercase tracking-wider px-3 py-3">Absent</th>
                 <th className="text-right text-xs font-semibold text-red-400 uppercase tracking-wider px-3 py-3">Absent Deduct</th>
                 <th className="text-right text-xs font-semibold text-red-400 uppercase tracking-wider px-3 py-3">
@@ -169,6 +179,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
 
                 const normalOtPaidHours = normalOtPaidHoursMap[s.id] ?? 0
                 const normalOT = calcNormalOT(s.basic_salary ?? 0, normalOtPaidHours)
+                const fridayOT = fridayOtAmountMap[s.id] ?? 0
 
                 const absentDays = absentDaysMap[s.id] ?? 0
                 const absentDeduct = calcAbsentDeduction(s, absentDays)
@@ -177,7 +188,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
                 const advDeduct = parseFloat(entries[s.id]?.advance_deduction || '0') || 0
                 const advBalance = s.advance_balance ?? 0
 
-                const gross = (s.basic_salary ?? 0) + allowance + food + fixedOT + normalOT
+                const gross = (s.basic_salary ?? 0) + allowance + food + fixedOT + normalOT + fridayOT
                 const net = gross - absentDeduct - foodDeduct - advDeduct
                 const allowanceName = s.allowance_name ?? 'Allowance'
 
@@ -209,6 +220,12 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
                           <span className="text-sm font-semibold text-blue-700">{formatCurrency(normalOT)}</span>
                           <p className="text-xs text-slate-400">{normalOtPaidHours.toFixed(2)}h paid</p>
                         </div>
+                      ) : <span className="text-sm text-slate-300">—</span>}
+                    </td>
+                    {/* Friday/Holiday OT — auto-summed from attendance records */}
+                    <td className="px-3 py-3 text-right">
+                      {fridayOT > 0 ? (
+                        <span className="text-sm font-semibold text-purple-700">{formatCurrency(fridayOT)}</span>
                       ) : <span className="text-sm text-slate-300">—</span>}
                     </td>
                     {/* Absent days — read-only from attendance */}

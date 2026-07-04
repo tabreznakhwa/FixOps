@@ -32,6 +32,14 @@ export async function POST(request: NextRequest) {
     if (!date) return NextResponse.json({ error: 'Date is required' }, { status: 400 })
     if (!status) return NextResponse.json({ error: 'Status is required' }, { status: 400 })
 
+    const privileged = ['owner', 'admin', 'hr', 'manager']
+    if (!privileged.includes(profile.role)) {
+      const today = new Date().toISOString().split('T')[0]
+      if (date !== today) {
+        return NextResponse.json({ error: 'You can only mark attendance for today' }, { status: 403 })
+      }
+    }
+
     const supabase = createAdminClient()
 
     const { data: record, error } = await (supabase as any)

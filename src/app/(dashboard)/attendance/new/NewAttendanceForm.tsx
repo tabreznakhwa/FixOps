@@ -14,6 +14,7 @@ interface Props {
   staff: StaffMember[]
   lockedStaffId?: string | null
   isKiosk?: boolean
+  dateLockedToToday?: boolean
 }
 
 const inputClass =
@@ -24,7 +25,7 @@ function fmtHrs(h: number): string {
   return h % 1 === 0 ? `${h}h` : `${h.toFixed(2)}h`
 }
 
-export function NewAttendanceForm({ staff, lockedStaffId, isKiosk }: Props) {
+export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToToday }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('present')
@@ -167,13 +168,19 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk }: Props) {
 
         <div>
           <label className={labelClass}>Date <span className="text-red-500">*</span></label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => handleDateChange(e.target.value)}
-            required
-            className={inputClass}
-          />
+          {dateLockedToToday ? (
+            <div className={inputClass + ' bg-slate-50 text-slate-600 cursor-not-allowed'}>
+              {date} <span className="text-xs text-slate-400 ml-1">(today only)</span>
+            </div>
+          ) : (
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => handleDateChange(e.target.value)}
+              required
+              className={inputClass}
+            />
+          )}
           {isFridayDate && (
             <p className="text-xs text-purple-600 font-semibold mt-1.5">Friday — overtime rules apply automatically</p>
           )}
