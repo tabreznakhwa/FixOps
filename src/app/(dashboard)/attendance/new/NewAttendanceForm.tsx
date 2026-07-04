@@ -11,6 +11,7 @@ interface StaffMember {
 
 interface Props {
   staff: StaffMember[]
+  lockedStaffId?: string | null
 }
 
 const OT_MULTIPLIER = 1.25 // Normal OT: 1 hr = 1.25 paid hrs (display only — calc lives in @/lib/attendance)
@@ -23,7 +24,7 @@ function fmtHrs(h: number): string {
   return h % 1 === 0 ? `${h}h` : `${h.toFixed(2)}h`
 }
 
-export function NewAttendanceForm({ staff }: Props) {
+export function NewAttendanceForm({ staff, lockedStaffId }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('present')
@@ -89,14 +90,23 @@ export function NewAttendanceForm({ staff }: Props) {
 
         <div>
           <label className={labelClass}>Staff Member <span className="text-red-500">*</span></label>
-          <select name="staff_id" required className={inputClass}>
-            <option value="">Select staff member…</option>
-            {staff.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.full_name}{s.designation ? ` — ${s.designation}` : ''}
-              </option>
-            ))}
-          </select>
+          {lockedStaffId ? (
+            <>
+              <input type="hidden" name="staff_id" value={lockedStaffId} />
+              <div className={inputClass + ' bg-slate-50 text-slate-600 cursor-not-allowed'}>
+                {staff[0]?.full_name ?? 'Your account'}
+              </div>
+            </>
+          ) : (
+            <select name="staff_id" required className={inputClass}>
+              <option value="">Select staff member…</option>
+              {staff.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.full_name}{s.designation ? ` — ${s.designation}` : ''}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div>

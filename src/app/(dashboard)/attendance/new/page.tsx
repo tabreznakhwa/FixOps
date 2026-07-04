@@ -6,14 +6,27 @@ import { NewAttendanceForm } from './NewAttendanceForm'
 
 export const metadata = { title: 'Mark Attendance' }
 
-export default async function NewAttendancePage() {
+export default async function NewAttendancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ locked_staff_id?: string }>
+}) {
+  const params = await searchParams
+  const lockedStaffId = params.locked_staff_id ?? null
   const supabase = await createClient()
 
-  const { data: staffRaw } = await supabase
+  let staffQuery = supabase
     .from('staff')
     .select('id, full_name, designation')
     .eq('employment_status', 'active')
     .order('full_name')
+
+  // Kiosk: only load their own staff record
+  if (lockedStaffId) {
+    staffQuery = (staffQuery as any).eq('id', lockedStaffId)
+  }
+
+  const { data: staffRaw } = await staffQuery
 
   const staff = (staffRaw ?? []) as Array<{
     id: string
@@ -36,7 +49,7 @@ export default async function NewAttendancePage() {
         }
       />
       <div className="p-6">
-        <NewAttendanceForm staff={staff} />
+        <NewAttendanceForm staff={staff} lockedStaffId={lockedStaffId} />
       </div>
     </div>
   )
