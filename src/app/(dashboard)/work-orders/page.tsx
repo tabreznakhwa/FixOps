@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Plus, ClipboardList } from 'lucide-react'
@@ -14,7 +14,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
 
   let query = supabase
     .from('work_orders')
-    .select('id, work_order_number, job_description, priority, status, payment_status, scheduled_date, final_amount, customers(full_name), users!work_orders_assigned_to_fkey(full_name), invoices(id, payment_status)')
+    .select('id, work_order_number, job_description, priority, status, payment_status, scheduled_date, final_amount, customers(full_name), users!work_orders_assigned_to_fkey(full_name)')
     .order('created_at', { ascending: false })
     .limit(hasDateFilter ? 1000 : 100)
 
@@ -29,12 +29,26 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
   if (params.to) query = query.lte('scheduled_date', params.to)
 
   const { data: workOrdersRaw } = await query
-  const workOrders = workOrdersRaw as unknown as Array<{
+  const workOrders = (workOrdersRaw ?? []) as unknown as Array<{
     id: string; work_order_number: string; job_description: string | null; priority: string; status: string;
     payment_status: string; scheduled_date: string | null; final_amount: number;
     customers: { full_name: string } | null; users: { full_name: string } | null
-    invoices: Array<{ id: string; payment_status: string }> | null
   }>
+
+  // Fetch invoice payment status for these work orders separately (avoids FK join issues)
+  const woIds = workOrders.map((wo) => wo.id)
+  const invoiceStatusMap: Record<string, string> = {}
+  if (woIds.length > 0) {
+    const admin = createAdminClient() as any
+    const { data: invoicesRaw } = await admin
+      .from('invoices')
+      .select('work_order_id, payment_status')
+      .in('work_order_id', woIds)
+    for (const inv of (invoicesRaw ?? []) as Array<{ work_order_id: string; payment_status: string }>) {
+      // Use the most recent invoice status (last write wins if multiple invoices per WO)
+      invoiceStatusMap[inv.work_order_id] = inv.payment_status
+    }
+  }
 
   return (
     <div className="animate-fade-in">
@@ -77,6 +91,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                 {workOrders.map((wo) => {
                   const customer = wo.customers as { full_name: string } | null
                   const assignee = wo.users as { full_name: string } | null
+                  const displayPaymentStatus = invoiceStatusMap[wo.id] ?? wo.payment_status
                   return (
                     <tr key={wo.id} className="hover:bg-slate-50 transition-colors group">
                       <td className="px-5 py-3.5">
@@ -106,11 +121,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                       </td>
                       <td className="px-4 py-3.5 hidden sm:table-cell">
                         <p className="text-sm font-bold text-slate-900">{formatCurrency(wo.final_amount)}</p>
-                        {(() => {
-                          const invoiceStatus = wo.invoices?.[0]?.payment_status
-                          const displayStatus = invoiceStatus ?? wo.payment_status
-                          return <p className={`text-xs ${getStatusColor(displayStatus)}`}>{displayStatus}</p>
-                        })()}
+                        <p className={`text-xs ${getStatusColor(displayPaymentStatus)}`}>{displayPaymentStatus}</p>
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <Link
