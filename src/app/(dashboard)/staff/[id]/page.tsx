@@ -69,11 +69,11 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
 
   const { data: advancesRaw } = await (supabase as any)
     .from('staff_advances')
-    .select('id, type, amount, issued_date, notes')
+    .select('id, type, amount, issued_date, payment_method, notes')
     .eq('staff_id', id)
     .order('issued_date', { ascending: false })
   const advances = (advancesRaw ?? []) as Array<{
-    id: string; type: string; amount: number; issued_date: string; notes: string | null
+    id: string; type: string; amount: number; issued_date: string; payment_method: string | null; notes: string | null
   }>
 
   const visaDays = daysUntil(s.visa_expiry_date)
