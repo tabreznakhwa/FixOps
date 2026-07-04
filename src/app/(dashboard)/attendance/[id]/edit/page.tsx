@@ -19,7 +19,7 @@ export default async function EditAttendancePage({ params }: { params: Promise<{
   const admin = createAdminClient() as any
   const { data: recordRaw } = await admin
     .from('attendance')
-    .select('id, date, status, check_in, check_out, hours_worked, overtime_hours, notes, is_public_holiday, staff(full_name)')
+    .select('id, date, status, check_in, check_out, hours_worked, overtime_hours, notes, is_public_holiday, friday_ot_amount, staff(full_name, friday_ot_amount)')
     .eq('id', id)
     .single()
 

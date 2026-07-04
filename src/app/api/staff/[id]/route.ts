@@ -70,6 +70,7 @@ export async function PATCH(
       other_allowance: Number(body.other_allowance ?? 0),
       allowance_name: body.allowance_name?.trim() || 'Allowance',
       fixed_overtime_monthly: Number(body.fixed_overtime_monthly ?? 0),
+      friday_ot_amount: Number(body.friday_ot_amount ?? 0),
       overtime_eligible: Boolean(body.overtime_eligible),
       bank_name: body.bank_name || null,
       iban: body.iban || null,

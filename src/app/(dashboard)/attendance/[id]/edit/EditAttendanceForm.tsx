@@ -8,7 +8,8 @@ interface Record {
   check_in: string | null; check_out: string | null
   hours_worked: number; overtime_hours: number
   notes: string | null; is_public_holiday: boolean
-  staff: { full_name: string } | null
+  friday_ot_amount: number
+  staff: { full_name: string; friday_ot_amount: number } | null
 }
 
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white'
@@ -25,6 +26,10 @@ export function EditAttendanceForm({ record }: { record: Record }) {
   const [checkOut, setCheckOut] = useState(record.check_out ?? DUTY_END)
   const [notes, setNotes] = useState(record.notes ?? '')
   const [isPublicHoliday, setIsPublicHoliday] = useState(record.is_public_holiday ?? false)
+  // Pre-fill from the saved record value; fall back to staff profile's default
+  const [fridayOtAmount, setFridayOtAmount] = useState(
+    String(record.friday_ot_amount || record.staff?.friday_ot_amount || 0)
+  )
 
   const isFridayDate = isFriday(date)
   const isFridayOrHoliday = isFridayDate || isPublicHoliday
@@ -47,6 +52,7 @@ export function EditAttendanceForm({ record }: { record: Record }) {
           check_out: showTimes ? checkOut || null : null,
           hours_worked: breakdown ? breakdown.hoursWorked : 0,
           overtime_hours: breakdown ? breakdown.normalOtPaidHrs : 0,
+          friday_ot_amount: isFridayOrHoliday && showTimes ? Number(fridayOtAmount) || 0 : 0,
           is_public_holiday: isPublicHoliday,
           notes: notes.trim() || null,
         }),
@@ -136,6 +142,24 @@ export function EditAttendanceForm({ record }: { record: Record }) {
               </div>
             </div>
 
+            {/* Friday/Holiday fixed OT amount — editable per record */}
+            {isFridayOrHoliday && (
+              <div>
+                <label className={labelClass}>
+                  Friday/Holiday OT Amount (KWD)
+                  <span className="ml-1 text-xs text-slate-400 font-normal">pre-filled from staff profile</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={fridayOtAmount}
+                  onChange={(e) => setFridayOtAmount(e.target.value)}
+                  className={`${inputClass} text-right`}
+                />
+              </div>
+            )}
+
             {breakdown && checkIn && checkOut && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 divide-y divide-slate-200 text-sm overflow-hidden">
                 {isFridayOrHoliday ? (
@@ -150,7 +174,7 @@ export function EditAttendanceForm({ record }: { record: Record }) {
                     <div className={`px-4 py-3 ${breakdown.fixedOtHrs > 0 ? 'bg-blue-50' : ''}`}>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-semibold text-slate-800">Fixed Overtime</p>
+                          <p className="font-semibold text-slate-800">Fixed Overtime Hours</p>
                           <p className="text-xs text-slate-400 mt-0.5">First 8 hours worked</p>
                         </div>
                         <p className="font-bold text-blue-700 text-base">{fmtHrs(breakdown.fixedOtHrs)}</p>
@@ -158,13 +182,12 @@ export function EditAttendanceForm({ record }: { record: Record }) {
                       {breakdown.lunchDeducted && (
                         <p className="text-xs text-slate-400 mt-1">Lunch break (1:00–2:00 PM) deducted</p>
                       )}
-                      <p className="text-xs text-blue-600 mt-1">Monthly fixed OT amount is set in the staff profile</p>
                     </div>
 
                     {breakdown.normalOtActualHrs > 0 ? (
                       <div className="flex items-center justify-between px-4 py-3 bg-amber-50">
                         <div>
-                          <p className="font-semibold text-amber-800">Normal Overtime (beyond 8h)</p>
+                          <p className="font-semibold text-amber-800">Additional OT (beyond 8h)</p>
                           <p className="text-xs text-amber-600 mt-0.5">
                             {fmtHrs(breakdown.normalOtActualHrs)} actual × 1.25 = {fmtHrs(breakdown.normalOtPaidHrs)} paid
                           </p>
@@ -174,8 +197,8 @@ export function EditAttendanceForm({ record }: { record: Record }) {
                     ) : (
                       <div className="flex items-center justify-between px-4 py-3">
                         <div>
-                          <p className="font-semibold text-slate-600">Normal Overtime (beyond 8h)</p>
-                          <p className="text-xs text-slate-400 mt-0.5">1 hr worked = 1.25 hrs paid</p>
+                          <p className="font-semibold text-slate-600">Additional OT (beyond 8h)</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Only if worked more than 8 hours</p>
                         </div>
                         <p className="text-slate-400 text-sm">—</p>
                       </div>

@@ -17,7 +17,7 @@ export default async function NewAttendancePage({
 
   let staffQuery = supabase
     .from('staff')
-    .select('id, full_name, designation')
+    .select('id, full_name, designation, friday_ot_amount')
     .eq('employment_status', 'active')
     .order('full_name')
 
@@ -32,6 +32,7 @@ export default async function NewAttendancePage({
     id: string
     full_name: string
     designation: string | null
+    friday_ot_amount: number
   }>
 
   return (

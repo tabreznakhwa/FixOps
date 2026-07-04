@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
         status,
         notes: notes?.trim() || null,
         is_public_holiday: Boolean(is_public_holiday ?? false),
+        friday_ot_amount: Number(body.friday_ot_amount ?? 0),
         created_by: user.id,
       })
       .select('id')

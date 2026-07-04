@@ -36,6 +36,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         status,
         notes: notes?.trim() || null,
         is_public_holiday: Boolean(is_public_holiday ?? false),
+        friday_ot_amount: Number(body.friday_ot_amount ?? 0),
       })
       .eq('id', id)
       .eq('organization_id', profile.organization_id)

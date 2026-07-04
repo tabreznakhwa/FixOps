@@ -83,7 +83,7 @@ export default async function AttendancePage({
 
   let query = (supabase as any)
     .from('attendance')
-    .select('id, staff_id, date, check_in, check_out, hours_worked, overtime_hours, status, notes, is_public_holiday, staff(full_name)')
+    .select('id, staff_id, date, check_in, check_out, hours_worked, overtime_hours, status, notes, is_public_holiday, friday_ot_amount, staff(full_name)')
     .gte('date', startDate)
     .lte('date', endDate)
     .order('date', { ascending: false })
@@ -109,6 +109,7 @@ export default async function AttendancePage({
     status: string
     notes: string | null
     is_public_holiday: boolean
+    friday_ot_amount: number
     staff: { full_name: string } | null
   }>
 
@@ -119,6 +120,7 @@ export default async function AttendancePage({
     half_day: records.filter((r) => r.status === 'half_day').length,
     leave: records.filter((r) => r.status === 'leave').length,
     overtime: records.reduce((s, r) => s + (r.overtime_hours ?? 0), 0),
+    fridayOt: records.reduce((s, r) => s + (r.friday_ot_amount ?? 0), 0),
   }
 
   const prev = prevMonth(currentMonth)
@@ -176,13 +178,14 @@ export default async function AttendancePage({
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {[
             { label: 'Present', value: summary.present, icon: UserCheck, color: 'text-green-600', bg: 'bg-green-50' },
             { label: 'Absent', value: summary.absent, icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
             { label: 'Half Day', value: summary.half_day, icon: CalendarCheck, color: 'text-amber-600', bg: 'bg-amber-50' },
             { label: 'Leave', value: summary.leave, icon: CalendarCheck, color: 'text-blue-600', bg: 'bg-blue-50' },
-            { label: 'OT Hours', value: summary.overtime.toFixed(1), icon: Clock, color: 'text-purple-600', bg: 'bg-purple-50' },
+            { label: 'Fri/Hol OT', value: `KWD ${summary.fridayOt.toFixed(3)}`, icon: Clock, color: 'text-purple-600', bg: 'bg-purple-50' },
+            { label: 'Add. OT Hrs', value: summary.overtime.toFixed(1), icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
           ].map(({ label, value, icon: Icon, color, bg }) => (
             <div key={label} className="bg-white rounded-xl border border-slate-200 p-4">
               <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center mb-2`}>
@@ -217,7 +220,8 @@ export default async function AttendancePage({
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Check In</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Check Out</th>
                   <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Hours</th>
-                  <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">OT Hrs</th>
+                  <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Friday/Holiday OT</th>
+                  <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Add. OT Hrs</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3 hidden xl:table-cell">Notes</th>
                   {canEdit && <th className="px-4 py-3" />}
                 </tr>
@@ -245,8 +249,15 @@ export default async function AttendancePage({
                       {r.hours_worked > 0 ? `${r.hours_worked}h` : '—'}
                     </td>
                     <td className="px-4 py-3.5 text-right hidden lg:table-cell">
+                      {(r.is_public_holiday || isFriday(r.date)) && r.friday_ot_amount > 0 ? (
+                        <span className="text-sm font-semibold text-purple-600">KWD {r.friday_ot_amount.toFixed(3)}</span>
+                      ) : (
+                        <span className="text-sm text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-right hidden lg:table-cell">
                       {r.overtime_hours > 0 ? (
-                        <span className="text-sm font-semibold text-purple-600">{r.overtime_hours}h</span>
+                        <span className="text-sm font-semibold text-amber-600">{r.overtime_hours}h</span>
                       ) : (
                         <span className="text-sm text-slate-400">—</span>
                       )}

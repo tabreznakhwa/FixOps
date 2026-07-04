@@ -11,6 +11,7 @@ interface StaffRecord {
   basic_salary: number; housing_allowance: number; transport_allowance: number
   food_allowance: number | null; other_allowance: number; allowance_name: string | null
   fixed_overtime_monthly: number
+  friday_ot_amount: number
   overtime_eligible: boolean; bank_name: string | null; iban: string | null
   employment_status: string; notes: string | null
 }
@@ -40,6 +41,7 @@ export function StaffEditForm({ staff }: { staff: StaffRecord }) {
     other_allowance: String((staff.housing_allowance ?? 0) + (staff.transport_allowance ?? 0) + (staff.other_allowance ?? 0)),
     allowance_name: staff.allowance_name ?? 'Allowance',
     fixed_overtime_monthly: String(staff.fixed_overtime_monthly ?? 0),
+    friday_ot_amount: String(staff.friday_ot_amount ?? 0),
     overtime_eligible: staff.overtime_eligible ?? false,
     bank_name: staff.bank_name ?? '',
     iban: staff.iban ?? '',
@@ -73,6 +75,7 @@ export function StaffEditForm({ staff }: { staff: StaffRecord }) {
           other_allowance: Number(form.other_allowance),
           allowance_name: form.allowance_name || 'Allowance',
           fixed_overtime_monthly: Number(form.fixed_overtime_monthly),
+          friday_ot_amount: Number(form.friday_ot_amount),
         }),
       })
       const data = await res.json()
@@ -185,11 +188,17 @@ export function StaffEditForm({ staff }: { staff: StaffRecord }) {
             <input type="number" min="0" step="0.01" value={form.other_allowance}
               onChange={(e) => set('other_allowance', e.target.value)} className={`${inputClass} text-right`} />
           </div>
-          <div key="fixed_overtime_monthly" className="col-span-2">
-            <label className={labelClass}>Fixed OT (Monthly)</label>
+          <div key="fixed_overtime_monthly">
+            <label className={labelClass}>Fixed OT (Monthly) KWD</label>
             <input type="number" min="0" step="0.01" value={form.fixed_overtime_monthly}
               onChange={(e) => set('fixed_overtime_monthly', e.target.value)} className={`${inputClass} text-right`} />
-            <p className="text-xs text-slate-400 mt-1">Deducted proportionally if absent days are entered during payroll</p>
+            <p className="text-xs text-slate-400 mt-1">Deducted proportionally for absent days in payroll</p>
+          </div>
+          <div key="friday_ot_amount">
+            <label className={labelClass}>Friday/Holiday OT (per day) KWD</label>
+            <input type="number" min="0" step="0.01" value={form.friday_ot_amount}
+              onChange={(e) => set('friday_ot_amount', e.target.value)} className={`${inputClass} text-right`} />
+            <p className="text-xs text-slate-400 mt-1">Pre-filled on Friday/holiday attendance records</p>
           </div>
           <div className="col-span-2 flex items-center gap-2 mt-1">
             <input type="checkbox" id="ot_eligible" checked={form.overtime_eligible}
