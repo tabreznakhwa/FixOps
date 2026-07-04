@@ -27,6 +27,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
     joining_date: string; employment_status: string; basic_salary: number
     housing_allowance: number; transport_allowance: number; food_allowance: number
     other_allowance: number; allowance_name: string | null; fixed_overtime_monthly: number; friday_ot_amount: number; overtime_eligible: boolean
+    opening_advance: number; opening_loan: number
     mobile_number: string | null; email: string | null; nationality: string | null
     passport_number: string | null; visa_number: string | null; emirates_id: string | null
     visa_expiry_date: string | null; passport_expiry_date: string | null

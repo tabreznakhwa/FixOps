@@ -28,8 +28,8 @@ export async function PATCH(
     const body = await request.json()
     const admin = createAdminClient() as any
 
-    // Verify staff belongs to same org
-    const { data: existing } = await admin.from('staff').select('organization_id, full_name').eq('id', staffId).single()
+    // Verify staff belongs to same org and get current opening balances for delta calculation
+    const { data: existing } = await admin.from('staff').select('organization_id, full_name, opening_advance, opening_loan, advance_balance').eq('id', staffId).single()
     if (!existing || existing.organization_id !== profile.organization_id) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
@@ -51,6 +51,13 @@ export async function PATCH(
       return NextResponse.json({ success: true })
     }
 
+    // Adjust advance_balance by the change in opening amounts
+    const newOpeningAdvance = Number(body.opening_advance ?? 0)
+    const newOpeningLoan = Number(body.opening_loan ?? 0)
+    const openingDelta = (newOpeningAdvance - (existing.opening_advance ?? 0))
+      + (newOpeningLoan - (existing.opening_loan ?? 0))
+    const newAdvanceBalance = Math.max(0, (existing.advance_balance ?? 0) + openingDelta)
+
     const updates = {
       full_name: body.full_name,
       designation: body.designation || null,
@@ -71,6 +78,9 @@ export async function PATCH(
       allowance_name: body.allowance_name?.trim() || 'Allowance',
       fixed_overtime_monthly: Number(body.fixed_overtime_monthly ?? 0),
       friday_ot_amount: Number(body.friday_ot_amount ?? 0),
+      opening_advance: newOpeningAdvance,
+      opening_loan: newOpeningLoan,
+      advance_balance: newAdvanceBalance,
       overtime_eligible: Boolean(body.overtime_eligible),
       bank_name: body.bank_name || null,
       iban: body.iban || null,

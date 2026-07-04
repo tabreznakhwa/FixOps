@@ -12,6 +12,8 @@ interface StaffRecord {
   food_allowance: number | null; other_allowance: number; allowance_name: string | null
   fixed_overtime_monthly: number
   friday_ot_amount: number
+  opening_advance: number
+  opening_loan: number
   overtime_eligible: boolean; bank_name: string | null; iban: string | null
   employment_status: string; notes: string | null
 }
@@ -42,6 +44,8 @@ export function StaffEditForm({ staff }: { staff: StaffRecord }) {
     allowance_name: staff.allowance_name ?? 'Allowance',
     fixed_overtime_monthly: String(staff.fixed_overtime_monthly ?? 0),
     friday_ot_amount: String(staff.friday_ot_amount ?? 0),
+    opening_advance: String(staff.opening_advance ?? 0),
+    opening_loan: String(staff.opening_loan ?? 0),
     overtime_eligible: staff.overtime_eligible ?? false,
     bank_name: staff.bank_name ?? '',
     iban: staff.iban ?? '',
@@ -76,6 +80,8 @@ export function StaffEditForm({ staff }: { staff: StaffRecord }) {
           allowance_name: form.allowance_name || 'Allowance',
           fixed_overtime_monthly: Number(form.fixed_overtime_monthly),
           friday_ot_amount: Number(form.friday_ot_amount),
+          opening_advance: Number(form.opening_advance),
+          opening_loan: Number(form.opening_loan),
         }),
       })
       const data = await res.json()
@@ -205,6 +211,24 @@ export function StaffEditForm({ staff }: { staff: StaffRecord }) {
               onChange={(e) => set('overtime_eligible', e.target.checked)}
               className="w-4 h-4 accent-blue-600" />
             <label htmlFor="ot_eligible" className="text-sm text-slate-700">Overtime eligible</label>
+          </div>
+        </div>
+      </div>
+
+      {/* Opening Advance & Loan Balances */}
+      <div>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 pb-1 border-b border-slate-100">Opening Advance &amp; Loan Balances</p>
+        <p className="text-xs text-slate-400 mb-3">Amounts given <strong>before</strong> this app was set up. These are added to the advance balance once saved.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelClass}>Opening Salary Advance (KWD)</label>
+            <input type="number" min="0" step="0.001" value={form.opening_advance}
+              onChange={(e) => set('opening_advance', e.target.value)} className={`${inputClass} text-right`} />
+          </div>
+          <div>
+            <label className={labelClass}>Opening Loan (KWD)</label>
+            <input type="number" min="0" step="0.001" value={form.opening_loan}
+              onChange={(e) => set('opening_loan', e.target.value)} className={`${inputClass} text-right`} />
           </div>
         </div>
       </div>

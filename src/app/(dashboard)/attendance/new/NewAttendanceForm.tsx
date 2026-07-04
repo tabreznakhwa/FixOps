@@ -13,6 +13,7 @@ interface StaffMember {
 interface Props {
   staff: StaffMember[]
   lockedStaffId?: string | null
+  isKiosk?: boolean
 }
 
 const inputClass =
@@ -23,7 +24,7 @@ function fmtHrs(h: number): string {
   return h % 1 === 0 ? `${h}h` : `${h.toFixed(2)}h`
 }
 
-export function NewAttendanceForm({ staff, lockedStaffId }: Props) {
+export function NewAttendanceForm({ staff, lockedStaffId, isKiosk }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('present')
@@ -110,6 +111,22 @@ export function NewAttendanceForm({ staff, lockedStaffId }: Props) {
       setError('Network error. Please try again.')
       setLoading(false)
     }
+  }
+
+  // Kiosk with no linked staff — show a clear message instead of blank form
+  if (isKiosk && !lockedStaffId) {
+    return (
+      <div className="max-w-xl bg-amber-50 border border-amber-200 rounded-xl px-6 py-8 text-center">
+        <p className="text-sm font-semibold text-amber-800 mb-2">Staff record not linked</p>
+        <p className="text-sm text-amber-700">
+          Your login is not linked to a staff profile. Please ask your HR administrator to link your account
+          in Staff → Login Account before you can mark attendance.
+        </p>
+        <a href="/attendance" className="mt-4 inline-block text-sm font-semibold text-blue-600 hover:underline">
+          ← Back to Attendance
+        </a>
+      </div>
+    )
   }
 
   return (

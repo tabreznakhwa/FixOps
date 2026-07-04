@@ -10,6 +10,7 @@ interface Advance {
   type: string
   amount: number
   issued_date: string
+  payment_method: string | null
   notes: string | null
 }
 
@@ -31,6 +32,7 @@ export function StaffAdvancePanel({ staffId, currentBalance, advances }: Props) 
     type: 'advance',
     amount: '',
     issued_date: new Date().toISOString().split('T')[0],
+    payment_method: 'cash',
     notes: '',
   })
 
@@ -52,7 +54,7 @@ export function StaffAdvancePanel({ staffId, currentBalance, advances }: Props) 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setShowForm(false)
-      setForm({ type: 'advance', amount: '', issued_date: new Date().toISOString().split('T')[0], notes: '' })
+      setForm({ type: 'advance', amount: '', issued_date: new Date().toISOString().split('T')[0], payment_method: 'cash', notes: '' })
       router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to record advance')
@@ -109,6 +111,13 @@ export function StaffAdvancePanel({ staffId, currentBalance, advances }: Props) 
               <input type="date" value={form.issued_date} onChange={e => set('issued_date', e.target.value)} className={inputClass} />
             </div>
             <div>
+              <label className={labelClass}>Payment Method</label>
+              <select value={form.payment_method} onChange={e => set('payment_method', e.target.value)} className={inputClass}>
+                <option value="cash">Cash</option>
+                <option value="bank">Bank Transfer</option>
+              </select>
+            </div>
+            <div className="col-span-2">
               <label className={labelClass}>Notes (optional)</label>
               <input type="text" placeholder="e.g. Emergency advance" value={form.notes} onChange={e => set('notes', e.target.value)} className={inputClass} />
             </div>
@@ -138,6 +147,11 @@ export function StaffAdvancePanel({ staffId, currentBalance, advances }: Props) 
                     {a.type === 'loan' ? 'Loan' : 'Advance'}
                   </span>
                   <span className="text-slate-500 text-xs">{formatDate(a.issued_date)}</span>
+                  {a.payment_method && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${a.payment_method === 'bank' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>
+                      {a.payment_method === 'bank' ? 'Bank' : 'Cash'}
+                    </span>
+                  )}
                 </div>
                 {a.notes && <p className="text-xs text-slate-400 mt-0.5 truncate">{a.notes}</p>}
               </div>

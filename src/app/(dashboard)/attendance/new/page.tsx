@@ -12,8 +12,25 @@ export default async function NewAttendancePage({
   searchParams: Promise<{ locked_staff_id?: string }>
 }) {
   const params = await searchParams
-  const lockedStaffId = params.locked_staff_id ?? null
   const supabase = await createClient()
+
+  // Check role server-side — kiosk always sees only their own staff record
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = await (supabase as any)
+    .from('users').select('role').eq('id', user!.id).single()
+  const userRole = (profileRaw as { role: string } | null)?.role ?? ''
+  const isKiosk = userRole === 'attendance_kiosk'
+
+  let lockedStaffId: string | null = null
+
+  if (isKiosk) {
+    // Ignore URL param — always look up their linked staff record
+    const { data: kioskStaff } = await (supabase as any)
+      .from('staff').select('id').eq('user_id', user!.id).maybeSingle()
+    lockedStaffId = (kioskStaff as { id: string } | null)?.id ?? null
+  } else {
+    lockedStaffId = params.locked_staff_id ?? null
+  }
 
   let staffQuery = supabase
     .from('staff')
@@ -21,7 +38,6 @@ export default async function NewAttendancePage({
     .eq('employment_status', 'active')
     .order('full_name')
 
-  // Kiosk: only load their own staff record
   if (lockedStaffId) {
     staffQuery = (staffQuery as any).eq('id', lockedStaffId)
   }
@@ -50,7 +66,7 @@ export default async function NewAttendancePage({
         }
       />
       <div className="p-6">
-        <NewAttendanceForm staff={staff} lockedStaffId={lockedStaffId} />
+        <NewAttendanceForm staff={staff} lockedStaffId={lockedStaffId} isKiosk={isKiosk} />
       </div>
     </div>
   )

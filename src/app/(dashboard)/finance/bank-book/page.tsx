@@ -76,21 +76,31 @@ export default async function BankBookPage({
     .order('payment_date', { ascending: true })
     .limit(5000)
 
+  const { data: allAdvancesRaw } = await (supabase as any)
+    .from('staff_advances')
+    .select('issued_date, type, amount, notes, staff(full_name)')
+    .eq('payment_method', 'bank')
+    .order('issued_date', { ascending: true })
+    .limit(5000)
+
   type Receipt = { payment_date: string; payment_number: string; amount_received: number; payment_mode: string; reference_number: string | null; customers: { full_name: string } | null }
   type SupplierPay = { payment_date: string; amount_paid: number; payment_mode: string; reference_number: string | null; suppliers: { supplier_name: string } | null }
   type Expense = { expense_date: string; expense_number: string; category: string; description: string; amount: number; payment_method: string; reference_number: string | null }
   type Salary = { payment_date: string; net_salary: number; payment_mode: string; staff: { full_name: string } | null; salary_runs: { salary_month: number; salary_year: number } | null }
+  type AdvancePay = { issued_date: string; type: string; amount: number; notes: string | null; staff: { full_name: string } | null }
 
   const allReceipts = (allReceiptsRaw ?? []) as Receipt[]
   const allSupplierPayments = (allSupplierPaymentsRaw ?? []) as SupplierPay[]
   const allExpenses = (allExpensesRaw ?? []) as Expense[]
   const allSalaries = (allSalariesRaw ?? []) as Salary[]
+  const allAdvances = (allAdvancesRaw ?? []) as AdvancePay[]
 
   // Closing balance is always the all-time running total
   const totalBankIn = allReceipts.reduce((s, r) => s + r.amount_received, 0)
   const totalBankOut = allSupplierPayments.reduce((s, r) => s + r.amount_paid, 0)
     + allExpenses.reduce((s, r) => s + r.amount, 0)
     + allSalaries.reduce((s, r) => s + r.net_salary, 0)
+    + allAdvances.reduce((s, r) => s + r.amount, 0)
   const closingBalance = openingBank + totalBankIn - totalBankOut
 
   // "Opening Balance b/f" for the table = balance at the START of the selected period
@@ -100,6 +110,7 @@ export default async function BankBookPage({
     allSupplierPayments.filter((p) => p.payment_date < from).reduce((s, p) => s + p.amount_paid, 0)
     + allExpenses.filter((e) => e.expense_date < from).reduce((s, e) => s + e.amount, 0)
     + allSalaries.filter((s) => s.payment_date < from).reduce((s2, s) => s2 + s.net_salary, 0)
+    + allAdvances.filter((a) => a.issued_date < from).reduce((s, a) => s + a.amount, 0)
   )
   const periodOpeningBalance = openingBank + prePeriodIn - prePeriodOut
   // Date label for the b/f row: one day before the period start
@@ -142,6 +153,13 @@ export default async function BankBookPage({
       mode: e.payment_method === 'cheque' ? 'Cheque' : 'Bank Transfer',
       receipts: 0, payments: e.amount,
       ref: e.reference_number ?? e.expense_number,
+    })),
+    ...allAdvances.filter((a) => inPeriod(a.issued_date)).map((a) => ({
+      date: a.issued_date,
+      narration: `${a.type === 'loan' ? 'Loan' : 'Salary Advance'} — ${a.staff?.full_name ?? 'Staff'}${a.notes ? ` (${a.notes})` : ''}`,
+      mode: 'Bank Transfer',
+      receipts: 0, payments: a.amount,
+      ref: '—',
     })),
   ].sort((a, b) => a.date.localeCompare(b.date))
 

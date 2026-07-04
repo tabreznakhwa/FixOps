@@ -69,6 +69,7 @@ export async function POST(
     type: body.type ?? 'advance',
     amount,
     issued_date: body.issued_date || new Date().toISOString().split('T')[0],
+    payment_method: body.payment_method ?? 'cash',
     notes: body.notes || null,
     created_by: user.id,
   })
