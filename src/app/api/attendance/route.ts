@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
       overtime_hours,
       status,
       notes,
+      is_public_holiday,
     } = body
 
     if (!staff_id) return NextResponse.json({ error: 'Staff member is required' }, { status: 400 })
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
         overtime_hours: Number(overtime_hours ?? 0),
         status,
         notes: notes?.trim() || null,
+        is_public_holiday: Boolean(is_public_holiday ?? false),
         created_by: user.id,
       })
       .select('id')

@@ -5,11 +5,19 @@ const LUNCH_START_M = 13 * 60        // 1:00 PM in minutes
 const LUNCH_END_M = 14 * 60          // 2:00 PM in minutes
 const FIXED_OT_END_M = 20 * 60       // 8:00 PM in minutes
 const STANDARD_HOURS = 8
+const FRIDAY_FIXED_OT_HOURS = 8     // Friday/holiday: first 8 worked hours = fixed OT
 const OT_MULTIPLIER = 1.25           // Normal OT: 1 hr = 1.25 paid hrs
 
 function toMins(t: string): number {
   const [h, m] = t.split(':').map(Number)
   return h * 60 + m
+}
+
+// Returns true if the ISO date string (YYYY-MM-DD) falls on a Friday
+export function isFriday(dateStr: string): boolean {
+  if (!dateStr) return false
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d).getDay() === 5
 }
 
 export interface AttendanceBreakdown {
@@ -18,9 +26,14 @@ export interface AttendanceBreakdown {
   fixedOtHrs: number
   normalOtActualHrs: number
   normalOtPaidHrs: number
+  isFridayOrHoliday: boolean
 }
 
-export function calcAttendanceBreakdown(checkIn: string, checkOut: string): AttendanceBreakdown | null {
+export function calcAttendanceBreakdown(
+  checkIn: string,
+  checkOut: string,
+  isFridayOrHoliday = false,
+): AttendanceBreakdown | null {
   if (!checkIn || !checkOut) return null
 
   const inM = toMins(checkIn)
@@ -36,7 +49,26 @@ export function calcAttendanceBreakdown(checkIn: string, checkOut: string): Atte
   }
 
   const netMins = outM - inM - lunchDeduct
-  const hoursWorked = Math.round((netMins / 60) * 4) / 4 // round to 0.25h
+  const totalHours = Math.round((netMins / 60) * 4) / 4
+
+  if (isFridayOrHoliday) {
+    // Friday/public holiday: no regular hours — entire shift is overtime
+    // First FRIDAY_FIXED_OT_HOURS hours = fixed OT; beyond = normal OT ×1.25
+    const fixedOtHrs = Math.min(totalHours, FRIDAY_FIXED_OT_HOURS)
+    const normalOtActualHrs = Math.round(Math.max(0, totalHours - FRIDAY_FIXED_OT_HOURS) * 4) / 4
+    const normalOtPaidHrs = Math.round(normalOtActualHrs * OT_MULTIPLIER * 4) / 4
+    return {
+      hoursWorked: 0,
+      lunchDeducted: lunchDeduct > 0,
+      fixedOtHrs,
+      normalOtActualHrs,
+      normalOtPaidHrs,
+      isFridayOrHoliday: true,
+    }
+  }
+
+  // Regular day
+  const hoursWorked = Math.round(totalHours * 4) / 4
 
   // Fixed OT: time between DUTY_END (17:30) and FIXED_OT_END (20:00)
   const dutyEndM = toMins(DUTY_END)
@@ -45,8 +77,7 @@ export function calcAttendanceBreakdown(checkIn: string, checkOut: string): Atte
   const fixedOtActualHrs = Math.round((Math.max(0, fixedOtEnd - fixedOtStart) / 60) * 4) / 4
 
   // Normal OT: time after 8 PM (20:00), multiplied by 1.25
-  const normalOtStart = Math.max(outM, FIXED_OT_END_M)
-  const normalOtActualHrs = Math.max(0, (normalOtStart > FIXED_OT_END_M ? outM - FIXED_OT_END_M : 0)) / 60
+  const normalOtActualHrs = Math.max(0, outM > FIXED_OT_END_M ? (outM - FIXED_OT_END_M) / 60 : 0)
   const normalOtPaidHrs = Math.round(normalOtActualHrs * OT_MULTIPLIER * 4) / 4
 
   return {
@@ -55,6 +86,7 @@ export function calcAttendanceBreakdown(checkIn: string, checkOut: string): Atte
     fixedOtHrs: fixedOtActualHrs,
     normalOtActualHrs: Math.round(normalOtActualHrs * 4) / 4,
     normalOtPaidHrs,
+    isFridayOrHoliday: false,
   }
 }
 

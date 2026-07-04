@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Plus, CalendarCheck, UserCheck, XCircle, Clock, Pencil } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import { isFriday } from '@/lib/attendance'
 import { StaffFilterSelect } from './StaffFilterSelect'
 
 export const metadata = { title: 'Attendance' }
@@ -82,7 +83,7 @@ export default async function AttendancePage({
 
   let query = (supabase as any)
     .from('attendance')
-    .select('id, staff_id, date, check_in, check_out, hours_worked, overtime_hours, status, notes, staff(full_name)')
+    .select('id, staff_id, date, check_in, check_out, hours_worked, overtime_hours, status, notes, is_public_holiday, staff(full_name)')
     .gte('date', startDate)
     .lte('date', endDate)
     .order('date', { ascending: false })
@@ -107,6 +108,7 @@ export default async function AttendancePage({
     overtime_hours: number
     status: string
     notes: string | null
+    is_public_holiday: boolean
     staff: { full_name: string } | null
   }>
 
@@ -223,7 +225,14 @@ export default async function AttendancePage({
               <tbody className="divide-y divide-slate-50">
                 {records.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-3.5 text-sm font-semibold text-slate-900">{formatDate(r.date)}</td>
+                    <td className="px-5 py-3.5">
+                      <p className="text-sm font-semibold text-slate-900">{formatDate(r.date)}</p>
+                      {(r.is_public_holiday || isFriday(r.date)) && (
+                        <span className="text-xs font-semibold text-purple-600">
+                          {r.is_public_holiday && isFriday(r.date) ? 'Fri + Holiday' : r.is_public_holiday ? 'Holiday' : 'Friday'}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3.5 text-sm text-slate-700">{r.staff?.full_name ?? '—'}</td>
                     <td className="px-4 py-3.5">
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLOR[r.status] ?? 'bg-gray-100 text-gray-700'}`}>

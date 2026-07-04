@@ -1,12 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { calcAttendanceBreakdown, DUTY_START, DUTY_END } from '@/lib/attendance'
+import { calcAttendanceBreakdown, isFriday, DUTY_START, DUTY_END } from '@/lib/attendance'
 
 interface Record {
   id: string; date: string; status: string
   check_in: string | null; check_out: string | null
-  hours_worked: number; overtime_hours: number; notes: string | null
+  hours_worked: number; overtime_hours: number
+  notes: string | null; is_public_holiday: boolean
   staff: { full_name: string } | null
 }
 
@@ -23,9 +24,13 @@ export function EditAttendanceForm({ record }: { record: Record }) {
   const [checkIn, setCheckIn] = useState(record.check_in ?? DUTY_START)
   const [checkOut, setCheckOut] = useState(record.check_out ?? DUTY_END)
   const [notes, setNotes] = useState(record.notes ?? '')
+  const [isPublicHoliday, setIsPublicHoliday] = useState(record.is_public_holiday ?? false)
+
+  const isFridayDate = isFriday(date)
+  const isFridayOrHoliday = isFridayDate || isPublicHoliday
 
   const showTimes = status === 'present' || status === 'half_day'
-  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut) : null
+  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut, isFridayOrHoliday) : null
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -42,6 +47,7 @@ export function EditAttendanceForm({ record }: { record: Record }) {
           check_out: showTimes ? checkOut || null : null,
           hours_worked: breakdown ? breakdown.hoursWorked : 0,
           overtime_hours: breakdown ? breakdown.normalOtPaidHrs : 0,
+          is_public_holiday: isPublicHoliday,
           notes: notes.trim() || null,
         }),
       })
@@ -68,8 +74,33 @@ export function EditAttendanceForm({ record }: { record: Record }) {
 
         <div>
           <label className={labelClass}>Date <span className="text-red-500">*</span></label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} required className={inputClass} />
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            required
+            className={inputClass}
+          />
+          {isFridayDate && (
+            <p className="text-xs text-purple-600 font-semibold mt-1.5">Friday — overtime rules apply automatically</p>
+          )}
         </div>
+
+        {/* Public Holiday toggle */}
+        <label className="flex items-center gap-3 cursor-pointer select-none">
+          <div className="relative">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={isPublicHoliday}
+              onChange={(e) => setIsPublicHoliday(e.target.checked)}
+            />
+            <div className="w-10 h-5 bg-slate-200 rounded-full peer peer-checked:bg-purple-600 transition-colors" />
+            <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-all peer-checked:translate-x-5" />
+          </div>
+          <span className="text-sm font-medium text-slate-700">Public Holiday</span>
+          {isPublicHoliday && <span className="text-xs text-purple-600 font-semibold">(overtime rules apply)</span>}
+        </label>
 
         <div>
           <label className={labelClass}>Status <span className="text-red-500">*</span></label>
@@ -96,31 +127,91 @@ export function EditAttendanceForm({ record }: { record: Record }) {
               <div>
                 <label className={labelClass}>Check In</label>
                 <input type="time" value={checkIn} onChange={e => setCheckIn(e.target.value)} className={inputClass} />
-                <p className="text-xs text-slate-400 mt-1">Duty starts 8:30 AM</p>
+                {!isFridayOrHoliday && <p className="text-xs text-slate-400 mt-1">Duty starts 8:30 AM</p>}
               </div>
               <div>
                 <label className={labelClass}>Check Out</label>
                 <input type="time" value={checkOut} onChange={e => setCheckOut(e.target.value)} className={inputClass} />
-                <p className="text-xs text-slate-400 mt-1">Duty ends 5:30 PM</p>
+                {!isFridayOrHoliday && <p className="text-xs text-slate-400 mt-1">Duty ends 5:30 PM</p>}
               </div>
             </div>
+
             {breakdown && checkIn && checkOut && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 divide-y divide-slate-200 text-sm overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <p className="font-semibold text-slate-800">Regular Hours</p>
-                    {breakdown.lunchDeducted && <p className="text-xs text-slate-400 mt-0.5">Lunch (1–2 PM) deducted</p>}
-                  </div>
-                  <p className="font-bold text-slate-900 text-base">{fmtHrs(breakdown.hoursWorked)}</p>
-                </div>
-                {breakdown.normalOtActualHrs > 0 && (
-                  <div className="flex items-center justify-between px-4 py-3 bg-amber-50">
-                    <div>
-                      <p className="font-semibold text-amber-800">Normal OT (after 8 PM)</p>
-                      <p className="text-xs text-amber-600 mt-0.5">{fmtHrs(breakdown.normalOtActualHrs)} × 1.25 = {fmtHrs(breakdown.normalOtPaidHrs)} paid</p>
+                {isFridayOrHoliday ? (
+                  <>
+                    <div className="px-4 py-3 bg-purple-50">
+                      <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide">
+                        {isFridayDate && isPublicHoliday ? 'Friday + Public Holiday' : isFridayDate ? 'Friday OT Rules' : 'Public Holiday OT Rules'}
+                      </p>
+                      <p className="text-xs text-purple-500 mt-0.5">No regular hours — entire shift counts as overtime</p>
                     </div>
-                    <p className="font-bold text-amber-700 text-base">{fmtHrs(breakdown.normalOtPaidHrs)}</p>
-                  </div>
+
+                    <div className={`px-4 py-3 ${breakdown.fixedOtHrs > 0 ? 'bg-blue-50' : ''}`}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-slate-800">Fixed Overtime</p>
+                          <p className="text-xs text-slate-400 mt-0.5">First 8 hours worked</p>
+                        </div>
+                        <p className="font-bold text-blue-700 text-base">{fmtHrs(breakdown.fixedOtHrs)}</p>
+                      </div>
+                      {breakdown.lunchDeducted && (
+                        <p className="text-xs text-slate-400 mt-1">Lunch break (1:00–2:00 PM) deducted</p>
+                      )}
+                      <p className="text-xs text-blue-600 mt-1">Monthly fixed OT amount is set in the staff profile</p>
+                    </div>
+
+                    {breakdown.normalOtActualHrs > 0 ? (
+                      <div className="flex items-center justify-between px-4 py-3 bg-amber-50">
+                        <div>
+                          <p className="font-semibold text-amber-800">Normal Overtime (beyond 8h)</p>
+                          <p className="text-xs text-amber-600 mt-0.5">
+                            {fmtHrs(breakdown.normalOtActualHrs)} actual × 1.25 = {fmtHrs(breakdown.normalOtPaidHrs)} paid
+                          </p>
+                        </div>
+                        <p className="font-bold text-amber-700 text-base">{fmtHrs(breakdown.normalOtPaidHrs)}</p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <div>
+                          <p className="font-semibold text-slate-600">Normal Overtime (beyond 8h)</p>
+                          <p className="text-xs text-slate-400 mt-0.5">1 hr worked = 1.25 hrs paid</p>
+                        </div>
+                        <p className="text-slate-400 text-sm">—</p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <div>
+                        <p className="font-semibold text-slate-800">Regular Hours</p>
+                        {breakdown.lunchDeducted && <p className="text-xs text-slate-400 mt-0.5">Lunch (1–2 PM) deducted</p>}
+                      </div>
+                      <p className="font-bold text-slate-900 text-base">{fmtHrs(breakdown.hoursWorked)}</p>
+                    </div>
+                    <div className={`px-4 py-3 ${breakdown.fixedOtHrs > 0 ? 'bg-blue-50' : ''}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <div>
+                          <p className="font-semibold text-slate-800">Fixed Overtime</p>
+                          <p className="text-xs text-slate-400 mt-0.5">5:30 PM – 8:00 PM period</p>
+                        </div>
+                        <p className="font-semibold text-slate-600 text-sm">
+                          {breakdown.fixedOtHrs > 0 ? `${fmtHrs(breakdown.fixedOtHrs)} eligible` : '—'}
+                        </p>
+                      </div>
+                      <p className="text-xs text-blue-600">Monthly fixed OT amount is set in the staff profile</p>
+                    </div>
+                    {breakdown.normalOtActualHrs > 0 && (
+                      <div className="flex items-center justify-between px-4 py-3 bg-amber-50">
+                        <div>
+                          <p className="font-semibold text-amber-800">Normal OT (after 8 PM)</p>
+                          <p className="text-xs text-amber-600 mt-0.5">{fmtHrs(breakdown.normalOtActualHrs)} × 1.25 = {fmtHrs(breakdown.normalOtPaidHrs)} paid</p>
+                        </div>
+                        <p className="font-bold text-amber-700 text-base">{fmtHrs(breakdown.normalOtPaidHrs)}</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}

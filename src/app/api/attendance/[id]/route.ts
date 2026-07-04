@@ -19,7 +19,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const body = await request.json()
-    const { date, check_in, check_out, hours_worked, overtime_hours, status, notes } = body
+    const { date, check_in, check_out, hours_worked, overtime_hours, status, notes, is_public_holiday } = body
 
     if (!date) return NextResponse.json({ error: 'Date is required' }, { status: 400 })
     if (!status) return NextResponse.json({ error: 'Status is required' }, { status: 400 })
@@ -35,6 +35,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         overtime_hours: Number(overtime_hours ?? 0),
         status,
         notes: notes?.trim() || null,
+        is_public_holiday: Boolean(is_public_holiday ?? false),
       })
       .eq('id', id)
       .eq('organization_id', profile.organization_id)
