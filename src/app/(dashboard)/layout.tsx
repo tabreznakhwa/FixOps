@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { AssignmentNotifier } from '@/components/layout/AssignmentNotifier'
 import { getRoleAccess } from '@/lib/orgPermissions'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -33,6 +34,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {children}
         </main>
       </div>
+      <AssignmentNotifier userId={user.id} />
     </div>
   )
 }
