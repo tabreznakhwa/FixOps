@@ -1,21 +1,25 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Minus, EyeOff } from 'lucide-react'
+import { Plus, Minus, EyeOff, AlertTriangle, Check } from 'lucide-react'
 
 interface Props {
   itemId: string
   currentStock: number
+  minimumStockLevel: number
   unitOfMeasure: string
   isActive: boolean
 }
 
-export function InventoryActions({ itemId, currentStock, unitOfMeasure, isActive }: Props) {
+export function InventoryActions({ itemId, currentStock, minimumStockLevel, unitOfMeasure, isActive }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [localStock, setLocalStock] = useState(currentStock)
   const [localActive, setLocalActive] = useState(isActive)
   const [adjustQty, setAdjustQty] = useState(1)
+  const [threshold, setThreshold] = useState(minimumStockLevel)
+  const [thresholdInput, setThresholdInput] = useState(String(minimumStockLevel))
+  const [thresholdSaved, setThresholdSaved] = useState(false)
 
   async function patch(payload: Record<string, unknown>) {
     setError('')
@@ -56,6 +60,15 @@ export function InventoryActions({ itemId, currentStock, unitOfMeasure, isActive
 
   function toggleActive() {
     patch({ is_active: !localActive })
+  }
+
+  async function saveThreshold() {
+    const val = Math.max(0, Number(thresholdInput) || 0)
+    setThresholdInput(String(val))
+    await patch({ minimum_stock_level: val })
+    setThreshold(val)
+    setThresholdSaved(true)
+    setTimeout(() => setThresholdSaved(false), 2000)
   }
 
   return (
@@ -108,6 +121,37 @@ export function InventoryActions({ itemId, currentStock, unitOfMeasure, isActive
         {loading && (
           <p className="text-xs text-slate-400 text-center mt-2">Updating…</p>
         )}
+      </div>
+
+      {/* Low Stock Threshold */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-orange-500" /> Low Stock Threshold
+        </h3>
+        <p className="text-xs text-slate-500 mb-3">
+          Alert when stock falls to or below this level. Currently: <span className="font-semibold text-slate-800">{threshold} {unitOfMeasure}</span>
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="number"
+            min="0"
+            value={thresholdInput}
+            onChange={(e) => { setThresholdInput(e.target.value); setThresholdSaved(false) }}
+            onKeyDown={(e) => e.key === 'Enter' && saveThreshold()}
+            className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white text-center font-semibold"
+          />
+          <button
+            onClick={saveThreshold}
+            disabled={loading}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg border transition-colors disabled:opacity-50 ${
+              thresholdSaved
+                ? 'bg-green-50 border-green-200 text-green-700'
+                : 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100'
+            }`}
+          >
+            {thresholdSaved ? <Check className="w-4 h-4" /> : 'Save'}
+          </button>
+        </div>
       </div>
 
       {/* Active/Inactive toggle */}

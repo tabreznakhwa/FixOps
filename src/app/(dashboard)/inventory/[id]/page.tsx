@@ -178,6 +178,7 @@ export default async function InventoryItemPage({
               <InventoryActions
                 itemId={item.id}
                 currentStock={item.current_stock}
+                minimumStockLevel={item.minimum_stock_level}
                 unitOfMeasure={item.unit_of_measure}
                 isActive={item.is_active}
               />
