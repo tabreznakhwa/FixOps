@@ -117,7 +117,6 @@ export async function POST(request: NextRequest) {
       line_total: it.line_total,
       total_price: it.total_price ?? it.line_total,
       sort_order: idx,
-      inventory_item_id: (it.inventory_item_id as string | null) ?? null,
     }))
 
     const { error: insertItemsErr } = await admin.from('invoice_items').insert(lineItemRows)
