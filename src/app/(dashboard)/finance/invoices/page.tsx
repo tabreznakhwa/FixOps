@@ -184,9 +184,13 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                         )}
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <p className={`text-sm font-bold ${inv.balance_due > 0 ? 'text-amber-600' : 'text-green-600'}`}>
-                          {formatCurrency(inv.balance_due)}
-                        </p>
+                        {inv.status === 'paid' ? (
+                          <p className="text-sm font-bold text-green-600">{formatCurrency(0)}</p>
+                        ) : (
+                          <p className={`text-sm font-bold ${inv.balance_due > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                            {formatCurrency(inv.balance_due)}
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-3.5">
                         <div className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusColor(inv.status)}`}>
