@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { invoice_ids, invoice_date, due_date, notes, ref_number } = body
+    const { invoice_ids, invoice_date, due_date, notes, ref_number, discount_amount } = body
 
     if (!Array.isArray(invoice_ids) || invoice_ids.length < 2) {
       return NextResponse.json({ error: 'Select at least 2 invoices to merge' }, { status: 400 })
@@ -68,7 +68,8 @@ export async function POST(request: NextRequest) {
 
     // Calculate merged totals
     const subtotal = allItems.reduce((s: number, it: { line_total: number }) => s + Number(it.line_total), 0)
-    const totalAmount = subtotal
+    const discountAmt = Math.max(0, Number(discount_amount ?? 0))
+    const totalAmount = Math.max(0, subtotal - discountAmt)
 
     // Generate invoice number
     const { data: seqData } = await admin.rpc('generate_sequence_number', {
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
         due_date: due_date ?? null,
         ref_number: ref_number?.trim() ?? null,
         subtotal,
-        discount_amount: 0,
+        discount_amount: discountAmt,
         tax_rate: 0,
         tax_amount: 0,
         total_amount: totalAmount,

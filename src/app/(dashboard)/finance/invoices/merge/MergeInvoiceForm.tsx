@@ -47,6 +47,7 @@ export function MergeInvoiceForm({ customers }: { customers: Customer[] }) {
   const [dueDate, setDueDate] = useState('')
   const [notes, setNotes] = useState('')
   const [refNumber, setRefNumber] = useState('')
+  const [discountAmount, setDiscountAmount] = useState('')
 
   const filteredCustomers = customers.filter((c) => {
     const q = customerSearch.toLowerCase()
@@ -101,6 +102,8 @@ export function MergeInvoiceForm({ customers }: { customers: Customer[] }) {
 
   const selectedInvoices = invoices.filter(i => selectedIds.has(i.id))
   const mergedTotal = selectedInvoices.reduce((s, i) => s + i.total_amount, 0)
+  const discountNum = Math.max(0, parseFloat(discountAmount) || 0)
+  const netTotal = Math.max(0, mergedTotal - discountNum)
 
   async function handleSubmit() {
     if (!selectedCustomer) { setError('Please select a customer'); return }
@@ -119,6 +122,7 @@ export function MergeInvoiceForm({ customers }: { customers: Customer[] }) {
           due_date: dueDate || null,
           notes: notes || null,
           ref_number: refNumber || null,
+          discount_amount: discountNum,
         }),
       })
       const data = await res.json()
@@ -277,6 +281,36 @@ export function MergeInvoiceForm({ customers }: { customers: Customer[] }) {
               <label className={labelClass}>REF Number</label>
               <input type="text" value={refNumber} onChange={(e) => setRefNumber(e.target.value)} placeholder="Optional reference" className={inputClass} />
             </div>
+            <div>
+              <label className={labelClass}>Discount (KWD)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.001"
+                value={discountAmount}
+                onChange={(e) => setDiscountAmount(e.target.value)}
+                placeholder="0.000"
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          {/* Total summary */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-1.5 text-sm">
+            <div className="flex justify-between text-slate-600">
+              <span>Subtotal ({selectedIds.size} invoices)</span>
+              <span className="font-semibold">{formatCurrency(mergedTotal)}</span>
+            </div>
+            {discountNum > 0 && (
+              <div className="flex justify-between text-red-600">
+                <span>Discount</span>
+                <span className="font-semibold">− {formatCurrency(discountNum)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-slate-900 font-bold border-t border-slate-200 pt-1.5 mt-1">
+              <span>Net Total</span>
+              <span>{formatCurrency(netTotal)}</span>
+            </div>
           </div>
           <div>
             <label className={labelClass}>Notes</label>
@@ -290,12 +324,9 @@ export function MergeInvoiceForm({ customers }: { customers: Customer[] }) {
           </div>
 
           <div className="flex items-center justify-between pt-2">
-            <div>
-              <p className="text-sm text-slate-500">
-                This will create <span className="font-semibold text-slate-900">1 consolidated invoice</span> with all line items
-                and cancel the {selectedIds.size} source invoices.
-              </p>
-            </div>
+            <p className="text-sm text-slate-500">
+              Creates <span className="font-semibold text-slate-900">1 consolidated invoice</span> and cancels the {selectedIds.size} source invoices.
+            </p>
             <button
               onClick={handleSubmit}
               disabled={loading}

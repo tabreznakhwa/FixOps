@@ -80,6 +80,26 @@ export async function DELETE(
       return NextResponse.json({ error: 'Cannot delete an invoice with payments recorded' }, { status: 400 })
     }
 
+    // Restore any source invoices that were cancelled when this was merged
+    const mergeReason = `Merged into ${inv.invoice_number}`
+    const { data: sourceInvs } = await supabase
+      .from('invoices')
+      .select('id, amount_paid, total_amount, due_date')
+      .eq('cancelled_reason', mergeReason)
+      .eq('organization_id', profile.organization_id)
+    if (sourceInvs && sourceInvs.length > 0) {
+      const today = new Date().toISOString().split('T')[0]
+      for (const src of sourceInvs as { id: string; amount_paid: number; total_amount: number; due_date: string | null }[]) {
+        const paid = Number(src.amount_paid)
+        const total = Number(src.total_amount)
+        let restoredStatus = 'issued'
+        if (paid >= total && total > 0) restoredStatus = 'paid'
+        else if (paid > 0) restoredStatus = 'partial'
+        else if (src.due_date && src.due_date < today) restoredStatus = 'overdue'
+        await supabase.from('invoices').update({ status: restoredStatus, cancelled_reason: null, updated_at: new Date().toISOString() }).eq('id', src.id)
+      }
+    }
+
     await supabase.from('invoice_items').delete().eq('invoice_id', id)
     await supabase.from('invoices').delete().eq('id', id)
 
@@ -175,9 +195,35 @@ export async function PATCH(
       updatePayload.cancelled_reason = body.cancelled_reason.trim()
     }
 
-    const supabase = createAdminClient()
+    const supabase = createAdminClient() as any
 
-    const { data: updated, error } = await (supabase as any)
+    // If cancelling, fetch the invoice number to restore any merged source invoices
+    if (updatePayload.status === 'cancelled') {
+      const { data: cancelledInv } = await supabase
+        .from('invoices').select('invoice_number, organization_id').eq('id', id).single()
+      if (cancelledInv && cancelledInv.organization_id === profile.organization_id) {
+        const mergeReason = `Merged into ${cancelledInv.invoice_number}`
+        const { data: sourceInvs } = await supabase
+          .from('invoices')
+          .select('id, amount_paid, total_amount, due_date')
+          .eq('cancelled_reason', mergeReason)
+          .eq('organization_id', profile.organization_id)
+        if (sourceInvs && sourceInvs.length > 0) {
+          const today = new Date().toISOString().split('T')[0]
+          for (const src of sourceInvs as { id: string; amount_paid: number; total_amount: number; due_date: string | null }[]) {
+            const paid = Number(src.amount_paid)
+            const total = Number(src.total_amount)
+            let restoredStatus = 'issued'
+            if (paid >= total && total > 0) restoredStatus = 'paid'
+            else if (paid > 0) restoredStatus = 'partial'
+            else if (src.due_date && src.due_date < today) restoredStatus = 'overdue'
+            await supabase.from('invoices').update({ status: restoredStatus, cancelled_reason: null, updated_at: new Date().toISOString() }).eq('id', src.id)
+          }
+        }
+      }
+    }
+
+    const { data: updated, error } = await supabase
       .from('invoices')
       .update({ ...updatePayload, updated_at: new Date().toISOString() })
       .eq('id', id)
