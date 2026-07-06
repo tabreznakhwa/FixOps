@@ -5,6 +5,7 @@ import { Plus, FileText, TrendingUp, Clock, AlertCircle, CheckCircle2, Pencil } 
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { DeleteInvoiceButton } from './DeleteInvoiceButton'
+import { InvoiceSearchBar } from './InvoiceSearchBar'
 
 export const metadata = { title: 'Invoices' }
 
@@ -16,7 +17,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
   const userRole = (profileRaw as { role: string } | null)?.role ?? ''
   const canEditDelete = ['owner', 'admin', 'manager'].includes(userRole)
 
-  const hasDateFilter = Boolean(params.from || params.to)
+  const hasDateFilter = Boolean(params.from || params.to || params.q)
 
   let query = supabase
     .from('invoices')
@@ -24,9 +25,26 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
     .order('created_at', { ascending: false })
 
   if (params.status) query = query.eq('status', params.status)
-  if (params.q) query = query.ilike('invoice_number', `%${params.q}%`)
   if (params.from) query = query.gte('invoice_date', params.from)
   if (params.to) query = query.lte('invoice_date', params.to)
+
+  if (params.q) {
+    const q = params.q.trim()
+    // Find customers whose name matches so we can include their invoices
+    const { data: matchedCustomers } = await supabase
+      .from('customers')
+      .select('id')
+      .ilike('full_name', `%${q}%`)
+    const customerIds = (matchedCustomers ?? []).map((c: { id: string }) => c.id)
+
+    if (customerIds.length > 0) {
+      query = query.or(
+        `invoice_number.ilike.%${q}%,ref_number.ilike.%${q}%,customer_id.in.(${customerIds.join(',')})`,
+      )
+    } else {
+      query = query.or(`invoice_number.ilike.%${q}%,ref_number.ilike.%${q}%`)
+    }
+  }
 
   const { data: invoicesRaw } = await query.limit(hasDateFilter ? 1000 : 50)
   const invoices = invoicesRaw as unknown as Array<{
@@ -60,6 +78,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
         subtitle="Billing and revenue tracking"
         actions={
           <div className="flex items-center gap-2">
+            <InvoiceSearchBar />
             {canEditDelete && (
               <Link
                 href="/finance/invoices/merge"
@@ -126,6 +145,20 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
 
         {/* Date Filter */}
         <DateRangeFilter basePath="/finance/invoices" from={params.from} to={params.to} />
+
+        {/* Active search indicator */}
+        {params.q && (
+          <div className="flex items-center gap-2 text-sm text-slate-600">
+            <Search className="w-4 h-4 text-slate-400" />
+            <span>Results for <span className="font-semibold text-slate-900">"{params.q}"</span></span>
+            <Link
+              href={`/finance/invoices${params.status ? `?status=${params.status}` : ''}`}
+              className="text-blue-500 hover:text-blue-700 text-xs underline"
+            >
+              Clear
+            </Link>
+          </div>
+        )}
 
         {/* Invoice Table */}
         {!invoices?.length ? (
