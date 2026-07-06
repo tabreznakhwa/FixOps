@@ -3,6 +3,43 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/audit'
 
+export async function GET(request: NextRequest) {
+  try {
+    const supabaseUser = await createClient()
+    const { data: { user } } = await supabaseUser.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { data: profile } = await (supabaseUser as any)
+      .from('users').select('organization_id').eq('id', user.id).single()
+    if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { searchParams } = new URL(request.url)
+    const customerId = searchParams.get('customer_id')
+    const statusNot = searchParams.get('status_not') // comma-separated statuses to exclude
+
+    const supabase = createAdminClient() as any
+    let query = supabase
+      .from('invoices')
+      .select('id, invoice_number, invoice_date, due_date, total_amount, balance_due, status')
+      .eq('organization_id', profile.organization_id)
+      .order('invoice_date', { ascending: false })
+      .limit(200)
+
+    if (customerId) query = query.eq('customer_id', customerId)
+    if (statusNot) {
+      const excludedStatuses = statusNot.split(',').map(s => s.trim())
+      query = query.not('status', 'in', `(${excludedStatuses.join(',')})`)
+    }
+
+    const { data: invoices, error } = await query
+    if (error) throw error
+    return NextResponse.json({ invoices: invoices ?? [] })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : JSON.stringify(err)
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabaseUser = await createClient()

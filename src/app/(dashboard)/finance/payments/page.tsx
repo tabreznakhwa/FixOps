@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { Plus, CreditCard, CheckCircle2 } from 'lucide-react'
+import { Plus, CreditCard, CheckCircle2, Pencil } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
+import { CancelPaymentButton } from './CancelPaymentButton'
 
 export const metadata = { title: 'Payments' }
 
@@ -15,11 +16,16 @@ const MODE_ICONS: Record<string, string> = {
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ mode?: string; from?: string; to?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
+  const userRole = (profileRaw as { role: string } | null)?.role ?? ''
+  const canEditDelete = ['owner', 'admin', 'manager'].includes(userRole)
+
   const hasDateFilter = Boolean(params.from || params.to)
 
   let query = supabase
     .from('payments')
-    .select('id, payment_number, payment_date, amount_received, payment_mode, reference_number, is_advance, is_cancelled, customers(full_name), invoices(invoice_number)')
+    .select('id, payment_number, payment_date, amount_received, payment_mode, reference_number, notes, is_advance, is_cancelled, customers(full_name), invoices(invoice_number)')
     .eq('is_cancelled', false)
     .order('created_at', { ascending: false })
 
@@ -30,7 +36,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const { data: paymentsRaw } = await query.limit(hasDateFilter ? 1000 : 50)
   const payments = paymentsRaw as unknown as Array<{
     id: string; payment_number: string; payment_date: string; amount_received: number; payment_mode: string;
-    reference_number: string | null; is_advance: boolean; is_cancelled: boolean;
+    reference_number: string | null; notes: string | null; is_advance: boolean; is_cancelled: boolean;
     customers: { full_name: string } | null; invoices: { invoice_number: string } | null
   }>
 
@@ -136,6 +142,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Invoice</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Mode</th>
                   <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Amount</th>
+                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden xl:table-cell">Notes</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -175,13 +182,21 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                       <td className="px-4 py-3.5 text-right">
                         <span className="text-sm font-bold text-green-600">+{formatCurrency(p.amount_received)}</span>
                       </td>
+                      <td className="px-4 py-3.5 hidden xl:table-cell text-sm text-slate-500 max-w-[160px] truncate">
+                        {p.notes ?? '—'}
+                      </td>
                       <td className="px-4 py-3.5 text-right">
-                        <Link
-                          href={`/finance/payments/${p.id}`}
-                          className="text-xs text-blue-600 hover:text-blue-700 font-medium opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          View →
-                        </Link>
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Link
+                            href={`/finance/payments/${p.id}`}
+                            className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1"
+                          >
+                            {canEditDelete ? 'Edit' : 'View'}
+                          </Link>
+                          {canEditDelete && (
+                            <CancelPaymentButton id={p.id} paymentNumber={p.payment_number} />
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )

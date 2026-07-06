@@ -72,10 +72,17 @@ export default async function AttendancePage({
 
   // Kiosk users see only their own records — look up their linked staff record
   let kioskStaffId: string | null = null
+  let kioskTodayMarked = false
   if (isKiosk) {
     const { data: kioskStaff } = await (supabase as any)
       .from('staff').select('id').eq('user_id', user!.id).maybeSingle()
     kioskStaffId = (kioskStaff as { id: string } | null)?.id ?? null
+    if (kioskStaffId) {
+      const todayISO = new Date().toISOString().split('T')[0]
+      const { data: todayRec } = await (supabase as any)
+        .from('attendance').select('id').eq('staff_id', kioskStaffId).eq('date', todayISO).maybeSingle()
+      kioskTodayMarked = !!todayRec
+    }
   }
 
   const { data: staffRaw } = await supabase
@@ -151,12 +158,18 @@ export default async function AttendancePage({
         title="Attendance"
         subtitle="Track daily staff attendance"
         actions={
-          <Link
-            href={isKiosk && kioskStaffId ? `/attendance/new?locked_staff_id=${kioskStaffId}` : '/attendance/new'}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Mark Attendance
-          </Link>
+          isKiosk && kioskTodayMarked ? (
+            <span className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 text-sm font-semibold rounded-lg">
+              <CalendarCheck className="w-4 h-4" /> Today Already Marked
+            </span>
+          ) : (
+            <Link
+              href={isKiosk && kioskStaffId ? `/attendance/new?locked_staff_id=${kioskStaffId}` : '/attendance/new'}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Mark Attendance
+            </Link>
+          )
         }
       />
 
@@ -213,12 +226,14 @@ export default async function AttendancePage({
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
             <CalendarCheck className="w-10 h-10 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500 font-medium">No attendance records for {getMonthLabel(currentMonth)}</p>
-            <Link
-              href={isKiosk && kioskStaffId ? `/attendance/new?locked_staff_id=${kioskStaffId}` : '/attendance/new'}
-              className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> Mark Attendance
-            </Link>
+            {!(isKiosk && kioskTodayMarked) && (
+              <Link
+                href={isKiosk && kioskStaffId ? `/attendance/new?locked_staff_id=${kioskStaffId}` : '/attendance/new'}
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Mark Attendance
+              </Link>
+            )}
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

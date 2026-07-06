@@ -62,8 +62,12 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard?error=unauthorized', request.url))
     }
 
-    // Attendance kiosk: only the /attendance route is allowed
-    if (profile.role === 'attendance_kiosk' && !pathname.startsWith('/attendance') && !pathname.startsWith('/api')) {
+    // Attendance kiosk: /attendance and own payslips only
+    if (profile.role === 'attendance_kiosk' &&
+      !pathname.startsWith('/attendance') &&
+      !pathname.startsWith('/payroll/my-payslips') &&
+      !pathname.startsWith('/payroll/slips') &&
+      !pathname.startsWith('/api')) {
       return NextResponse.redirect(new URL('/attendance', request.url))
     }
 

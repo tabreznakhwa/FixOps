@@ -42,6 +42,18 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient()
 
+    // Block duplicate same-day records
+    const { data: existing } = await (supabase as any)
+      .from('attendance')
+      .select('id')
+      .eq('organization_id', profile.organization_id)
+      .eq('staff_id', staff_id)
+      .eq('date', date)
+      .maybeSingle()
+    if (existing) {
+      return NextResponse.json({ error: 'Attendance already recorded for this staff member on this date' }, { status: 409 })
+    }
+
     const { data: record, error } = await (supabase as any)
       .from('attendance')
       .insert({

@@ -49,6 +49,48 @@ export async function GET(
   }
 }
 
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params
+    const supabaseUser = await createClient()
+    const { data: { user } } = await supabaseUser.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { data: profile } = await (supabaseUser as any)
+      .from('users').select('organization_id, role').eq('id', user.id).single()
+    if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!['admin', 'owner', 'manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const supabase = createAdminClient() as any
+    const { data: inv } = await supabase
+      .from('invoices').select('id, invoice_number, status, amount_paid, organization_id').eq('id', id).single()
+    if (!inv) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
+    if (inv.organization_id !== profile.organization_id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    if (inv.status !== 'draft') {
+      return NextResponse.json({ error: 'Only draft invoices can be deleted. To cancel a sent invoice, use the Cancel option.' }, { status: 400 })
+    }
+    if (Number(inv.amount_paid) > 0) {
+      return NextResponse.json({ error: 'Cannot delete an invoice with payments recorded' }, { status: 400 })
+    }
+
+    await supabase.from('invoice_items').delete().eq('invoice_id', id)
+    await supabase.from('invoices').delete().eq('id', id)
+
+    await logAudit({ orgId: profile.organization_id, userId: user.id, action: 'delete', entityType: 'invoice', entityId: id, entityLabel: inv.invoice_number })
+    return NextResponse.json({ success: true })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : JSON.stringify(err)
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

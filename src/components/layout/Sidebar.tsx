@@ -18,7 +18,7 @@ import { type ModuleKey, type ModuleAccess } from '@/lib/permissions'
 const navGroups: Array<{
   label: string
   module: ModuleKey
-  items: { href: string; label: string; icon: ElementType; exact?: boolean; excludeRoles?: string[] }[]
+  items: { href: string; label: string; icon: ElementType; exact?: boolean; excludeRoles?: string[]; onlyRoles?: string[] }[]
 }> = [
   {
     label: 'Operations',
@@ -71,6 +71,7 @@ const navGroups: Array<{
       { href: '/attendance', label: 'Attendance', icon: CalendarCheck },
       { href: '/payroll', label: 'Payroll', icon: BarChart3, excludeRoles: ['attendance_kiosk'] },
       { href: '/payroll/process', label: 'Payslips', icon: Printer, excludeRoles: ['attendance_kiosk'] },
+      { href: '/payroll/my-payslips', label: 'My Payslips', icon: Printer, onlyRoles: ['attendance_kiosk'] },
     ],
   },
   {
@@ -142,7 +143,7 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
 
             {!collapsed[group.label] && (
               <div className="mt-1 space-y-0.5">
-                {group.items.filter(({ excludeRoles }) => !excludeRoles?.includes(user.role)).map(({ href, label, icon: Icon, exact }) => {
+                {group.items.filter(({ excludeRoles, onlyRoles }) => !excludeRoles?.includes(user.role) && (!onlyRoles || onlyRoles.includes(user.role))).map(({ href, label, icon: Icon, exact }) => {
                   const active = exact ? pathname === href : (pathname === href || pathname.startsWith(href + '/'))
                   return (
                     <Link
