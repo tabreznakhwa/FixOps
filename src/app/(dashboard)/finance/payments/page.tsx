@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { Plus, CreditCard, CheckCircle2, Pencil } from 'lucide-react'
+import { Suspense } from 'react'
+import { Plus, CreditCard, CheckCircle2 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { CancelPaymentButton } from './CancelPaymentButton'
@@ -84,7 +85,9 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         subtitle="Payment receipts and collection tracking"
         actions={
           <div className="flex items-center gap-2">
-            <PaymentSearchBar />
+            <Suspense fallback={<div className="w-64 h-9 bg-slate-100 rounded-lg animate-pulse" />}>
+              <PaymentSearchBar />
+            </Suspense>
             <Link
               href="/finance/payments/new"
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"

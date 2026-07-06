@@ -40,7 +40,7 @@ export default async function DashboardPage() {
     supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('status', 'new'),
     supabase.from('complaints').select('*', { count: 'exact', head: true }).not('status', 'in', '(completed,verified,invoiced,paid,cancelled)'),
     supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('priority', 'emergency').not('status', 'in', '(completed,cancelled)'),
-    supabase.from('complaints').select('*', { count: 'exact', head: true }).not('status', 'eq', 'cancelled').gte('closed_at' as any, todayISO),
+    supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('status', 'completed').eq('preferred_date' as any, today),
     // Skip financial queries for technicians
     isTechnician
       ? Promise.resolve({ data: [] })
@@ -49,7 +49,7 @@ export default async function DashboardPage() {
     supabase.from('complaints').select('id, complaint_number, description, priority, status, created_at, customers(full_name)').order('created_at', { ascending: false }).limit(8),
     supabase.from('users').select('id, full_name').eq('role', 'technician').eq('status', 'active'),
     supabase.from('staff').select('id, full_name').eq('employment_status', 'active'),
-    supabase.from('inventory_items').select('id, item_name, current_stock, minimum_stock_level, unit_of_measure').eq('is_active', true).gt('minimum_stock_level', 0).limit(200),
+    supabase.from('inventory_items').select('id, item_name, current_stock, minimum_stock_level, unit_of_measure').eq('is_active', true).limit(500),
     isTechnician
       ? Promise.resolve({ data: [] })
       : supabase.from('invoices').select('balance_due, status').in('status', ['issued', 'partial', 'overdue']),
@@ -71,7 +71,9 @@ export default async function DashboardPage() {
   })
   type StockRow = { id: string; item_name: string; current_stock: number; minimum_stock_level: number; unit_of_measure: string }
   const allStockItems = (lowStockItems as unknown as StockRow[]) ?? []
-  const lowStock = allStockItems.filter(i => Number(i.current_stock) <= Number(i.minimum_stock_level)).slice(0, 5)
+  const lowStock = allStockItems
+    .filter(i => i.minimum_stock_level != null && Number(i.minimum_stock_level) > 0 && Number(i.current_stock) <= Number(i.minimum_stock_level))
+    .slice(0, 5)
 
   const rev = (revenueData as unknown as RevRow[]) ?? []
   const statusRows = (complaintStatusData as unknown as StatusRow[]) ?? []

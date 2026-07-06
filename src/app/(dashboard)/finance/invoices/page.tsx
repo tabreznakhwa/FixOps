@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { Plus, FileText, TrendingUp, Clock, AlertCircle, CheckCircle2, Pencil, Search } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
@@ -78,7 +79,9 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
         subtitle="Billing and revenue tracking"
         actions={
           <div className="flex items-center gap-2">
-            <InvoiceSearchBar />
+            <Suspense fallback={<div className="w-64 h-9 bg-slate-100 rounded-lg animate-pulse" />}>
+              <InvoiceSearchBar />
+            </Suspense>
             {canEditDelete && (
               <Link
                 href="/finance/invoices/merge"
