@@ -54,17 +54,39 @@ export function LedgerCustomerSelector({ customers, selectedId, fromDate, toDate
     setSearch('')
   }
 
-  const applyFilters = () => {
+  const applyFilters = (from = localFrom, to = localTo) => {
     const params = new URLSearchParams()
     if (localCustomerId) params.set('customer_id', localCustomerId)
-    if (localFrom) params.set('from_date', localFrom)
-    if (localTo) params.set('to_date', localTo)
+    if (from) params.set('from_date', from)
+    if (to) params.set('to_date', to)
     router.push(`?${params.toString()}`)
   }
 
   const clearCustomer = () => {
     setLocalCustomerId('')
     router.push('?')
+  }
+
+  function applyPreset(preset: string) {
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    const today = fmt(now)
+    let from = today, to = today
+    if (preset === 'yesterday') {
+      const d = new Date(now); d.setDate(d.getDate() - 1)
+      from = to = fmt(d)
+    } else if (preset === 'week') {
+      const d = new Date(now); d.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1))
+      from = fmt(d)
+    } else if (preset === 'month') {
+      from = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`
+    } else if (preset === 'year') {
+      from = `${now.getFullYear()}-01-01`
+    }
+    setLocalFrom(from)
+    setLocalTo(to)
+    applyFilters(from, to)
   }
 
   return (
@@ -169,13 +191,38 @@ export function LedgerCustomerSelector({ customers, selectedId, fromDate, toDate
         {/* Apply button */}
         <button
           type="button"
-          onClick={applyFilters}
+          onClick={() => applyFilters()}
           disabled={!localCustomerId}
           className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Search className="w-4 h-4" />
           View
         </button>
+      </div>
+
+      {/* Quick date presets */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-slate-400 font-medium">Quick:</span>
+        {[
+          { label: 'Today', key: 'today' },
+          { label: 'Yesterday', key: 'yesterday' },
+          { label: 'This Week', key: 'week' },
+          { label: 'This Month', key: 'month' },
+          { label: 'This Year', key: 'year' },
+          { label: 'All Time', key: 'all' },
+        ].map(({ label, key }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => {
+              if (key === 'all') { setLocalFrom(''); setLocalTo(''); applyFilters('', '') }
+              else applyPreset(key)
+            }}
+            className="px-3 py-1 text-xs font-semibold rounded-full border border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Active filter chips */}
