@@ -1,9 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { Plus, MessageSquare, Filter } from 'lucide-react'
+import { Suspense } from 'react'
+import { Plus, MessageSquare } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
+import { ComplaintSearchBar } from './ComplaintSearchBar'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Complaints' }
@@ -21,9 +23,20 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
 
   if (params.status) query = query.eq('status', params.status)
   if (params.priority) query = query.eq('priority', params.priority)
-  if (params.q) query = query.ilike('description', `%${params.q}%`)
   if (params.from) query = query.gte('preferred_date', params.from)
   if (params.to) query = query.lte('preferred_date', params.to)
+
+  if (params.q) {
+    const q = params.q.trim()
+    const { data: matchedCustomers } = await supabase
+      .from('customers').select('id').ilike('full_name', `%${q}%`)
+    const customerIds = (matchedCustomers ?? []).map((c: { id: string }) => c.id)
+    if (customerIds.length > 0) {
+      query = query.or(`description.ilike.%${q}%,complaint_number.ilike.%${q}%,customer_id.in.(${customerIds.join(',')})`)
+    } else {
+      query = query.or(`description.ilike.%${q}%,complaint_number.ilike.%${q}%`)
+    }
+  }
 
   const { data: complaintsRaw } = await query.limit(params.from || params.to ? 1000 : 50)
   const complaints = complaintsRaw as unknown as Array<{
@@ -61,12 +74,17 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
         title="Complaints"
         subtitle="Service requests & job tracking"
         actions={
-          <Link
-            href="/complaints/new"
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> New Complaint
-          </Link>
+          <div className="flex items-center gap-2">
+            <Suspense fallback={<div className="w-60 h-9 bg-slate-100 rounded-lg animate-pulse" />}>
+              <ComplaintSearchBar />
+            </Suspense>
+            <Link
+              href="/complaints/new"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> New Complaint
+            </Link>
+          </div>
         }
       />
 

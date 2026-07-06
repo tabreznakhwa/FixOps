@@ -21,17 +21,24 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
     .order('item_name')
 
   if (params.q) query = query.ilike('item_name', `%${params.q}%`)
-  if (params.filter === 'low') query = query.filter('current_stock', 'lte', 'minimum_stock_level')
 
-  const { data: itemsRaw } = await query.limit(50)
-  const items = itemsRaw as unknown as Array<{
+  // Fetch all (up to 500) so low-stock count is accurate; slice later for normal view
+  const { data: allItemsRaw } = await query.limit(500)
+  type InventoryItem = {
     id: string; item_code: string; item_name: string; category: string | null; brand: string | null;
     unit_of_measure: string; current_stock: number; minimum_stock_level: number;
     purchase_price: number; selling_price: number; storage_location: string | null; is_active: boolean
-  }>
+  }
+  const allItems = (allItemsRaw ?? []) as unknown as InventoryItem[]
+  const isLowItem = (i: InventoryItem) =>
+    i.minimum_stock_level != null && Number(i.minimum_stock_level) > 0 && Number(i.current_stock) <= Number(i.minimum_stock_level)
 
-  const lowStockCount = items?.filter((i) => i.current_stock <= i.minimum_stock_level).length ?? 0
-  const totalValue = items?.reduce((s, i) => s + i.current_stock * i.purchase_price, 0) ?? 0
+  const items: InventoryItem[] = params.filter === 'low'
+    ? allItems.filter(isLowItem)
+    : allItems.slice(0, 50)
+
+  const lowStockCount = allItems.filter(isLowItem).length
+  const totalValue = allItems.reduce((s, i) => s + i.current_stock * i.purchase_price, 0)
 
   return (
     <div className="animate-fade-in">

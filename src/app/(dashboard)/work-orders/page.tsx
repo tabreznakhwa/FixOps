@@ -1,16 +1,19 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { Plus, ClipboardList } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDate, formatCurrency } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
+import { WorkOrderSearchBar } from './WorkOrderSearchBar'
 
+export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Work Orders' }
 
-export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; from?: string; to?: string }> }) {
+export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; from?: string; to?: string; q?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
-  const hasDateFilter = Boolean(params.from || params.to)
+  const hasDateFilter = Boolean(params.from || params.to || params.q)
 
   let query = supabase
     .from('work_orders')
@@ -23,10 +26,20 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
   // the user is looking back at a specific period rather than the active queue.
   if (!hasDateFilter) query = query.not('status', 'in', '(invoiced,paid,cancelled)')
   if (params.status) query = (query as any).eq('status', params.status)
-  // Filter by scheduled_date (the job date shown in the list), not created_at
-  // (when the record was entered into the system) — those can differ.
   if (params.from) query = query.gte('scheduled_date', params.from)
   if (params.to) query = query.lte('scheduled_date', params.to)
+
+  if (params.q) {
+    const q = params.q.trim()
+    const { data: matchedCustomers } = await supabase
+      .from('customers').select('id').ilike('full_name', `%${q}%`)
+    const customerIds = (matchedCustomers ?? []).map((c: { id: string }) => c.id)
+    if (customerIds.length > 0) {
+      query = query.or(`work_order_number.ilike.%${q}%,job_description.ilike.%${q}%,customer_id.in.(${customerIds.join(',')})`)
+    } else {
+      query = query.or(`work_order_number.ilike.%${q}%,job_description.ilike.%${q}%`)
+    }
+  }
 
   const { data: workOrdersRaw } = await query
   const workOrders = (workOrdersRaw ?? []) as unknown as Array<{
@@ -58,12 +71,17 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
         title="Work Orders"
         subtitle="Technician job records and billing"
         actions={
-          <Link
-            href="/work-orders/new"
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> New Work Order
-          </Link>
+          <div className="flex items-center gap-2">
+            <Suspense fallback={<div className="w-60 h-9 bg-slate-100 rounded-lg animate-pulse" />}>
+              <WorkOrderSearchBar />
+            </Suspense>
+            <Link
+              href="/work-orders/new"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> New Work Order
+            </Link>
+          </div>
         }
       />
 
