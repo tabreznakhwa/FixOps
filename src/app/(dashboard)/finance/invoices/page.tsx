@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { Plus, FileText, TrendingUp, Clock, AlertCircle, CheckCircle2, Pencil } from 'lucide-react'
+import { Plus, FileText, TrendingUp, Clock, AlertCircle, CheckCircle2, Pencil, Search } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { DeleteInvoiceButton } from './DeleteInvoiceButton'
