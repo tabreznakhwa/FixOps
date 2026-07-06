@@ -55,12 +55,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch all line items from source invoices
-    const { data: allItems } = await admin
+    const { data: allItems, error: itemsErr } = await admin
       .from('invoice_items')
-      .select('description, quantity, unit_price, line_total, total_price, discount_percent, tax_percent, sort_order, inventory_item_id')
+      .select('*')
       .in('invoice_id', invoice_ids)
       .order('sort_order')
 
+    if (itemsErr) throw itemsErr
     if (!allItems || allItems.length === 0) {
       return NextResponse.json({ error: 'Source invoices have no line items' }, { status: 400 })
     }
@@ -105,10 +106,7 @@ export async function POST(request: NextRequest) {
     if (invErr || !newInvoice) throw invErr ?? new Error('Failed to create merged invoice')
 
     // Insert merged line items (re-index sort_order)
-    const lineItemRows = allItems.map((it: {
-      description: string; quantity: number; unit_price: number; line_total: number
-      total_price: number; discount_percent: number; tax_percent: number; inventory_item_id: string | null
-    }, idx: number) => ({
+    const lineItemRows = (allItems as Record<string, unknown>[]).map((it, idx) => ({
       organization_id: profile.organization_id,
       invoice_id: newInvoice.id,
       description: it.description,
@@ -119,11 +117,11 @@ export async function POST(request: NextRequest) {
       line_total: it.line_total,
       total_price: it.total_price ?? it.line_total,
       sort_order: idx,
-      inventory_item_id: it.inventory_item_id ?? null,
+      inventory_item_id: (it.inventory_item_id as string | null) ?? null,
     }))
 
-    const { error: itemsErr } = await admin.from('invoice_items').insert(lineItemRows)
-    if (itemsErr) throw itemsErr
+    const { error: insertItemsErr } = await admin.from('invoice_items').insert(lineItemRows)
+    if (insertItemsErr) throw insertItemsErr
 
     // Cancel all source invoices with reference to the new merged invoice
     const cancelReason = `Merged into ${invoiceNumber}`
