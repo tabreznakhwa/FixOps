@@ -49,7 +49,7 @@ export default async function DashboardPage() {
     supabase.from('complaints').select('id, complaint_number, description, priority, status, created_at, customers(full_name)').order('created_at', { ascending: false }).limit(8),
     supabase.from('users').select('id, full_name').eq('role', 'technician').eq('status', 'active'),
     supabase.from('staff').select('id, full_name').eq('employment_status', 'active'),
-    supabase.from('inventory_items').select('id, item_name, current_stock, minimum_stock_level, unit_of_measure').filter('current_stock', 'lte', 'minimum_stock_level').eq('is_active', true).limit(5),
+    supabase.from('inventory_items').select('id, item_name, current_stock, minimum_stock_level, unit_of_measure').eq('is_active', true).gt('minimum_stock_level', 0).limit(200),
     isTechnician
       ? Promise.resolve({ data: [] })
       : supabase.from('invoices').select('balance_due, status').in('status', ['issued', 'partial', 'overdue']),
@@ -70,6 +70,8 @@ export default async function DashboardPage() {
     return true
   })
   type StockRow = { id: string; item_name: string; current_stock: number; minimum_stock_level: number; unit_of_measure: string }
+  const allStockItems = (lowStockItems as unknown as StockRow[]) ?? []
+  const lowStock = allStockItems.filter(i => Number(i.current_stock) <= Number(i.minimum_stock_level)).slice(0, 5)
 
   const rev = (revenueData as unknown as RevRow[]) ?? []
   const statusRows = (complaintStatusData as unknown as StatusRow[]) ?? []
@@ -104,7 +106,7 @@ export default async function DashboardPage() {
             monthRevenue,
             monthCollected,
             totalReceivables,
-            lowStockCount: (lowStockItems as unknown as StockRow[])?.length ?? 0,
+            lowStockCount: lowStock.length,
           }}
         />
 
@@ -127,7 +129,7 @@ export default async function DashboardPage() {
           </div>
           <div className="space-y-6">
             <TechnicianWorkload technicians={(technicianData as unknown as TechRow[]) ?? []} />
-            <LowStockAlert items={(lowStockItems as unknown as StockRow[]) ?? []} />
+            <LowStockAlert items={lowStock} />
           </div>
         </div>
       </div>

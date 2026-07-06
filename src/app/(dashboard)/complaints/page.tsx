@@ -5,6 +5,7 @@ import { Plus, MessageSquare, Filter } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 
+export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Complaints' }
 
 const STATUSES = ['new', 'assigned', 'accepted', 'on_the_way', 'work_started', 'waiting_parts', 'waiting_approval', 'completed']
@@ -21,8 +22,8 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   if (params.status) query = query.eq('status', params.status)
   if (params.priority) query = query.eq('priority', params.priority)
   if (params.q) query = query.ilike('description', `%${params.q}%`)
-  if (params.from) query = query.gte('created_at', `${params.from}T00:00:00`)
-  if (params.to) query = query.lte('created_at', `${params.to}T23:59:59`)
+  if (params.from) query = query.gte('preferred_date', params.from)
+  if (params.to) query = query.lte('preferred_date', params.to)
 
   const { data: complaintsRaw } = await query.limit(params.from || params.to ? 1000 : 50)
   const complaints = complaintsRaw as unknown as Array<{
@@ -89,8 +90,8 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
           ))}
         </div>
 
-        {/* Date Range Filter */}
-        <DateRangeFilter basePath="/complaints" from={params.from} to={params.to} />
+        {/* Date Range Filter — filters by preferred/assigned date */}
+        <DateRangeFilter basePath="/complaints" from={params.from} to={params.to} label="Assigned Date" />
 
         {/* Priority Filter */}
         <div className="flex gap-2">

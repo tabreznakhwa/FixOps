@@ -24,7 +24,7 @@ const PRESETS: { label: string; range: () => { from: string; to: string } }[] = 
   { label: 'This Year', range: () => { const t = new Date(); return { from: toISODate(new Date(t.getFullYear(), 0, 1)), to: toISODate(t) } } },
 ]
 
-export function DateRangeFilter({ basePath, from, to }: { basePath: string; from?: string; to?: string }) {
+export function DateRangeFilter({ basePath, from, to, label = 'Date' }: { basePath: string; from?: string; to?: string; label?: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [customFrom, setCustomFrom] = useState(from ?? '')
@@ -45,7 +45,7 @@ export function DateRangeFilter({ basePath, from, to }: { basePath: string; from
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex items-center gap-1.5 text-slate-400 text-xs font-semibold pr-1">
-        <Calendar className="w-3.5 h-3.5" /> Date
+        <Calendar className="w-3.5 h-3.5" /> {label}
       </div>
       <button
         onClick={() => navigate(null, null)}

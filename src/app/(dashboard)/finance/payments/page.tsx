@@ -5,7 +5,9 @@ import { Plus, CreditCard, CheckCircle2, Pencil } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { CancelPaymentButton } from './CancelPaymentButton'
+import { PaymentSearchBar } from './PaymentSearchBar'
 
+export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Payments' }
 
 const MODE_ICONS: Record<string, string> = {
@@ -13,7 +15,7 @@ const MODE_ICONS: Record<string, string> = {
   cheque: '📄', online: '🌐', other: '💰',
 }
 
-export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ mode?: string; from?: string; to?: string }> }) {
+export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ mode?: string; from?: string; to?: string; q?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -21,7 +23,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const userRole = (profileRaw as { role: string } | null)?.role ?? ''
   const canEditDelete = ['owner', 'admin', 'manager'].includes(userRole)
 
-  const hasDateFilter = Boolean(params.from || params.to)
+  const hasDateFilter = Boolean(params.from || params.to || params.q)
 
   let query = supabase
     .from('payments')
@@ -32,6 +34,23 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   if (params.mode) query = query.eq('payment_mode', params.mode)
   if (params.from) query = query.gte('payment_date', params.from)
   if (params.to) query = query.lte('payment_date', params.to)
+
+  if (params.q) {
+    const q = params.q.trim()
+    const { data: matchedCustomers } = await supabase
+      .from('customers')
+      .select('id')
+      .ilike('full_name', `%${q}%`)
+    const customerIds = (matchedCustomers ?? []).map((c: { id: string }) => c.id)
+
+    if (customerIds.length > 0) {
+      query = query.or(
+        `payment_number.ilike.%${q}%,reference_number.ilike.%${q}%,customer_id.in.(${customerIds.join(',')})`,
+      )
+    } else {
+      query = query.or(`payment_number.ilike.%${q}%,reference_number.ilike.%${q}%`)
+    }
+  }
 
   const { data: paymentsRaw } = await query.limit(hasDateFilter ? 1000 : 50)
   const payments = paymentsRaw as unknown as Array<{
@@ -64,12 +83,15 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         title="Payments"
         subtitle="Payment receipts and collection tracking"
         actions={
-          <Link
-            href="/finance/payments/new"
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Record Payment
-          </Link>
+          <div className="flex items-center gap-2">
+            <PaymentSearchBar />
+            <Link
+              href="/finance/payments/new"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Record Payment
+            </Link>
+          </div>
         }
       />
 
