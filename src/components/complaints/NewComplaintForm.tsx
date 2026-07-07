@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState, useState, useEffect, useRef } from 'react'
 import { createComplaint } from '@/app/(dashboard)/complaints/actions'
 import { Loader2, AlertCircle, Search } from 'lucide-react'
 
@@ -30,37 +30,59 @@ const PRIORITIES = [
   { value: 'emergency', label: 'Emergency', cls: 'border-red-200 text-red-700', active: 'bg-red-600 border-red-600 text-white' },
 ]
 
+type Customer = { id: string; full_name: string; company_name: string | null; mobile_number: string | null; customer_code: string }
+
 interface Props {
-  customers: { id: string; full_name: string; company_name: string | null; mobile_number: string | null; customer_code: string }[]
   technicians: { id: string; full_name: string }[]
 }
 
-export function NewComplaintForm({ customers, technicians }: Props) {
+export function NewComplaintForm({ technicians }: Props) {
   const [state, action, pending] = useActionState(createComplaint, null)
   const [priority, setPriority] = useState('medium')
   const [source, setSource] = useState('admin_entry')
   const [categories, setCategories] = useState<string[]>([])
   const [customerSearch, setCustomerSearch] = useState('')
-  const [selectedCustomer, setSelectedCustomer] = useState<Props['customers'][0] | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
+  const [searchResults, setSearchResults] = useState<Customer[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const errorRef = useRef<HTMLDivElement>(null)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (state?.error && errorRef.current) {
+      errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [state?.error])
+
+  useEffect(() => {
+    const q = customerSearch.trim()
+    if (!q) { setSearchResults([]); return }
+
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(async () => {
+      setSearchLoading(true)
+      try {
+        const res = await fetch(`/api/customers/search?q=${encodeURIComponent(q)}`)
+        const data = res.ok ? await res.json() : []
+        setSearchResults(data as Customer[])
+      } catch {
+        setSearchResults([])
+      } finally {
+        setSearchLoading(false)
+      }
+    }, 300)
+
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
+  }, [customerSearch])
 
   const toggleCategory = (val: string) =>
     setCategories((prev) => prev.includes(val) ? prev.filter((c) => c !== val) : [...prev, val])
 
-  const filteredCustomers = customerSearch ? customers.filter((c) => {
-    const q = customerSearch.toLowerCase()
-    return (
-      (c.full_name?.toLowerCase().includes(q) ?? false) ||
-      (c.company_name?.toLowerCase().includes(q) ?? false) ||
-      (c.mobile_number?.includes(q) ?? false) ||
-      (c.customer_code?.toLowerCase().includes(q) ?? false)
-    )
-  }).slice(0, 8) : []
-
   return (
     <form action={action} className="space-y-6">
       {state?.error && (
-        <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
+        <div ref={errorRef} className="flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           {state.error}
         </div>
@@ -83,7 +105,7 @@ export function NewComplaintForm({ customers, technicians }: Props) {
             </div>
             <button
               type="button"
-              onClick={() => { setSelectedCustomer(null); setCustomerSearch('') }}
+              onClick={() => { setSelectedCustomer(null); setCustomerSearch(''); setSearchResults([]) }}
               className="text-xs text-blue-600 hover:text-blue-700 font-medium"
             >
               Change
@@ -93,6 +115,9 @@ export function NewComplaintForm({ customers, technicians }: Props) {
         ) : (
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            {searchLoading && (
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />
+            )}
             <input
               type="text"
               value={customerSearch}
@@ -103,10 +128,12 @@ export function NewComplaintForm({ customers, technicians }: Props) {
             />
             {showDropdown && customerSearch && (
               <div className="absolute z-10 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-                {filteredCustomers.length === 0 ? (
+                {searchLoading ? (
+                  <p className="text-sm text-slate-400 px-4 py-3">Searching…</p>
+                ) : searchResults.length === 0 ? (
                   <p className="text-sm text-slate-400 px-4 py-3">No customers found</p>
                 ) : (
-                  filteredCustomers.map((c) => (
+                  searchResults.map((c) => (
                     <button
                       key={c.id}
                       type="button"
@@ -121,13 +148,6 @@ export function NewComplaintForm({ customers, technicians }: Props) {
               </div>
             )}
           </div>
-        )}
-
-        {customers.length === 0 && (
-          <p className="text-xs text-slate-500 mt-2">
-            No customers yet.{' '}
-            <a href="/customers/new" className="text-blue-600 underline">Add one first</a>.
-          </p>
         )}
       </div>
 
@@ -231,7 +251,7 @@ export function NewComplaintForm({ customers, technicians }: Props) {
           <input
             type="text"
             name="location"
-            placeholder="e.g. Dubai Marina, Villa 12, Flat 304"
+            placeholder="e.g. Block 6, Street 615, House 30"
             className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -242,7 +262,6 @@ export function NewComplaintForm({ customers, technicians }: Props) {
             <input
               type="date"
               name="preferred_date"
-              min={new Date().toISOString().split('T')[0]}
               className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -276,17 +295,25 @@ export function NewComplaintForm({ customers, technicians }: Props) {
       )}
 
       {/* Submit */}
-      <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={pending}
-          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-        >
-          {pending ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : 'Log Complaint'}
-        </button>
-        <a href="/complaints" className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors">
-          Cancel
-        </a>
+      <div className="space-y-3">
+        {state?.error && (
+          <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            {state.error}
+          </div>
+        )}
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={pending}
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            {pending ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : 'Log Complaint'}
+          </button>
+          <a href="/complaints" className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors">
+            Cancel
+          </a>
+        </div>
       </div>
     </form>
   )

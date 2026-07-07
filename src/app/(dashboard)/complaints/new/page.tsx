@@ -9,24 +9,13 @@ export const metadata = { title: 'New Complaint' }
 export default async function NewComplaintPage() {
   const supabase = await createClient()
 
-  const [{ data: customersRaw }, { data: techniciansRaw }] = await Promise.all([
-    supabase
-      .from('customers')
-      .select('id, full_name, company_name, mobile_number, customer_code')
-      .eq('status', 'active')
-      .order('full_name')
-      .limit(5000),
-    supabase
-      .from('users')
-      .select('id, full_name')
-      .eq('role', 'technician')
-      .eq('status', 'active')
-      .order('full_name'),
-  ])
+  const { data: techniciansRaw } = await supabase
+    .from('users')
+    .select('id, full_name')
+    .eq('role', 'technician')
+    .eq('status', 'active')
+    .order('full_name')
 
-  const customers = (customersRaw ?? []) as {
-    id: string; full_name: string; company_name: string | null; mobile_number: string | null; customer_code: string
-  }[]
   const technicians = (techniciansRaw ?? []) as { id: string; full_name: string }[]
 
   return (
@@ -44,7 +33,7 @@ export default async function NewComplaintPage() {
         }
       />
       <div className="p-6 max-w-2xl">
-        <NewComplaintForm customers={customers} technicians={technicians} />
+        <NewComplaintForm technicians={technicians} />
       </div>
     </div>
   )
