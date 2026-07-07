@@ -5,6 +5,45 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { logAudit } from '@/lib/audit'
 
+export async function deleteCustomer(id: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: profileRaw } = await supabase
+    .from('users').select('organization_id, full_name').eq('id', user.id).single()
+  const profile = profileRaw as unknown as { organization_id: string; full_name: string } | null
+  if (!profile?.organization_id) return { error: 'No organization found' }
+
+  // Check for linked complaints or invoices
+  const [{ count: complaintCount }, { count: invoiceCount }] = await Promise.all([
+    (supabase as any).from('complaints').select('id', { count: 'exact', head: true }).eq('customer_id', id),
+    (supabase as any).from('invoices').select('id', { count: 'exact', head: true }).eq('customer_id', id),
+  ])
+  if ((complaintCount ?? 0) > 0) return { error: `Cannot delete — customer has ${complaintCount} complaint(s) on record.` }
+  if ((invoiceCount ?? 0) > 0) return { error: `Cannot delete — customer has ${invoiceCount} invoice(s) on record.` }
+
+  const { data: customerRaw } = await (supabase as any)
+    .from('customers').select('full_name, mobile_number').eq('id', id).eq('organization_id', profile.organization_id).single()
+
+  const { error } = await (supabase as any)
+    .from('customers').delete().eq('id', id).eq('organization_id', profile.organization_id)
+  if (error) return { error: error.message }
+
+  await logAudit({
+    orgId: profile.organization_id,
+    userId: user.id,
+    userName: profile.full_name,
+    action: 'delete',
+    entityType: 'customer',
+    entityLabel: customerRaw ? `${customerRaw.full_name} (${customerRaw.mobile_number})` : id,
+    entityId: id,
+  })
+
+  revalidatePath('/customers')
+  redirect('/customers')
+}
+
 export async function createCustomer(
   prevState: { error?: string } | null,
   formData: FormData

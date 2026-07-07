@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Edit, Plus, Building2, User, Printer } from 'lucide-react'
 import { formatDate, getStatusColor, getPriorityColor, formatStatus } from '@/lib/utils'
+import { DeleteCustomerButton } from './DeleteCustomerButton'
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   return { title: 'Customer Detail' }
@@ -62,7 +63,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         title={customer.full_name}
         subtitle={customer.customer_code}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Link
               href="/customers"
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
@@ -75,9 +76,10 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             >
               <Edit className="w-4 h-4" /> Edit
             </Link>
+            <DeleteCustomerButton customerId={customer.id} customerName={customer.full_name} />
             <Link
               href={`/complaints/new?customer_id=${customer.id}`}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" /> Add Complaint
             </Link>

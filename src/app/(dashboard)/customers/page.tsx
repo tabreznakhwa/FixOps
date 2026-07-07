@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { Plus, Phone, MapPin, Building2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Phone, MapPin, Building2, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 import { CustomerSearch } from './CustomerSearch'
 import { getStatusColor } from '@/lib/utils'
 
@@ -162,12 +162,20 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <Link
-                          href={`/customers/${c.id}`}
-                          className="text-xs text-blue-600 hover:text-blue-700 font-medium opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          View →
-                        </Link>
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Link
+                            href={`/customers/${c.id}/edit`}
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                          >
+                            <Pencil className="w-3 h-3" /> Edit
+                          </Link>
+                          <Link
+                            href={`/customers/${c.id}`}
+                            className="px-2.5 py-1.5 text-xs font-semibold text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+                          >
+                            View →
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}
