@@ -34,10 +34,15 @@ export async function GET(request: Request) {
       .limit(8),
   ])
 
-  // Merge and deduplicate, name matches first
+  type Row = { id: string; full_name: string; company_name: string | null; mobile_number: string | null; customer_code: string }
+  const all = [
+    ...((byName ?? []) as Row[]),
+    ...((byMobile ?? []) as Row[]),
+    ...((byCode ?? []) as Row[]),
+  ]
   const seen = new Set<string>()
-  const results: typeof byName = []
-  for (const row of [...(byName ?? []), ...(byMobile ?? []), ...(byCode ?? [])]) {
+  const results: Row[] = []
+  for (const row of all) {
     if (!seen.has(row.id)) { seen.add(row.id); results.push(row) }
     if (results.length >= 8) break
   }
