@@ -13,7 +13,7 @@ export const metadata = { title: 'Vendor Ledger' }
 export default async function VendorLedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ supplier_id?: string; from_date?: string; to_date?: string }>
+  searchParams: Promise<{ supplier_id?: string; from_date?: string; to_date?: string; show?: string }>
 }) {
   const params = await searchParams
   const supabase = await createClient()
@@ -118,6 +118,13 @@ export default async function VendorLedgerPage({
 
   const balance = ledgerRows.length ? ledgerRows[ledgerRows.length - 1].running_balance : 0
 
+  const show = params.show ?? 'all'
+  const displayRows = show === 'purchases'
+    ? ledgerRows.filter(r => r.type !== 'payment')
+    : show === 'payments'
+    ? ledgerRows.filter(r => r.type === 'payment')
+    : ledgerRows
+
   const typeBadge: Record<string, string> = {
     opening_balance: 'bg-purple-50 text-purple-700',
     purchase_order: 'bg-blue-50 text-blue-700',
@@ -144,12 +151,36 @@ export default async function VendorLedgerPage({
             />
           </Suspense>
         </div>
-        <Suspense>
-          <SupplierSelector
-            suppliers={suppliers}
-            selectedId={params.supplier_id ?? ''}
-          />
-        </Suspense>
+        <div className="flex items-center gap-2 print:hidden">
+          <Suspense>
+            <SupplierSelector
+              suppliers={suppliers}
+              selectedId={params.supplier_id ?? ''}
+            />
+          </Suspense>
+          {params.supplier_id && (
+            <div className="flex gap-1.5 ml-2">
+              {([
+                { label: 'All', value: 'all' },
+                { label: 'Purchases', value: 'purchases' },
+                { label: 'Paid', value: 'payments' },
+              ] as const).map(({ label, value }) => {
+                const isActive = show === value || (value === 'all' && show !== 'purchases' && show !== 'payments')
+                const sp = new URLSearchParams()
+                if (params.supplier_id) sp.set('supplier_id', params.supplier_id)
+                if (params.from_date) sp.set('from_date', params.from_date)
+                if (params.to_date) sp.set('to_date', params.to_date)
+                if (value !== 'all') sp.set('show', value)
+                return (
+                  <a key={value} href={`/suppliers/vendor-ledger?${sp.toString()}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${isActive ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    {label}
+                  </a>
+                )
+              })}
+            </div>
+          )}
+        </div>
 
         {selectedSupplier && (
           <>
@@ -158,7 +189,7 @@ export default async function VendorLedgerPage({
                 <div>
                   <p className="font-semibold text-slate-900">{selectedSupplier.supplier_name}</p>
                   <p className="text-sm text-slate-500">{selectedSupplier.supplier_code}</p>
-                  <p className="text-xs text-slate-400 mt-1">{ledgerRows.length} transaction{ledgerRows.length !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-slate-400 mt-1">{displayRows.length} transaction{displayRows.length !== 1 ? 's' : ''}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-slate-500 uppercase tracking-wider mb-0.5">Current Balance</p>
@@ -172,7 +203,7 @@ export default async function VendorLedgerPage({
               </div>
             </div>
 
-            {!ledgerRows.length ? (
+            {!displayRows.length ? (
               <div className="bg-white rounded-xl border border-slate-200 p-10 text-center">
                 <FileBarChart className="w-10 h-10 text-slate-300 mx-auto mb-3" />
                 <p className="text-slate-500 font-medium">No transactions found</p>
@@ -192,7 +223,7 @@ export default async function VendorLedgerPage({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {ledgerRows.map((row) => (
+                    {displayRows.map((row) => (
                       <tr key={row.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">{formatDate(row.date)}</td>
                         <td className="px-4 py-3.5">
@@ -221,10 +252,10 @@ export default async function VendorLedgerPage({
                     <tr className="border-t-2 border-slate-200 bg-slate-50">
                       <td colSpan={3} className="px-5 py-3.5 text-sm font-bold text-slate-700">Totals</td>
                       <td className="px-4 py-3.5 text-right text-sm font-bold text-red-600">
-                        {formatCurrency(ledgerRows.reduce((s, r) => s + r.debit, 0))}
+                        {formatCurrency(displayRows.reduce((s, r) => s + r.debit, 0))}
                       </td>
                       <td className="px-4 py-3.5 text-right text-sm font-bold text-green-600">
-                        {formatCurrency(ledgerRows.reduce((s, r) => s + r.credit, 0))}
+                        {formatCurrency(displayRows.reduce((s, r) => s + r.credit, 0))}
                       </td>
                       <td className="px-5 py-3.5 text-right text-sm font-bold text-slate-900">
                         {formatCurrency(Math.abs(balance))}

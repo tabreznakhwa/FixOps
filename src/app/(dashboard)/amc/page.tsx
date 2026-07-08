@@ -1,27 +1,29 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { Plus, ShieldCheck, Clock, AlertTriangle } from 'lucide-react'
+import { Plus, ShieldCheck, Clock, AlertTriangle, Package } from 'lucide-react'
 import { formatCurrency, formatDate, daysUntil, getStatusColor } from '@/lib/utils'
 
 export const metadata = { title: 'AMC Contracts' }
 
-export default async function AMCPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+export default async function AMCPage({ searchParams }: { searchParams: Promise<{ status?: string; parts?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
 
   let query = supabase
     .from('amc_contracts')
-    .select('id, contract_number, contract_type, start_date, end_date, contract_amount, billing_frequency, visits_included, visits_used, status, renewal_reminder_date, customers(full_name, mobile_number, company_name)')
+    .select('id, contract_number, contract_type, start_date, end_date, contract_amount, billing_frequency, visits_included, visits_used, status, renewal_reminder_date, parts_included, customers(full_name, mobile_number, company_name)')
     .order('end_date', { ascending: true })
 
   if (params.status) query = query.eq('status', params.status)
+  if (params.parts === 'with') query = (query as any).eq('parts_included', true)
+  if (params.parts === 'without') query = (query as any).eq('parts_included', false)
 
   const { data: contractsRaw } = await query.limit(50)
   const contracts = contractsRaw as unknown as Array<{
     id: string; contract_number: string; contract_type: string | null; start_date: string; end_date: string;
     contract_amount: number; billing_frequency: string; visits_included: number; visits_used: number;
-    status: string; renewal_reminder_date: string | null;
+    status: string; renewal_reminder_date: string | null; parts_included: boolean;
     customers: { full_name: string; mobile_number: string; company_name?: string | null } | null
   }>
 
@@ -72,25 +74,47 @@ export default async function AMCPage({ searchParams }: { searchParams: Promise<
           ))}
         </div>
 
-        {/* Status Tabs */}
-        <div className="flex gap-2">
+        {/* Status + Parts Tabs */}
+        <div className="flex flex-wrap gap-2 items-center">
           {[
             { label: 'All', value: '' },
             { label: 'Active', value: 'active' },
             { label: 'Expiring Soon', value: 'expiring' },
             { label: 'Expired', value: 'expired' },
             { label: 'Cancelled', value: 'cancelled' },
-          ].map(({ label, value }) => (
-            <Link
-              key={label}
-              href={value ? `/amc?status=${value}` : '/amc'}
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                params.status === value || (!params.status && !value) ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {label}
-            </Link>
-          ))}
+          ].map(({ label, value }) => {
+            const sp = new URLSearchParams()
+            if (value) sp.set('status', value)
+            if (params.parts) sp.set('parts', params.parts)
+            return (
+              <Link key={label} href={`/amc${sp.toString() ? `?${sp.toString()}` : ''}`}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                  params.status === value || (!params.status && !value) ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}>
+                {label}
+              </Link>
+            )
+          })}
+
+          <div className="w-px h-6 bg-slate-200 mx-1" />
+
+          {[
+            { label: 'All Contracts', value: '' },
+            { label: 'With Spare Parts', value: 'with' },
+            { label: 'Without Spare Parts', value: 'without' },
+          ].map(({ label, value }) => {
+            const sp = new URLSearchParams()
+            if (params.status) sp.set('status', params.status)
+            if (value) sp.set('parts', value)
+            return (
+              <Link key={label} href={`/amc${sp.toString() ? `?${sp.toString()}` : ''}`}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                  params.parts === value || (!params.parts && !value) ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}>
+                {label}
+              </Link>
+            )
+          })}
         </div>
 
         {/* Contracts Grid */}
@@ -124,9 +148,16 @@ export default async function AMCPage({ searchParams }: { searchParams: Promise<
                         <p className="text-xs text-slate-500">{customer.full_name}</p>
                       )}
                     </div>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusColor(c.status)}`}>
-                      {c.status}
-                    </span>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusColor(c.status)}`}>
+                        {c.status}
+                      </span>
+                      {c.parts_included && (
+                        <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">
+                          <Package className="w-3 h-3" /> Spare Parts
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 mb-4 text-xs">

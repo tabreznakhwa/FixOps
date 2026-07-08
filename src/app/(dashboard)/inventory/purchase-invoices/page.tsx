@@ -1,11 +1,12 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { Plus, Package } from 'lucide-react'
+import { Plus, Package, Pencil, Eye } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
+import { CancelPurchaseInvoiceButton } from './CancelPurchaseInvoiceButton'
 
 export const metadata = { title: 'Purchase Invoices' }
 
@@ -114,14 +115,16 @@ export default async function PurchaseInvoicesPage({
                   <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Total</th>
                   <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Balance</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Status</th>
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {invoices.map(inv => {
                   const supplierDisplay = inv.suppliers?.supplier_name ?? inv.supplier_name ?? '—'
                   const isCash = inv.payment_type === 'cash'
+                  const isCancelled = inv.status === 'cancelled'
                   return (
-                    <tr key={inv.id} className={`hover:bg-slate-50 transition-colors ${inv.status === 'cancelled' ? 'opacity-50' : ''}`}>
+                    <tr key={inv.id} className={`hover:bg-slate-50 transition-colors group ${isCancelled ? 'opacity-50' : ''}`}>
                       <td className="px-4 py-3.5">
                         <Link href={`/inventory/purchase-invoices/${inv.id}`}
                           className="text-sm font-mono font-semibold text-blue-600 hover:text-blue-800">
@@ -142,13 +145,30 @@ export default async function PurchaseInvoicesPage({
                         </span>
                       </td>
                       <td className="px-4 py-3.5">
-                        {inv.status === 'cancelled' ? (
+                        {isCancelled ? (
                           <span className="text-xs font-semibold text-red-500 bg-red-50 px-2.5 py-1 rounded-full">Cancelled</span>
                         ) : (
                           <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${inv.payment_status === 'paid' ? 'bg-green-100 text-green-700' : inv.payment_status === 'partial' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
                             {inv.payment_status.charAt(0).toUpperCase() + inv.payment_status.slice(1)}
                           </span>
                         )}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Link href={`/inventory/purchase-invoices/${inv.id}`}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View">
+                            <Eye className="w-4 h-4" />
+                          </Link>
+                          {!isCancelled && (
+                            <>
+                              <Link href={`/inventory/purchase-invoices/${inv.id}/edit`}
+                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                                <Pencil className="w-4 h-4" />
+                              </Link>
+                              <CancelPurchaseInvoiceButton id={inv.id} />
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )

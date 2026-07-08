@@ -21,6 +21,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ success: true })
     }
 
+    if (body.action === 'update') {
+      const allowed = ['invoice_date', 'due_date', 'payment_type', 'payment_mode', 'payment_status', 'notes']
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      for (const key of allowed) {
+        if (key in body) updates[key] = body[key] === '' ? null : body[key]
+      }
+      const { error } = await supabase.from('purchase_invoices').update(updates).eq('id', id)
+      if (error) throw error
+      return NextResponse.json({ success: true })
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
   } catch (err) {
     console.error('Purchase invoice PATCH error:', err)

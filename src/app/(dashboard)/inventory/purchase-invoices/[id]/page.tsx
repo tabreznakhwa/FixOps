@@ -2,9 +2,10 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Pencil } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { PrintActions } from '@/components/print/PrintActions'
+import { CancelPurchaseInvoiceButton } from '../CancelPurchaseInvoiceButton'
 
 export const metadata = { title: 'Purchase Invoice' }
 
@@ -166,6 +167,15 @@ export default async function PurchaseInvoiceDetailPage({ params }: { params: Pr
         actions={
           <div className="flex items-center gap-2">
             <PrintActions label="Print" />
+            {!isCancelled && (
+              <>
+                <Link href={`/inventory/purchase-invoices/${invoice.id}/edit`}
+                  className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
+                  <Pencil className="w-4 h-4" /> Edit
+                </Link>
+                <CancelPurchaseInvoiceButton id={invoice.id} redirect />
+              </>
+            )}
             <Link href="/inventory/purchase-invoices"
               className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
               <ArrowLeft className="w-4 h-4" /> Back
