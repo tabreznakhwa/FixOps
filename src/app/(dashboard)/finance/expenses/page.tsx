@@ -4,6 +4,10 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus, Receipt, TrendingDown, Banknote, Landmark, Pencil } from 'lucide-react'
 import { DeleteExpenseButton } from './DeleteExpenseButton'
+import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
+import { SearchBar } from '@/components/ui/SearchBar'
+import { CategorySelect } from '@/components/ui/CategorySelect'
+import { Suspense } from 'react'
 
 export const metadata = { title: 'Expenses' }
 
@@ -46,7 +50,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; category?: string }>
+  searchParams: Promise<{ from?: string; to?: string; category?: string; q?: string }>
 }) {
   const params = await searchParams
   const supabase = await createClient()
@@ -68,6 +72,7 @@ export default async function ExpensesPage({
     .order('expense_date', { ascending: false })
 
   if (params.category) query = query.eq('category', params.category)
+  if (params.q) query = query.ilike('description', `%${params.q}%`)
 
   const { data: rawExpenses } = await query
 
@@ -98,33 +103,22 @@ export default async function ExpensesPage({
 
       <div className="p-6 space-y-5">
         {/* Filters */}
-        <form method="get" className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <label className="font-medium">From</label>
-            <input type="date" name="from" defaultValue={from}
-              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <label className="font-medium">To</label>
-            <input type="date" name="to" defaultValue={to}
-              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <select name="category" defaultValue={params.category ?? ''}
-            className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="">All Categories</option>
-            {Object.entries(CATEGORY_LABELS).map(([v, l]) => (
-              <option key={v} value={v}>{l}</option>
-            ))}
-          </select>
-          <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-            Apply
-          </button>
-          {(params.from || params.to || params.category) && (
-            <Link href="/finance/expenses" className="px-3 py-2 text-sm text-slate-500 hover:text-slate-700">
-              Clear
-            </Link>
-          )}
-        </form>
+        <div className="flex flex-wrap items-center gap-3">
+          <Suspense>
+            <DateRangeFilter basePath="/finance/expenses" from={params.from} to={params.to} />
+          </Suspense>
+          <Suspense>
+            <CategorySelect
+              basePath="/finance/expenses"
+              categories={Object.keys(CATEGORY_LABELS)}
+              labelMap={CATEGORY_LABELS}
+              value={params.category ?? ''}
+            />
+          </Suspense>
+          <Suspense>
+            <SearchBar basePath="/finance/expenses" placeholder="Search description…" />
+          </Suspense>
+        </div>
 
         {/* Summary cards */}
         <div className="grid grid-cols-3 gap-4">

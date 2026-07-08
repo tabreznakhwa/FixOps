@@ -3,10 +3,18 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Plus, Package } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
+import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
+import { SearchBar } from '@/components/ui/SearchBar'
+import { Suspense } from 'react'
 
 export const metadata = { title: 'Purchase Invoices' }
 
-export default async function PurchaseInvoicesPage() {
+export default async function PurchaseInvoicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string; q?: string }>
+}) {
+  const params = await searchParams
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -14,20 +22,32 @@ export default async function PurchaseInvoicesPage() {
   const { data: profileRaw } = await admin.from('users').select('organization_id').eq('id', user!.id).single()
   const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
 
-  const { data: invoicesRaw } = await admin
+  let invoiceQuery = admin
     .from('purchase_invoices')
     .select('id, invoice_number, invoice_date, supplier_name, payment_type, payment_status, total_amount, balance_due, status, suppliers(supplier_name)')
     .eq('organization_id', orgId)
     .order('invoice_date', { ascending: false })
     .order('created_at', { ascending: false })
-    .limit(500)
 
-  const invoices = (invoicesRaw ?? []) as Array<{
+  if (params.from) invoiceQuery = invoiceQuery.gte('invoice_date', params.from)
+  if (params.to) invoiceQuery = invoiceQuery.lte('invoice_date', params.to)
+
+  const { data: invoicesRaw } = await invoiceQuery.limit(500)
+
+  const allInvoices = (invoicesRaw ?? []) as Array<{
     id: string; invoice_number: string; invoice_date: string
     supplier_name: string | null; payment_type: string; payment_status: string
     total_amount: number; balance_due: number; status: string
     suppliers: { supplier_name: string } | null
   }>
+
+  const q = params.q?.toLowerCase().trim() ?? ''
+  const invoices = q
+    ? allInvoices.filter(inv =>
+        (inv.invoice_number ?? '').toLowerCase().includes(q) ||
+        (inv.suppliers?.supplier_name ?? inv.supplier_name ?? '').toLowerCase().includes(q)
+      )
+    : allInvoices
 
   // Summary totals
   const totalPurchases = invoices.filter(i => i.status !== 'cancelled').reduce((s, i) => s + i.total_amount, 0)
@@ -47,6 +67,15 @@ export default async function PurchaseInvoicesPage() {
       />
 
       <div className="p-6 space-y-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <Suspense>
+            <DateRangeFilter basePath="/inventory/purchase-invoices" from={params.from} to={params.to} />
+          </Suspense>
+          <Suspense>
+            <SearchBar basePath="/inventory/purchase-invoices" placeholder="Search invoice #, supplier…" />
+          </Suspense>
+        </div>
+
         {/* Summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -67,7 +96,7 @@ export default async function PurchaseInvoicesPage() {
         {invoices.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
             <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">No purchase invoices yet</p>
+            <p className="text-slate-500 font-medium">No purchase invoices found</p>
             <Link href="/inventory/purchase-invoices/new"
               className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition">
               <Plus className="w-4 h-4" /> Record First Purchase

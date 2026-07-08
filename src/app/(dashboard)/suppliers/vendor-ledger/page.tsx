@@ -5,6 +5,8 @@ import { FileBarChart } from 'lucide-react'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
 import { SupplierSelector } from './SupplierSelector'
+import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
+import { Suspense } from 'react'
 
 export const metadata = { title: 'Vendor Ledger' }
 
@@ -131,12 +133,23 @@ export default async function VendorLedgerPage({
         actions={<PrintActions />} />
 
       <div className="p-6 space-y-5">
-        <SupplierSelector
-          suppliers={suppliers}
-          selectedId={params.supplier_id ?? ''}
-          fromDate={params.from_date ?? ''}
-          toDate={params.to_date ?? ''}
-        />
+        <div className="print:hidden">
+          <Suspense>
+            <DateRangeFilter
+              basePath="/suppliers/vendor-ledger"
+              from={params.from_date}
+              to={params.to_date}
+              fromKey="from_date"
+              toKey="to_date"
+            />
+          </Suspense>
+        </div>
+        <Suspense>
+          <SupplierSelector
+            suppliers={suppliers}
+            selectedId={params.supplier_id ?? ''}
+          />
+        </Suspense>
 
         {selectedSupplier && (
           <>

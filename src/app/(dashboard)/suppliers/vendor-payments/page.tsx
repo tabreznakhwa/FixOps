@@ -5,6 +5,9 @@ import { TrendingDown, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
+import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
+import { SearchBar } from '@/components/ui/SearchBar'
+import { Suspense } from 'react'
 
 export const metadata = { title: 'Vendor Payment Register' }
 
@@ -23,7 +26,7 @@ const MODE_COLORS: Record<string, string> = {
 export default async function VendorPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>
+  searchParams: Promise<{ from?: string; to?: string; q?: string }>
 }) {
   const params = await searchParams
   const supabase = await createClient()
@@ -39,14 +42,23 @@ export default async function VendorPaymentsPage({
     .gte('payment_date', from)
     .lte('payment_date', to)
     .order('payment_date', { ascending: false })
-    .limit(200)
+    .limit(500)
 
-  const payments = (paymentsRaw ?? []) as Array<{
+  const allPayments = (paymentsRaw ?? []) as Array<{
     id: string; payment_date: string; amount_paid: number; discount_amount: number | null; payment_mode: string
     reference_number: string | null; notes: string | null
     suppliers: { supplier_name: string; supplier_code: string } | null
     purchase_orders: { po_number: string } | null
   }>
+
+  const q = params.q?.toLowerCase().trim() ?? ''
+  const payments = q
+    ? allPayments.filter(p =>
+        (p.suppliers?.supplier_name ?? '').toLowerCase().includes(q) ||
+        (p.reference_number ?? '').toLowerCase().includes(q) ||
+        (p.purchase_orders?.po_number ?? '').toLowerCase().includes(q)
+      )
+    : allPayments
 
   const totalPaid = payments.reduce((s, p) => s + p.amount_paid, 0)
   const totalDiscount = payments.reduce((s, p) => s + Number(p.discount_amount ?? 0), 0)
@@ -73,21 +85,14 @@ export default async function VendorPaymentsPage({
         } />
 
       <div className="p-6 space-y-5">
-        <form method="get" className="flex items-center gap-3 flex-wrap print:hidden">
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <label className="font-medium">From</label>
-            <input type="date" name="from" defaultValue={from}
-              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <label className="font-medium">To</label>
-            <input type="date" name="to" defaultValue={to}
-              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-            Apply
-          </button>
-        </form>
+        <div className="flex flex-wrap items-center gap-3 print:hidden">
+          <Suspense>
+            <DateRangeFilter basePath="/suppliers/vendor-payments" from={params.from} to={params.to} />
+          </Suspense>
+          <Suspense>
+            <SearchBar basePath="/suppliers/vendor-payments" placeholder="Search supplier, reference…" />
+          </Suspense>
+        </div>
 
         {/* Summary */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

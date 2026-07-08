@@ -4,13 +4,17 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { Layers } from 'lucide-react'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
+import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
+import { SearchBar } from '@/components/ui/SearchBar'
+import { CategorySelect } from '@/components/ui/CategorySelect'
+import { Suspense } from 'react'
 
 export const metadata = { title: 'Stock Trial' }
 
 export default async function StockTrialPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; category?: string }>
+  searchParams: Promise<{ from?: string; to?: string; category?: string; q?: string }>
 }) {
   const params = await searchParams
   const supabase = await createClient()
@@ -75,10 +79,16 @@ export default async function StockTrialPage({
     }
   }).filter((r) => params.category ? r.category === params.category : true)
 
+  // Apply text search
+  const q = params.q?.toLowerCase().trim() ?? ''
+  const filteredRows = q
+    ? rows.filter(r => r.item_name.toLowerCase().includes(q) || r.item_code.toLowerCase().includes(q))
+    : rows
+
   // Categories for filter
   const categories = [...new Set(items.map((i) => i.category).filter(Boolean))] as string[]
 
-  const totalClosingValue = rows.reduce((s, r) => s + r.closing * r.purchase_price, 0)
+  const totalClosingValue = filteredRows.reduce((s, r) => s + r.closing * r.purchase_price, 0)
 
   return (
     <div className="animate-fade-in">
@@ -89,41 +99,32 @@ export default async function StockTrialPage({
         actions={<PrintActions />} />
 
       <div className="p-6 space-y-5">
-        <form method="get" className="flex items-center gap-3 flex-wrap print:hidden">
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <label className="font-medium">From</label>
-            <input type="date" name="from" defaultValue={from}
-              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <label className="font-medium">To</label>
-            <input type="date" name="to" defaultValue={to}
-              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
+        <div className="flex flex-wrap items-center gap-3 print:hidden">
+          <Suspense>
+            <DateRangeFilter basePath="/inventory/stock-trial" from={params.from} to={params.to} />
+          </Suspense>
           {categories.length > 0 && (
-            <select name="category" defaultValue={params.category ?? ''}
-              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">All Categories</option>
-              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <Suspense>
+              <CategorySelect basePath="/inventory/stock-trial" categories={categories} value={params.category ?? ''} />
+            </Suspense>
           )}
-          <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-            Apply
-          </button>
-        </form>
+          <Suspense>
+            <SearchBar basePath="/inventory/stock-trial" placeholder="Search item…" />
+          </Suspense>
+        </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Total Items</p>
-            <p className="text-xl font-bold text-slate-900">{rows.length}</p>
+            <p className="text-xl font-bold text-slate-900">{filteredRows.length}</p>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Total Purchased</p>
-            <p className="text-xl font-bold text-green-600">{rows.reduce((s, r) => s + r.purchases, 0).toFixed(0)} units</p>
+            <p className="text-xl font-bold text-green-600">{filteredRows.reduce((s, r) => s + r.purchases, 0).toFixed(0)} units</p>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Total Issued</p>
-            <p className="text-xl font-bold text-amber-600">{rows.reduce((s, r) => s + r.issued, 0).toFixed(0)} units</p>
+            <p className="text-xl font-bold text-amber-600">{filteredRows.reduce((s, r) => s + r.issued, 0).toFixed(0)} units</p>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Closing Value</p>
@@ -134,9 +135,9 @@ export default async function StockTrialPage({
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <h3 className="font-semibold text-slate-900">Stock Trial Balance</h3>
-            <span className="text-xs text-slate-500">{rows.length} items</span>
+            <span className="text-xs text-slate-500">{filteredRows.length} items</span>
           </div>
-          {rows.length === 0 ? (
+          {filteredRows.length === 0 ? (
             <div className="p-10 text-center">
               <Layers className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="text-sm text-slate-400">No inventory items found</p>
@@ -160,7 +161,7 @@ export default async function StockTrialPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {rows.map((r) => (
+                  {filteredRows.map((r) => (
                     <tr key={r.id} className={`hover:bg-slate-50 transition-colors ${r.closing < 0 ? 'bg-red-50' : ''}`}>
                       <td className="px-5 py-3">
                         <p className="text-sm font-semibold text-slate-800">{r.item_name}</p>

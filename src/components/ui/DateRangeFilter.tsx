@@ -24,7 +24,11 @@ const PRESETS: { label: string; range: () => { from: string; to: string } }[] = 
   { label: 'This Year', range: () => { const t = new Date(); return { from: toISODate(new Date(t.getFullYear(), 0, 1)), to: toISODate(t) } } },
 ]
 
-export function DateRangeFilter({ basePath, from, to, label = 'Date' }: { basePath: string; from?: string; to?: string; label?: string }) {
+export function DateRangeFilter({
+  basePath, from, to, label = 'Date', fromKey = 'from', toKey = 'to',
+}: {
+  basePath: string; from?: string; to?: string; label?: string; fromKey?: string; toKey?: string
+}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [customFrom, setCustomFrom] = useState(from ?? '')
@@ -32,8 +36,8 @@ export function DateRangeFilter({ basePath, from, to, label = 'Date' }: { basePa
 
   const navigate = (newFrom: string | null, newTo: string | null) => {
     const params = new URLSearchParams(searchParams.toString())
-    if (newFrom) params.set('from', newFrom); else params.delete('from')
-    if (newTo) params.set('to', newTo); else params.delete('to')
+    if (newFrom) params.set(fromKey, newFrom); else params.delete(fromKey)
+    if (newTo) params.set(toKey, newTo); else params.delete(toKey)
     router.push(`${basePath}?${params.toString()}`)
   }
 

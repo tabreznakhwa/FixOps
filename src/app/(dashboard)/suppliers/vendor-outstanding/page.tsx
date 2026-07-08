@@ -6,13 +6,16 @@ import Link from 'next/link'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
 import { SupplierFilter } from './SupplierFilter'
+import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
+import { SearchBar } from '@/components/ui/SearchBar'
+import { Suspense } from 'react'
 
 export const metadata = { title: 'Vendor Bill-wise Outstanding' }
 
 export default async function VendorOutstandingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ supplier?: string }>
+  searchParams: Promise<{ supplier?: string; from?: string; to?: string; q?: string }>
 }) {
   const params = await searchParams
   const supabase = await createClient()
@@ -32,6 +35,8 @@ export default async function VendorOutstandingPage({
     .order('purchase_date', { ascending: true })
 
   if (params.supplier) poQuery = poQuery.eq('supplier_id', params.supplier)
+  if (params.from) poQuery = poQuery.gte('purchase_date', params.from)
+  if (params.to) poQuery = poQuery.lte('purchase_date', params.to)
 
   let piQuery = admin
     .from('purchase_invoices')
@@ -41,6 +46,8 @@ export default async function VendorOutstandingPage({
     .order('invoice_date', { ascending: true })
 
   if (params.supplier) piQuery = piQuery.eq('supplier_id', params.supplier)
+  if (params.from) piQuery = piQuery.gte('invoice_date', params.from)
+  if (params.to) piQuery = piQuery.lte('invoice_date', params.to)
 
   let openingQuery = admin
     .from('opening_payables')
@@ -50,6 +57,8 @@ export default async function VendorOutstandingPage({
     .order('bill_date', { ascending: true })
 
   if (params.supplier) openingQuery = openingQuery.eq('supplier_id', params.supplier)
+  if (params.from) openingQuery = openingQuery.gte('bill_date', params.from)
+  if (params.to) openingQuery = openingQuery.lte('bill_date', params.to)
 
   const suppliersRes = await admin
     .from('suppliers')
@@ -65,25 +74,46 @@ export default async function VendorOutstandingPage({
     openingQuery.limit(200),
   ])
 
-  const pos = (posRaw ?? []) as Array<{
+  const allPos = (posRaw ?? []) as Array<{
     id: string; po_number: string; purchase_date: string; due_date: string | null
     total_amount: number; amount_paid: number; balance_due: number
     payment_status: string; status: string
     suppliers: { id: string; supplier_name: string; supplier_code: string } | null
   }>
 
-  const pis = ((pisRaw ?? []) as Array<{
+  const allPis = ((pisRaw ?? []) as Array<{
     id: string; invoice_number: string; invoice_date: string; due_date: string | null
     total_amount: number; amount_paid: number; balance_due: number
     payment_status: string; supplier_id: string | null; supplier_name: string | null; status: string
     suppliers: { supplier_name: string } | null
   }>).filter(p => p.status !== 'cancelled' && p.payment_status !== 'paid' && p.balance_due > 0)
 
-  const openingEntries = (openingRaw ?? []) as Array<{
+  const allOpeningEntries = (openingRaw ?? []) as Array<{
     id: string; bill_ref: string; bill_date: string; due_date: string | null
     amount: number; balance_due: number
     suppliers: { id: string; supplier_name: string; supplier_code: string } | null
   }>
+
+  // Text search filter
+  const q = params.q?.toLowerCase().trim() ?? ''
+  const pos = q
+    ? allPos.filter(p =>
+        p.po_number.toLowerCase().includes(q) ||
+        (p.suppliers?.supplier_name ?? '').toLowerCase().includes(q)
+      )
+    : allPos
+  const pis = q
+    ? allPis.filter(p =>
+        (p.invoice_number ?? '').toLowerCase().includes(q) ||
+        (p.suppliers?.supplier_name ?? p.supplier_name ?? '').toLowerCase().includes(q)
+      )
+    : allPis
+  const openingEntries = q
+    ? allOpeningEntries.filter(e =>
+        (e.bill_ref ?? '').toLowerCase().includes(q) ||
+        (e.suppliers?.supplier_name ?? '').toLowerCase().includes(q)
+      )
+    : allOpeningEntries
 
   const totalOutstanding = pos.reduce((s, p) => s + p.balance_due, 0)
     + pis.reduce((s, p) => s + p.balance_due, 0)
@@ -133,6 +163,15 @@ export default async function VendorOutstandingPage({
       />
 
       <div className="p-6 space-y-5">
+        <div className="flex flex-wrap items-center gap-3 print:hidden">
+          <Suspense>
+            <DateRangeFilter basePath="/suppliers/vendor-outstanding" from={params.from} to={params.to} label="Bill Date" />
+          </Suspense>
+          <Suspense>
+            <SearchBar basePath="/suppliers/vendor-outstanding" placeholder="Search bill, PO, supplier…" />
+          </Suspense>
+        </div>
+
         {/* Ageing summary */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
