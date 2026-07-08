@@ -199,19 +199,30 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
       {/* ── Desktop: Flyout Panel ── */}
       {activeGroup && activeGroupData && (
         <div
-          className="hidden lg:flex flex-col fixed left-14 top-0 h-screen w-52 bg-slate-900 border-r border-slate-700/50 z-20 shadow-2xl"
+          className="hidden lg:flex flex-col fixed left-14 top-0 h-screen w-56 bg-slate-900 border-r border-slate-700/50 z-20 shadow-2xl"
           onMouseEnter={cancelClose}
           onMouseLeave={scheduleClose}
         >
-          {/* Panel Header */}
-          <div className="px-4 py-4 border-b border-slate-700/50 flex-shrink-0">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+          {/* Brand header — same height as icon rail logo area */}
+          <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-700/50 flex-shrink-0">
+            <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Wrench className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-white text-sm leading-tight">FixOps</p>
+              <p className="text-slate-500 text-xs">Maintenance System</p>
+            </div>
+          </div>
+
+          {/* Section label */}
+          <div className="px-4 pt-4 pb-1.5 flex-shrink-0">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
               {activeGroupData.label}
             </p>
           </div>
 
           {/* Links */}
-          <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto">
+          <nav className="flex-1 pb-2 px-2 space-y-0.5 overflow-y-auto">
             {activeGroupItems.map(({ href, label, icon: Icon, exact }) => {
               const active = exact ? pathname === href : (pathname === href || pathname.startsWith(href + '/'))
               return (
