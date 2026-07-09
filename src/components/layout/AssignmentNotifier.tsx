@@ -105,11 +105,9 @@ export function AssignmentNotifier({ userId }: { userId: string }) {
           }
           const oldRow = payload.old as { assigned_to?: string }
 
-          // Fire when newly assigned to this user (assigned_to just changed to userId)
-          // OR when status changes to 'assigned' for this user
+          // Fire only when assigned_to just changed to this user
           const justAssigned = oldRow.assigned_to !== userId
-          const statusIsAssigned = row.status === 'assigned'
-          if (!justAssigned && !statusIsAssigned) return
+          if (!justAssigned) return
 
           playSound()
 

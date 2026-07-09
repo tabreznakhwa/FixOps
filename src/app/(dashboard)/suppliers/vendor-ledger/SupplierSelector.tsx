@@ -46,7 +46,7 @@ export function SupplierSelector({ suppliers, selectedId }: Props) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5">
       <h2 className="font-semibold text-slate-900 mb-4">Select Supplier</h2>
-      <div ref={ref} className="relative max-w-sm">
+      <div ref={ref} className="relative w-80">
         <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Supplier</label>
         <button
           type="button"
