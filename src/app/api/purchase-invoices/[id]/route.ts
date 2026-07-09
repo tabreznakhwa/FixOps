@@ -22,7 +22,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     if (body.action === 'update') {
-      const allowed = ['invoice_date', 'due_date', 'payment_type', 'payment_mode', 'payment_status', 'notes']
+      const allowed = ['invoice_date', 'due_date', 'payment_type', 'payment_mode', 'payment_status', 'notes', 'supplier_id']
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
       for (const key of allowed) {
         if (key in body) updates[key] = body[key] === '' ? null : body[key]
