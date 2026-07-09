@@ -14,14 +14,10 @@ export default async function NewPaymentPage({
   const params = await searchParams
   const supabase = await createClient()
 
-  // Fetch invoice first to get customer_id before building the customer list
+  // Fetch invoice first to get customer_id
   let prefilledInvoice: {
-    id: string
-    invoice_number: string
-    total_amount: number
-    balance_due: number
-    customer_id: string
-    status: string
+    id: string; invoice_number: string; total_amount: number
+    balance_due: number; customer_id: string; status: string
   } | null = null
 
   if (params.invoice_id) {
@@ -35,34 +31,27 @@ export default async function NewPaymentPage({
 
   const prefilledCustomerId = params.customer_id || prefilledInvoice?.customer_id || ''
 
-  // Use same query as the Customers page — user client with RLS, no status filter
-  const { data: customersRaw } = await (supabase as any)
-    .from('customers')
-    .select('id, full_name, mobile_number, company_name')
-    .order('full_name')
-    .limit(5000)
+  // Fetch the pre-filled customer name to show it immediately (bypasses row-limit issue)
+  let prefilledCustomerName = ''
+  if (prefilledCustomerId) {
+    const { data: cust } = await (supabase as any)
+      .from('customers')
+      .select('full_name')
+      .eq('id', prefilledCustomerId)
+      .single()
+    prefilledCustomerName = (cust as { full_name: string } | null)?.full_name ?? ''
+  }
 
-  const customers = (customersRaw ?? []) as unknown as Array<{
-    id: string
-    full_name: string
-    mobile_number: string
-    company_name: string | null
-  }>
-
-  // Fetch all open invoices for the invoice dropdown
+  // Fetch open invoices for the invoice dropdown
   const { data: openInvoicesRaw } = await (supabase as any)
     .from('invoices')
     .select('id, invoice_number, total_amount, balance_due, customer_id, status')
     .in('status', ['issued', 'partial', 'overdue'])
     .order('invoice_date', { ascending: false })
 
-  const openInvoices = (openInvoicesRaw ?? []) as unknown as Array<{
-    id: string
-    invoice_number: string
-    total_amount: number
-    balance_due: number
-    customer_id: string
-    status: string
+  const openInvoices = (openInvoicesRaw ?? []) as Array<{
+    id: string; invoice_number: string; total_amount: number
+    balance_due: number; customer_id: string; status: string
   }>
 
   return (
@@ -71,20 +60,17 @@ export default async function NewPaymentPage({
         title="Record Payment"
         subtitle="Record a customer payment receipt"
         actions={
-          <Link
-            href="/finance/payments"
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
-          >
+          <Link href="/finance/payments"
+            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
             <ArrowLeft className="w-4 h-4" /> Back
           </Link>
         }
       />
-
       <div className="p-6">
         <NewPaymentForm
-          customers={customers}
           openInvoices={openInvoices}
           prefilledCustomerId={prefilledCustomerId}
+          prefilledCustomerName={prefilledCustomerName}
           prefilledInvoiceId={params.invoice_id ?? ''}
           prefilledAmount={params.amount ?? (prefilledInvoice ? String(prefilledInvoice.balance_due) : '')}
         />

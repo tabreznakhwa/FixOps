@@ -14,21 +14,18 @@ export async function GET(request: Request) {
     supabase
       .from('customers')
       .select('id, full_name, company_name, mobile_number, customer_code')
-      .eq('status', 'active')
       .ilike('full_name', `%${q}%`)
       .order('full_name')
       .limit(8),
     supabase
       .from('customers')
       .select('id, full_name, company_name, mobile_number, customer_code')
-      .eq('status', 'active')
       .ilike('mobile_number', `%${q}%`)
       .order('full_name')
       .limit(8),
     supabase
       .from('customers')
       .select('id, full_name, company_name, mobile_number, customer_code')
-      .eq('status', 'active')
       .ilike('customer_code', `%${q}%`)
       .order('full_name')
       .limit(8),
