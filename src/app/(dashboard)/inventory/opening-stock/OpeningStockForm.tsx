@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, CheckCircle } from 'lucide-react'
+import { Loader2, CheckCircle, Search, X } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
 interface Item {
@@ -24,6 +24,20 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
     Object.fromEntries(items.map(i => [i.id, String(i.current_stock || 0)]))
   )
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [search, setSearch] = useState('')
+  const [catFilter, setCatFilter] = useState('')
+
+  const categories = useMemo(() => [...new Set(items.map(i => i.category).filter(Boolean))] as string[], [items])
+
+  const visibleItems = useMemo(() => {
+    let result = items
+    if (catFilter) result = result.filter(i => i.category === catFilter)
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      result = result.filter(i => i.item_name.toLowerCase().includes(q) || i.item_code.toLowerCase().includes(q))
+    }
+    return result
+  }, [items, catFilter, search])
 
   async function handleSave() {
     setSaving(true)
@@ -63,12 +77,33 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
       </div>
 
       {/* Controls */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4 flex-wrap">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Opening Date</label>
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</label>
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
             className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
+
+        {/* Search */}
+        <div className="relative flex items-center">
+          <Search className="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search item…"
+            className="pl-9 pr-8 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-44" />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2.5 p-0.5 text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
+          )}
+        </div>
+
+        {/* Category dropdown */}
+        {categories.length > 0 && (
+          <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="">All Categories</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+
         <div className="ml-auto flex items-center gap-4">
           <div className="text-right">
             <p className="text-xs text-slate-400 uppercase tracking-wider">Total Stock Value</p>
@@ -94,7 +129,10 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {items.map((item) => (
+              {visibleItems.length === 0 && (
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-slate-400">No items match your filter</td></tr>
+              )}
+              {visibleItems.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-5 py-3">
                     <p className="text-sm font-semibold text-slate-800">{item.item_name}</p>

@@ -7,6 +7,7 @@ import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { SearchBar } from '@/components/ui/SearchBar'
+import { CategorySelect } from '@/components/ui/CategorySelect'
 import { Suspense } from 'react'
 
 export const metadata = { title: 'Vendor Payment Register' }
@@ -26,7 +27,7 @@ const MODE_COLORS: Record<string, string> = {
 export default async function VendorPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; q?: string }>
+  searchParams: Promise<{ from?: string; to?: string; q?: string; supplier_id?: string }>
 }) {
   const params = await searchParams
   const supabase = await createClient()
@@ -36,20 +37,31 @@ export default async function VendorPaymentsPage({
   const from = params.from ?? firstOfMonth
   const to = params.to ?? today
 
-  const { data: paymentsRaw } = await (supabase as any)
+  let paymentQuery = (supabase as any)
     .from('supplier_payments')
-    .select('id, payment_date, amount_paid, discount_amount, payment_mode, reference_number, notes, suppliers(supplier_name, supplier_code), purchase_orders(po_number)')
+    .select('id, payment_date, amount_paid, discount_amount, payment_mode, reference_number, notes, supplier_id, suppliers(supplier_name, supplier_code), purchase_orders(po_number)')
     .gte('payment_date', from)
     .lte('payment_date', to)
     .order('payment_date', { ascending: false })
     .limit(500)
 
+  if (params.supplier_id) paymentQuery = paymentQuery.eq('supplier_id', params.supplier_id)
+
+  const { data: paymentsRaw } = await paymentQuery
+
   const allPayments = (paymentsRaw ?? []) as Array<{
     id: string; payment_date: string; amount_paid: number; discount_amount: number | null; payment_mode: string
-    reference_number: string | null; notes: string | null
+    reference_number: string | null; notes: string | null; supplier_id: string | null
     suppliers: { supplier_name: string; supplier_code: string } | null
     purchase_orders: { po_number: string } | null
   }>
+
+  // Unique suppliers from fetched payments for dropdown
+  const supplierMap: Record<string, string> = {}
+  allPayments.forEach(p => {
+    if (p.supplier_id && p.suppliers?.supplier_name) supplierMap[p.supplier_id] = p.suppliers.supplier_name
+  })
+  const suppliers = Object.entries(supplierMap).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
 
   const q = params.q?.toLowerCase().trim() ?? ''
   const payments = q
@@ -89,6 +101,18 @@ export default async function VendorPaymentsPage({
           <Suspense>
             <DateRangeFilter basePath="/suppliers/vendor-payments" from={params.from} to={params.to} />
           </Suspense>
+          {suppliers.length > 0 && (
+            <Suspense>
+              <CategorySelect
+                basePath="/suppliers/vendor-payments"
+                categories={suppliers.map(s => s.id)}
+                labelMap={Object.fromEntries(suppliers.map(s => [s.id, s.name]))}
+                value={params.supplier_id ?? ''}
+                paramKey="supplier_id"
+                allLabel="All Suppliers"
+              />
+            </Suspense>
+          )}
           <Suspense>
             <SearchBar basePath="/suppliers/vendor-payments" placeholder="Search supplier, reference…" />
           </Suspense>

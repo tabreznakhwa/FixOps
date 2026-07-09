@@ -163,7 +163,7 @@ export default async function VendorLedgerPage({
               {([
                 { label: 'All', value: 'all' },
                 { label: 'Purchases', value: 'purchases' },
-                { label: 'Paid', value: 'payments' },
+                { label: 'Payments Made', value: 'payments' },
               ] as const).map(({ label, value }) => {
                 const isActive = show === value || (value === 'all' && show !== 'purchases' && show !== 'payments')
                 const sp = new URLSearchParams()

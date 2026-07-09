@@ -7,18 +7,22 @@ export function CategorySelect({
   categories,
   labelMap,
   value,
+  paramKey = 'category',
+  allLabel = 'All Categories',
 }: {
   basePath: string
   categories: string[]
   labelMap?: Record<string, string>
   value: string
+  paramKey?: string
+  allLabel?: string
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
   function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const params = new URLSearchParams(searchParams.toString())
-    if (e.target.value) params.set('category', e.target.value); else params.delete('category')
+    if (e.target.value) params.set(paramKey, e.target.value); else params.delete(paramKey)
     router.push(`${basePath}?${params.toString()}`)
   }
 
@@ -28,7 +32,7 @@ export function CategorySelect({
       onChange={handleChange}
       className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
     >
-      <option value="">All Categories</option>
+      <option value="">{allLabel}</option>
       {categories.map((c) => (
         <option key={c} value={c}>{labelMap?.[c] ?? c}</option>
       ))}

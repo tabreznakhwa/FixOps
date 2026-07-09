@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { AlertTriangle, TrendingDown, Clock, Users } from 'lucide-react'
+import { TrendingDown, Clock, Users } from 'lucide-react'
 import Link from 'next/link'
+import { ReceivablesClient } from './ReceivablesClient'
 
 export const metadata = { title: 'Receivables' }
 
@@ -12,78 +13,51 @@ export default async function ReceivablesPage() {
   const [receivablesRes, openingRes] = await Promise.all([
     (supabase as any)
       .from('invoices')
-      .select('customer_id, balance_due, due_date, status, invoice_date, customers(id, full_name, mobile_number, area)')
+      .select('id, invoice_number, customer_id, balance_due, due_date, status, invoice_date, customers(id, full_name, mobile_number, area)')
       .in('status', ['issued', 'partial', 'overdue'])
       .gt('balance_due', 0)
       .order('balance_due', { ascending: false }),
     (supabase as any)
       .from('opening_receivables')
-      .select('customer_id, balance_due, due_date, invoice_date, customers(id, full_name, mobile_number, area)')
+      .select('id, bill_ref, customer_id, balance_due, due_date, invoice_date, customers(id, full_name, mobile_number, area)')
       .gt('balance_due', 0),
   ])
 
   const receivables = (receivablesRes.data ?? []) as Array<{
-    customer_id: string; balance_due: number; due_date: string | null; status: string; invoice_date: string;
+    id: string; invoice_number: string; customer_id: string; balance_due: number; due_date: string | null; status: string; invoice_date: string;
     customers: { id: string; full_name: string; mobile_number: string; area: string | null } | null
   }>
 
   const openingReceivables = (openingRes.data ?? []) as Array<{
-    customer_id: string; balance_due: number; due_date: string | null; invoice_date: string;
+    id: string; bill_ref: string | null; customer_id: string; balance_due: number; due_date: string | null; invoice_date: string;
     customers: { id: string; full_name: string; mobile_number: string; area: string | null } | null
   }>
 
   // Group by customer
   const customerMap: Record<string, {
-    customer_id: string
-    full_name: string
-    mobile_number: string
-    area: string | null
+    customer_id: string; full_name: string; mobile_number: string; area: string | null
     total_balance: number
-    invoices: { balance_due: number; due_date: string | null; status: string; invoice_date: string }[]
+    invoices: { id: string; invoice_number: string; balance_due: number; due_date: string | null; status: string; invoice_date: string }[]
   }> = {}
 
   receivables.forEach((inv) => {
     const customer = inv.customers
     if (!customer) return
     if (!customerMap[inv.customer_id]) {
-      customerMap[inv.customer_id] = {
-        customer_id: inv.customer_id,
-        full_name: customer.full_name,
-        mobile_number: customer.mobile_number,
-        area: customer.area,
-        total_balance: 0,
-        invoices: [],
-      }
+      customerMap[inv.customer_id] = { customer_id: inv.customer_id, full_name: customer.full_name, mobile_number: customer.mobile_number, area: customer.area, total_balance: 0, invoices: [] }
     }
     customerMap[inv.customer_id].total_balance += inv.balance_due
-    customerMap[inv.customer_id].invoices.push({
-      balance_due: inv.balance_due,
-      due_date: inv.due_date,
-      status: inv.status,
-      invoice_date: inv.invoice_date,
-    })
+    customerMap[inv.customer_id].invoices.push({ id: inv.id, invoice_number: inv.invoice_number, balance_due: inv.balance_due, due_date: inv.due_date, status: inv.status, invoice_date: inv.invoice_date })
   })
 
   openingReceivables.forEach((op) => {
     const customer = op.customers
     if (!customer) return
     if (!customerMap[op.customer_id]) {
-      customerMap[op.customer_id] = {
-        customer_id: op.customer_id,
-        full_name: customer.full_name,
-        mobile_number: customer.mobile_number,
-        area: customer.area,
-        total_balance: 0,
-        invoices: [],
-      }
+      customerMap[op.customer_id] = { customer_id: op.customer_id, full_name: customer.full_name, mobile_number: customer.mobile_number, area: customer.area, total_balance: 0, invoices: [] }
     }
     customerMap[op.customer_id].total_balance += op.balance_due
-    customerMap[op.customer_id].invoices.push({
-      balance_due: op.balance_due,
-      due_date: op.due_date,
-      status: 'opening',
-      invoice_date: op.invoice_date,
-    })
+    customerMap[op.customer_id].invoices.push({ id: '', invoice_number: op.bill_ref ?? 'Opening', balance_due: op.balance_due, due_date: op.due_date, status: 'opening', invoice_date: op.invoice_date })
   })
 
   const customers = Object.values(customerMap).sort((a, b) => b.total_balance - a.total_balance)
@@ -149,7 +123,7 @@ export default async function ReceivablesPage() {
           </div>
         </div>
 
-        {/* Customer Receivables Table */}
+        {/* Customer Receivables */}
         {customers.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
             <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
@@ -157,54 +131,7 @@ export default async function ReceivablesPage() {
             <p className="text-slate-400 text-sm">All invoices are paid up!</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="font-semibold text-slate-900">Customer Balances</h3>
-              <span className="text-sm text-slate-500">{customers.length} customers</span>
-            </div>
-            <div className="divide-y divide-slate-50">
-              {customers.map((c, idx) => {
-                const overdueCount = c.invoices.filter((i) => i.status === 'overdue').length
-                const maxBalance = customers[0].total_balance
-                const barWidth = (c.total_balance / maxBalance) * 100
-
-                return (
-                  <div key={c.customer_id} className="px-5 py-4 hover:bg-slate-50 transition-colors">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-slate-400 w-5">#{idx + 1}</span>
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">{c.full_name}</p>
-                          <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-                            <span>📱 {c.mobile_number}</span>
-                            {c.area && <span>📍 {c.area}</span>}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-amber-600">{formatCurrency(c.total_balance)}</p>
-                        <div className="flex items-center gap-2 justify-end mt-0.5">
-                          <span className="text-xs text-slate-500">{c.invoices.length} inv.</span>
-                          {overdueCount > 0 && (
-                            <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
-                              <AlertTriangle className="w-3 h-3" /> {overdueCount} overdue
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    {/* Balance bar */}
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-amber-400 rounded-full transition-all"
-                        style={{ width: `${barWidth}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+          <ReceivablesClient customers={customers} />
         )}
       </div>
     </div>

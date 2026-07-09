@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Bell, X, ExternalLink } from 'lucide-react'
+import { Bell, X, ExternalLink, Volume2 } from 'lucide-react'
 import Link from 'next/link'
 
 interface AssignmentNotif {
@@ -12,11 +12,26 @@ interface AssignmentNotif {
   description: string
 }
 
-function playSound() {
+// Singleton AudioContext — created once on first user gesture, reused thereafter
+let _audioCtx: AudioContext | null = null
+
+function getAudioCtx(): AudioContext | null {
+  if (typeof window === 'undefined') return null
+  if (_audioCtx) return _audioCtx
   try {
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    const ctx = new AudioCtx()
-    // Three ascending tones: pleasant notification chime
+    _audioCtx = new AudioCtx()
+  } catch {
+    // not available
+  }
+  return _audioCtx
+}
+
+async function playSound() {
+  try {
+    const ctx = getAudioCtx()
+    if (!ctx) return
+    if (ctx.state === 'suspended') await ctx.resume()
     const tones = [
       { freq: 880, start: 0, dur: 0.14 },
       { freq: 1100, start: 0.17, dur: 0.14 },
@@ -36,12 +51,32 @@ function playSound() {
       osc.stop(ctx.currentTime + start + dur + 0.05)
     })
   } catch {
-    // Audio not available in this browser/context
+    // Audio not available
   }
 }
 
 export function AssignmentNotifier({ userId }: { userId: string }) {
   const [notifs, setNotifs] = useState<AssignmentNotif[]>([])
+  const [audioReady, setAudioReady] = useState(false)
+  const audioUnlocked = useRef(false)
+
+  // Unlock audio on first user click anywhere on the page
+  useEffect(() => {
+    function unlock() {
+      if (audioUnlocked.current) return
+      audioUnlocked.current = true
+      getAudioCtx() // initialise singleton
+      setAudioReady(true)
+      document.removeEventListener('click', unlock)
+      document.removeEventListener('touchstart', unlock)
+    }
+    document.addEventListener('click', unlock)
+    document.addEventListener('touchstart', unlock)
+    return () => {
+      document.removeEventListener('click', unlock)
+      document.removeEventListener('touchstart', unlock)
+    }
+  }, [])
 
   const dismiss = useCallback((id: string) => {
     setNotifs((prev) => prev.filter((n) => n.id !== id))
@@ -50,7 +85,6 @@ export function AssignmentNotifier({ userId }: { userId: string }) {
   useEffect(() => {
     const supabase = createClient()
 
-    // Request browser notification permission (non-blocking)
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission()
     }
@@ -67,17 +101,18 @@ export function AssignmentNotifier({ userId }: { userId: string }) {
         },
         (payload) => {
           const row = payload.new as {
-            id: string
-            complaint_number: string
-            description: string
-            status: string
+            id: string; complaint_number: string; description: string; status: string; assigned_to: string
           }
+          const oldRow = payload.old as { assigned_to?: string }
 
-          if (row.status !== 'assigned') return
+          // Fire when newly assigned to this user (assigned_to just changed to userId)
+          // OR when status changes to 'assigned' for this user
+          const justAssigned = oldRow.assigned_to !== userId
+          const statusIsAssigned = row.status === 'assigned'
+          if (!justAssigned && !statusIsAssigned) return
 
           playSound()
 
-          // Browser push notification if granted
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             new Notification('New Job Assigned — FixOps', {
               body: `${row.complaint_number}: ${(row.description ?? '').slice(0, 100)}`,
@@ -97,44 +132,43 @@ export function AssignmentNotifier({ userId }: { userId: string }) {
       )
       .subscribe()
 
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    return () => { supabase.removeChannel(channel) }
   }, [userId, dismiss])
 
-  if (notifs.length === 0) return null
-
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2 w-80">
-      {notifs.map((n) => (
-        <div
-          key={n.id}
-          className="animate-slide-in bg-white border border-blue-200 rounded-xl shadow-2xl p-4 flex items-start gap-3"
-        >
-          <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-            <Bell className="w-4 h-4 text-blue-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-slate-900">New Job Assigned</p>
-            <p className="text-xs font-mono text-blue-600 mt-0.5">{n.complaintNumber}</p>
-            <p className="text-xs text-slate-600 mt-1 line-clamp-2">{n.description}</p>
-            <Link
-              href={`/complaints/${n.complaintId}`}
-              onClick={() => dismiss(n.id)}
-              className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
-            >
-              View complaint <ExternalLink className="w-3 h-3" />
-            </Link>
-          </div>
-          <button
-            type="button"
-            onClick={() => dismiss(n.id)}
-            className="text-slate-400 hover:text-slate-600 flex-shrink-0"
-          >
-            <X className="w-4 h-4" />
-          </button>
+    <>
+      {/* Audio unlock hint — shown only until user has clicked once */}
+      {!audioReady && (
+        <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 bg-slate-800 text-white text-xs font-medium px-3 py-2 rounded-lg shadow-lg opacity-80">
+          <Volume2 className="w-3.5 h-3.5 text-slate-300" />
+          Click anywhere to enable sound alerts
         </div>
-      ))}
-    </div>
+      )}
+
+      {notifs.length > 0 && (
+        <div className="fixed top-4 right-4 z-50 space-y-2 w-80">
+          {notifs.map((n) => (
+            <div key={n.id}
+              className="animate-slide-in bg-white border border-blue-200 rounded-xl shadow-2xl p-4 flex items-start gap-3">
+              <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Bell className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-900">New Job Assigned</p>
+                <p className="text-xs font-mono text-blue-600 mt-0.5">{n.complaintNumber}</p>
+                <p className="text-xs text-slate-600 mt-1 line-clamp-2">{n.description}</p>
+                <Link href={`/complaints/${n.complaintId}`} onClick={() => dismiss(n.id)}
+                  className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700">
+                  View complaint <ExternalLink className="w-3 h-3" />
+                </Link>
+              </div>
+              <button type="button" onClick={() => dismiss(n.id)} className="text-slate-400 hover:text-slate-600 flex-shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   )
 }

@@ -72,9 +72,11 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     modeBreakdown[p.payment_mode] = (modeBreakdown[p.payment_mode] ?? 0) + p.amount_received
   })
 
-  const totalToday = allPayments
-    ?.filter((p) => new Date(p.payment_date ?? '').toDateString() === new Date().toDateString())
-    .reduce((s, p) => s + p.amount_received, 0) ?? 0
+  const todayStr = new Date().toISOString().split('T')[0]
+  const todayPayments = allPayments?.filter((p) => (p.payment_date ?? '').slice(0, 10) === todayStr) ?? []
+  const totalToday = todayPayments.reduce((s, p) => s + p.amount_received, 0)
+  const todayCash = todayPayments.filter(p => p.payment_mode === 'cash').reduce((s, p) => s + p.amount_received, 0)
+  const todayBank = todayPayments.filter(p => p.payment_mode !== 'cash').reduce((s, p) => s + p.amount_received, 0)
 
   const totalMonth = allPayments?.reduce((s, p) => s + p.amount_received, 0) ?? 0
 
@@ -104,6 +106,16 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
           <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-5 text-white">
             <p className="text-sm opacity-80 mb-1">Today's Collection</p>
             <p className="text-2xl font-bold">{formatCurrency(totalToday)}</p>
+            <div className="mt-3 flex gap-4 border-t border-white/20 pt-3">
+              <div>
+                <p className="text-xs opacity-70">💵 Cash</p>
+                <p className="text-base font-bold">{formatCurrency(todayCash)}</p>
+              </div>
+              <div>
+                <p className="text-xs opacity-70">🏦 Bank / Other</p>
+                <p className="text-base font-bold">{formatCurrency(todayBank)}</p>
+              </div>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-4 md:col-span-2">
