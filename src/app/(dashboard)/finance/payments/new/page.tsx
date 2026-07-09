@@ -36,15 +36,10 @@ export default async function NewPaymentPage({
   // Step 2: Resolve the pre-filled customer ID (URL param takes priority, then invoice)
   const prefilledCustomerId = params.customer_id || prefilledInvoice?.customer_id || ''
 
-  // Step 3: Fetch active customers, always including the pre-filled customer by ID
-  const customerFilter = prefilledCustomerId
-    ? `status.eq.active,id.eq.${prefilledCustomerId}`
-    : 'status.eq.active'
-
+  // Step 3: Fetch all customers (RLS scopes to org; no status filter so all customers appear)
   const { data: customersRaw } = await (supabase as any)
     .from('customers')
     .select('id, full_name, mobile_number, company_name')
-    .or(customerFilter)
     .order('full_name')
     .limit(5000)
 
