@@ -184,7 +184,6 @@ export function NewPaymentForm({
               className={inputClass}
               value={customerId}
               onChange={(e) => handleCustomerChange(e.target.value)}
-              size={filteredCustomers.length > 0 && customerSearch ? Math.min(filteredCustomers.length + 1, 8) : 1}
               required
             >
               <option value="">Select customer…</option>
