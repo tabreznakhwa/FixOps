@@ -63,6 +63,16 @@ export default async function NewPaymentPage({
     prefilledInvoice = inv ?? null
   }
 
+  // If the invoice's customer isn't in the active list (status null/inactive), add them anyway
+  if (prefilledInvoice?.customer_id && !customers.find(c => c.id === prefilledInvoice!.customer_id)) {
+    const { data: missingCustomer } = await supabase
+      .from('customers')
+      .select('id, full_name, mobile_number, company_name')
+      .eq('id', prefilledInvoice.customer_id)
+      .single()
+    if (missingCustomer) customers.unshift(missingCustomer as typeof customers[0])
+  }
+
   return (
     <div className="animate-fade-in">
       <Header
