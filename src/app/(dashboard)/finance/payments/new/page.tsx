@@ -63,12 +63,13 @@ export default async function NewPaymentPage({
     prefilledInvoice = inv ?? null
   }
 
-  // If the invoice's customer isn't in the active list (status null/inactive), add them anyway
-  if (prefilledInvoice?.customer_id && !customers.find(c => c.id === prefilledInvoice!.customer_id)) {
+  // If the pre-filled customer isn't in the active list (status null/inactive), fetch and add them
+  const prefilledCustomerId = params.customer_id ?? prefilledInvoice?.customer_id ?? ''
+  if (prefilledCustomerId && !customers.find(c => c.id === prefilledCustomerId)) {
     const { data: missingCustomer } = await supabase
       .from('customers')
       .select('id, full_name, mobile_number, company_name')
-      .eq('id', prefilledInvoice.customer_id)
+      .eq('id', prefilledCustomerId)
       .single()
     if (missingCustomer) customers.unshift(missingCustomer as typeof customers[0])
   }
@@ -92,7 +93,7 @@ export default async function NewPaymentPage({
         <NewPaymentForm
           customers={customers}
           openInvoices={openInvoices}
-          prefilledCustomerId={params.customer_id ?? prefilledInvoice?.customer_id ?? ''}
+          prefilledCustomerId={prefilledCustomerId}
           prefilledInvoiceId={params.invoice_id ?? ''}
           prefilledAmount={params.amount ?? (prefilledInvoice ? String(prefilledInvoice.balance_due) : '')}
         />
