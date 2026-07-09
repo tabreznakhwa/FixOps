@@ -14,10 +14,16 @@ export default async function NewPaymentPage({
   const params = await searchParams
   const supabase = await createClient()
 
-  const { data: customersRaw } = await supabase
+  // Always include the pre-filled customer (even if their status isn't 'active')
+  const prefilledCid = params.customer_id ?? ''
+  const customerFilter = prefilledCid
+    ? `status.eq.active,id.eq.${prefilledCid}`
+    : 'status.eq.active'
+
+  const { data: customersRaw } = await (supabase as any)
     .from('customers')
     .select('id, full_name, mobile_number, company_name')
-    .eq('status', 'active')
+    .or(customerFilter)
     .order('full_name')
     .limit(5000)
 
@@ -63,16 +69,7 @@ export default async function NewPaymentPage({
     prefilledInvoice = inv ?? null
   }
 
-  // If the pre-filled customer isn't in the active list (status null/inactive), fetch and add them
-  const prefilledCustomerId = params.customer_id ?? prefilledInvoice?.customer_id ?? ''
-  if (prefilledCustomerId && !customers.find(c => c.id === prefilledCustomerId)) {
-    const { data: missingCustomer } = await supabase
-      .from('customers')
-      .select('id, full_name, mobile_number, company_name')
-      .eq('id', prefilledCustomerId)
-      .single()
-    if (missingCustomer) customers.unshift(missingCustomer as typeof customers[0])
-  }
+  const prefilledCustomerId = prefilledCid || (prefilledInvoice?.customer_id ?? '')
 
   return (
     <div className="animate-fade-in">
