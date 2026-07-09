@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { AlertCircle } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { AlertCircle, Search } from 'lucide-react'
 
 interface Customer {
   id: string
@@ -51,6 +51,7 @@ export function NewPaymentForm({
   prefilledAmount,
 }: Props) {
   const [customerId, setCustomerId] = useState(prefilledCustomerId)
+  const [customerSearch, setCustomerSearch] = useState('')
   const [invoiceId, setInvoiceId] = useState(prefilledInvoiceId)
   const [isAdvance, setIsAdvance] = useState(false)
   const [paymentDate, setPaymentDate] = useState(TODAY)
@@ -60,6 +61,16 @@ export function NewPaymentForm({
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const filteredCustomers = useMemo(() => {
+    const q = customerSearch.toLowerCase().trim()
+    if (!q) return customers
+    return customers.filter(c =>
+      c.full_name.toLowerCase().includes(q) ||
+      (c.company_name ?? '').toLowerCase().includes(q) ||
+      (c.mobile_number ?? '').includes(q)
+    )
+  }, [customers, customerSearch])
 
   const customerInvoices = customerId
     ? openInvoices.filter((inv) => inv.customer_id === customerId)
@@ -159,20 +170,34 @@ export function NewPaymentForm({
           {/* Customer */}
           <div className="md:col-span-2">
             <label className={labelClass}>Customer *</label>
+            <div className="relative mb-1.5">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search customer name, mobile…"
+                value={customerSearch}
+                onChange={e => setCustomerSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+            </div>
             <select
               className={inputClass}
               value={customerId}
               onChange={(e) => handleCustomerChange(e.target.value)}
+              size={filteredCustomers.length > 0 && customerSearch ? Math.min(filteredCustomers.length + 1, 8) : 1}
               required
             >
               <option value="">Select customer…</option>
-              {customers.map((c) => (
+              {filteredCustomers.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.full_name}
                   {c.company_name ? ` — ${c.company_name}` : ''} · {c.mobile_number}
                 </option>
               ))}
             </select>
+            {customerSearch && filteredCustomers.length === 0 && (
+              <p className="text-xs text-slate-400 mt-1">No customers match "{customerSearch}"</p>
+            )}
           </div>
 
           {/* Advance Payment toggle */}
