@@ -14,43 +14,7 @@ export default async function NewPaymentPage({
   const params = await searchParams
   const supabase = await createClient()
 
-  // Always include the pre-filled customer (even if their status isn't 'active')
-  const prefilledCid = params.customer_id ?? ''
-  const customerFilter = prefilledCid
-    ? `status.eq.active,id.eq.${prefilledCid}`
-    : 'status.eq.active'
-
-  const { data: customersRaw } = await (supabase as any)
-    .from('customers')
-    .select('id, full_name, mobile_number, company_name')
-    .or(customerFilter)
-    .order('full_name')
-    .limit(5000)
-
-  const customers = (customersRaw ?? []) as unknown as Array<{
-    id: string
-    full_name: string
-    mobile_number: string
-    company_name: string | null
-  }>
-
-  // Fetch all open invoices (issued / partial / overdue) for client-side filtering
-  const { data: openInvoicesRaw } = await (supabase as any)
-    .from('invoices')
-    .select('id, invoice_number, total_amount, balance_due, customer_id, status')
-    .in('status', ['issued', 'partial', 'overdue'])
-    .order('invoice_date', { ascending: false })
-
-  const openInvoices = (openInvoicesRaw ?? []) as unknown as Array<{
-    id: string
-    invoice_number: string
-    total_amount: number
-    balance_due: number
-    customer_id: string
-    status: string
-  }>
-
-  // If invoice_id provided, fetch that invoice to pre-fill details
+  // Step 1: Fetch the invoice first so we have the customer_id before loading the customer list
   let prefilledInvoice: {
     id: string
     invoice_number: string
@@ -69,7 +33,43 @@ export default async function NewPaymentPage({
     prefilledInvoice = inv ?? null
   }
 
-  const prefilledCustomerId = prefilledCid || (prefilledInvoice?.customer_id ?? '')
+  // Step 2: Resolve the pre-filled customer ID (URL param takes priority, then invoice)
+  const prefilledCustomerId = params.customer_id || prefilledInvoice?.customer_id || ''
+
+  // Step 3: Fetch active customers, always including the pre-filled customer by ID
+  const customerFilter = prefilledCustomerId
+    ? `status.eq.active,id.eq.${prefilledCustomerId}`
+    : 'status.eq.active'
+
+  const { data: customersRaw } = await (supabase as any)
+    .from('customers')
+    .select('id, full_name, mobile_number, company_name')
+    .or(customerFilter)
+    .order('full_name')
+    .limit(5000)
+
+  const customers = (customersRaw ?? []) as unknown as Array<{
+    id: string
+    full_name: string
+    mobile_number: string
+    company_name: string | null
+  }>
+
+  // Step 4: Fetch all open invoices for the invoice dropdown
+  const { data: openInvoicesRaw } = await (supabase as any)
+    .from('invoices')
+    .select('id, invoice_number, total_amount, balance_due, customer_id, status')
+    .in('status', ['issued', 'partial', 'overdue'])
+    .order('invoice_date', { ascending: false })
+
+  const openInvoices = (openInvoicesRaw ?? []) as unknown as Array<{
+    id: string
+    invoice_number: string
+    total_amount: number
+    balance_due: number
+    customer_id: string
+    status: string
+  }>
 
   return (
     <div className="animate-fade-in">
