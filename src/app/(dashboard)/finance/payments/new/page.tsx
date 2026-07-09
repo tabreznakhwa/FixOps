@@ -1,4 +1,4 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -13,9 +13,8 @@ export default async function NewPaymentPage({
 }) {
   const params = await searchParams
   const supabase = await createClient()
-  const admin = createAdminClient() as any
 
-  // Step 1: Fetch the invoice first so we have the customer_id before loading the customer list
+  // Fetch invoice first to get customer_id before building the customer list
   let prefilledInvoice: {
     id: string
     invoice_number: string
@@ -26,7 +25,7 @@ export default async function NewPaymentPage({
   } | null = null
 
   if (params.invoice_id) {
-    const { data: inv } = await admin
+    const { data: inv } = await (supabase as any)
       .from('invoices')
       .select('id, invoice_number, total_amount, balance_due, customer_id, status')
       .eq('id', params.invoice_id)
@@ -34,18 +33,12 @@ export default async function NewPaymentPage({
     prefilledInvoice = inv ?? null
   }
 
-  // Step 2: Resolve the pre-filled customer ID (URL param takes priority, then invoice)
   const prefilledCustomerId = params.customer_id || prefilledInvoice?.customer_id || ''
 
-  // Step 3: Fetch all org customers via admin client (bypasses RLS restrictions)
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileRaw } = await admin.from('users').select('organization_id').eq('id', user!.id).single()
-  const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
-
-  const { data: customersRaw } = await admin
+  // Use same query as the Customers page — user client with RLS, no status filter
+  const { data: customersRaw } = await (supabase as any)
     .from('customers')
     .select('id, full_name, mobile_number, company_name')
-    .eq('organization_id', orgId)
     .order('full_name')
     .limit(5000)
 
@@ -56,11 +49,10 @@ export default async function NewPaymentPage({
     company_name: string | null
   }>
 
-  // Step 4: Fetch all open invoices for the invoice dropdown
-  const { data: openInvoicesRaw } = await admin
+  // Fetch all open invoices for the invoice dropdown
+  const { data: openInvoicesRaw } = await (supabase as any)
     .from('invoices')
     .select('id, invoice_number, total_amount, balance_due, customer_id, status')
-    .eq('organization_id', orgId)
     .in('status', ['issued', 'partial', 'overdue'])
     .order('invoice_date', { ascending: false })
 
