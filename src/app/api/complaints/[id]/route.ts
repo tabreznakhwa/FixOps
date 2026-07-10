@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { createClient } from '@/lib/supabase/server'
+import { sendWhatsAppMessage } from '@/lib/whatsapp'
 
 export async function GET(
   _req: NextRequest,
@@ -84,6 +85,28 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       await (supabase as any)
         .from('complaint_status_history')
         .insert({ organization_id: orgId, complaint_id: id, new_status: updates.status, updated_by: user.id })
+    }
+
+    // Send WhatsApp notification when a complaint is assigned to a technician
+    if (updates.assigned_to) {
+      try {
+        const [{ data: techRaw }, { data: complaintRaw }] = await Promise.all([
+          (supabase as any).from('users').select('full_name, mobile_number').eq('id', updates.assigned_to).single(),
+          (supabase as any).from('complaints').select('complaint_number, description, location').eq('id', id).single(),
+        ])
+        const tech = techRaw as { full_name: string; mobile_number: string | null } | null
+        const complaint = complaintRaw as { complaint_number: string; description: string; location: string | null } | null
+        if (tech?.mobile_number && complaint) {
+          const description = (complaint.description ?? '').slice(0, 100)
+          const location = complaint.location ? ` · ${complaint.location}` : ''
+          await sendWhatsAppMessage(tech.mobile_number, [
+            complaint.complaint_number,
+            `${description}${location}`,
+          ])
+        }
+      } catch (waErr) {
+        console.error('WhatsApp notification failed:', waErr)
+      }
     }
 
     return NextResponse.json({ success: true })
