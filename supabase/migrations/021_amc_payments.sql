@@ -27,3 +27,7 @@ CREATE POLICY "amc_payments_org_delete" ON amc_payments FOR DELETE
 -- Index for fast lookups by contract
 CREATE INDEX amc_payments_contract_idx ON amc_payments (amc_contract_id);
 CREATE INDEX amc_payments_date_idx ON amc_payments (payment_date);
+
+-- Grant access to roles (required for Supabase migrations)
+GRANT SELECT, INSERT, DELETE ON amc_payments TO authenticated;
+GRANT ALL ON amc_payments TO service_role;
