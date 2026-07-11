@@ -1,8 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { Plus, Package, AlertTriangle, Search } from 'lucide-react'
+import { Plus, Package, AlertTriangle } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { SearchBar } from '@/components/ui/SearchBar'
+import { Suspense } from 'react'
 
 export const metadata = { title: 'Inventory' }
 
@@ -20,7 +22,10 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
     .eq('is_active', true)
     .order('item_name')
 
-  if (params.q) query = query.ilike('item_name', `%${params.q}%`)
+  if (params.q) {
+    const q = params.q
+    query = (query as any).or(`item_name.ilike.%${q}%,item_code.ilike.%${q}%,brand.ilike.%${q}%,category.ilike.%${q}%`)
+  }
 
   // Fetch all (up to 500) so low-stock count is accurate; slice later for normal view
   const { data: allItemsRaw } = await query.limit(500)
@@ -35,7 +40,9 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
 
   const items: InventoryItem[] = params.filter === 'low'
     ? allItems.filter(isLowItem)
-    : allItems.slice(0, 50)
+    : params.q
+    ? allItems
+    : allItems.slice(0, 200)
 
   const lowStockCount = allItems.filter(isLowItem).length
   const totalValue = allItems.reduce((s, i) => s + i.current_stock * i.purchase_price, 0)
@@ -78,15 +85,9 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
 
         {/* Search + Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
-          <form className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              name="q"
-              defaultValue={params.q}
-              placeholder="Search items..."
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </form>
+          <Suspense>
+            <SearchBar basePath="/inventory" placeholder="Search by name, code, brand, category…" />
+          </Suspense>
           <Link
             href={params.filter === 'low' ? '/inventory' : '/inventory?filter=low'}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${

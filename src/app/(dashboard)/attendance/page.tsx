@@ -53,14 +53,17 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function AttendancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; staff_id?: string }>
+  searchParams: Promise<{ month?: string; staff_id?: string; period?: string }>
 }) {
   const params = await searchParams
   const today = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
   const currentMonth =
     params.month ??
     `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
 
+  const period = params.period ?? ''
   const selectedStaffId = params.staff_id ?? ''
 
   const supabase = await createClient()
@@ -93,11 +96,37 @@ export default async function AttendancePage({
 
   const staffList = (staffRaw ?? []) as Array<{ id: string; full_name: string }>
 
-  // Build date range for selected month
-  const [yr, mo] = currentMonth.split('-').map(Number)
-  const startDate = `${currentMonth}-01`
-  const lastDay = new Date(yr, mo, 0).getDate()
-  const endDate = `${currentMonth}-${String(lastDay).padStart(2, '0')}`
+  // Build date range — period takes precedence over month
+  let startDate: string
+  let endDate: string
+  let periodLabel: string | null = null
+
+  if (period === 'today') {
+    startDate = endDate = todayStr
+    periodLabel = 'Today'
+  } else if (period === 'yesterday') {
+    const yest = new Date(today)
+    yest.setDate(yest.getDate() - 1)
+    startDate = endDate = `${yest.getFullYear()}-${pad(yest.getMonth() + 1)}-${pad(yest.getDate())}`
+    periodLabel = 'Yesterday'
+  } else if (period === 'this_week') {
+    const dow = today.getDay() // 0=Sun
+    const daysSinceSun = dow
+    const sun = new Date(today)
+    sun.setDate(today.getDate() - daysSinceSun)
+    startDate = `${sun.getFullYear()}-${pad(sun.getMonth() + 1)}-${pad(sun.getDate())}`
+    endDate = todayStr
+    periodLabel = 'This Week'
+  } else if (period === 'this_month') {
+    startDate = `${currentMonth}-01`
+    endDate = todayStr
+    periodLabel = 'This Month'
+  } else {
+    const [yr, mo] = currentMonth.split('-').map(Number)
+    startDate = `${currentMonth}-01`
+    const lastDay = new Date(yr, mo, 0).getDate()
+    endDate = `${currentMonth}-${String(lastDay).padStart(2, '0')}`
+  }
 
   let query = (supabase as any)
     .from('attendance')
@@ -152,6 +181,14 @@ export default async function AttendancePage({
     return `/attendance?${qs.toString()}`
   }
 
+  const buildPeriodHref = (p: string) => {
+    const qs = new URLSearchParams()
+    qs.set('month', currentMonth)
+    if (selectedStaffId) qs.set('staff_id', selectedStaffId)
+    if (p !== period) qs.set('period', p)
+    return `/attendance?${qs.toString()}`
+  }
+
   return (
     <div className="animate-fade-in">
       <Header
@@ -174,6 +211,28 @@ export default async function AttendancePage({
       />
 
       <div className="p-6 space-y-5">
+        {/* Quick Period Tabs */}
+        <div className="flex flex-wrap gap-2">
+          {[
+            { label: 'Today', value: 'today' },
+            { label: 'Yesterday', value: 'yesterday' },
+            { label: 'This Week', value: 'this_week' },
+            { label: 'This Month', value: 'this_month' },
+          ].map(({ label, value }) => (
+            <Link
+              key={value}
+              href={buildPeriodHref(value)}
+              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                period === value
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
+
         {/* Month Navigator + Staff Filter */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-1">
@@ -225,7 +284,7 @@ export default async function AttendancePage({
         {records.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
             <CalendarCheck className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">No attendance records for {getMonthLabel(currentMonth)}</p>
+            <p className="text-slate-500 font-medium">No attendance records for {periodLabel ?? getMonthLabel(currentMonth)}</p>
             {!(isKiosk && kioskTodayMarked) && (
               <Link
                 href={isKiosk && kioskStaffId ? `/attendance/new?locked_staff_id=${kioskStaffId}` : '/attendance/new'}
