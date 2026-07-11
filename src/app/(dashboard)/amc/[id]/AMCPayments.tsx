@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { PlusCircle, DollarSign, Trash2 } from 'lucide-react'
+import { PlusCircle, DollarSign, Trash2, AlertCircle } from 'lucide-react'
 
 const PAYMENT_MODES = [
   { value: 'cash', label: 'Cash' },
@@ -19,6 +19,8 @@ const MODE_LABELS: Record<string, string> = {
   cash: 'Cash', bank_transfer: 'Bank Transfer', cheque: 'Cheque',
   pos: 'POS', card: 'Card', online: 'Online', other: 'Other',
 }
+
+const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
 
 interface Payment {
   id: string
@@ -43,15 +45,17 @@ export function AMCPayments({ contractId, contractAmount, payments: initialPayme
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const today = new Date().toISOString().split('T')[0]
-  const [form, setForm] = useState({
-    payment_date: today,
+
+  const todayStr = () => new Date().toISOString().split('T')[0]
+  const blankForm = () => ({
+    payment_date: todayStr(),
     amount: '',
     payment_mode: 'cash',
     reference_number: '',
     notes: '',
     is_pre_opening: false,
   })
+  const [form, setForm] = useState(blankForm)
 
   const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0)
   const balance = contractAmount - totalPaid
@@ -61,43 +65,52 @@ export function AMCPayments({ contractId, contractAmount, payments: initialPayme
     e.preventDefault()
     setError('')
     const amt = Number(form.amount)
+    if (!form.payment_date) { setError('Payment date is required'); return }
     if (!amt || amt <= 0) { setError('Enter a valid amount'); return }
     setSaving(true)
-    const res = await fetch(`/api/amc/${contractId}/payments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        payment_date: form.payment_date,
-        amount: amt,
-        payment_mode: form.payment_mode,
-        reference_number: form.reference_number || null,
-        notes: form.notes || null,
-        is_pre_opening: form.is_pre_opening,
-      }),
-    })
-    setSaving(false)
-    if (!res.ok) { const d = await res.json(); setError(d.error ?? 'Error saving'); return }
-    const newPay = await res.json()
-    setPayments(prev =>
-      [newPay, ...prev].sort((a, b) => b.payment_date.localeCompare(a.payment_date))
-    )
-    setShowForm(false)
-    setForm({ payment_date: today, amount: '', payment_mode: 'cash', reference_number: '', notes: '', is_pre_opening: false })
-    router.refresh()
+    try {
+      const res = await fetch(`/api/amc/${contractId}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payment_date: form.payment_date,
+          amount: amt,
+          payment_mode: form.payment_mode,
+          reference_number: form.reference_number || null,
+          notes: form.notes || null,
+          is_pre_opening: form.is_pre_opening,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? 'Failed to save payment'); return }
+      setPayments(prev =>
+        [data, ...prev].sort((a, b) => b.payment_date.localeCompare(a.payment_date))
+      )
+      setShowForm(false)
+      setForm(blankForm())
+      router.refresh()
+    } catch {
+      setError('Network error — please try again')
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleDelete(paymentId: string) {
     if (!confirm('Delete this payment?')) return
     setDeletingId(paymentId)
-    const res = await fetch(`/api/amc/${contractId}/payments`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ payment_id: paymentId }),
-    })
-    setDeletingId(null)
-    if (!res.ok) { alert('Could not delete payment'); return }
-    setPayments(prev => prev.filter(p => p.id !== paymentId))
-    router.refresh()
+    try {
+      const res = await fetch(`/api/amc/${contractId}/payments`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_id: paymentId }),
+      })
+      if (!res.ok) { alert('Could not delete payment'); return }
+      setPayments(prev => prev.filter(p => p.id !== paymentId))
+      router.refresh()
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
@@ -106,7 +119,7 @@ export function AMCPayments({ contractId, contractAmount, payments: initialPayme
         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Payments Received</h3>
         {!showForm && (
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => { setShowForm(true); setError('') }}
             className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700"
           >
             <PlusCircle className="w-3.5 h-3.5" /> Record Payment
@@ -119,7 +132,8 @@ export function AMCPayments({ contractId, contractAmount, payments: initialPayme
         <div className="flex justify-between text-sm mb-1.5">
           <span className="text-slate-500">Amount Paid</span>
           <span className="font-bold text-slate-900">
-            {formatCurrency(totalPaid)} <span className="text-slate-400 font-normal">/ {formatCurrency(contractAmount)}</span>
+            {formatCurrency(totalPaid)}{' '}
+            <span className="text-slate-400 font-normal">/ {formatCurrency(contractAmount)}</span>
           </span>
         </div>
         <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -140,81 +154,100 @@ export function AMCPayments({ contractId, contractAmount, payments: initialPayme
       {showForm && (
         <form onSubmit={handleSubmit} className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
           <p className="text-sm font-semibold text-slate-700">Record Payment</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Date</label>
-              <input
-                type="date" required value={form.payment_date}
-                onChange={e => setForm(f => ({ ...f, payment_date: e.target.value }))}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
+
+          {error && (
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-red-700 font-medium">{error}</p>
             </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Amount (KWD)</label>
-              <input
-                type="number" required step="0.001" min="0.001" placeholder="0.000"
-                value={form.amount}
-                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Payment Mode</label>
-              <select
-                value={form.payment_mode}
-                onChange={e => setForm(f => ({ ...f, payment_mode: e.target.value }))}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                {PAYMENT_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Reference No.</label>
-              <input
-                type="text" placeholder="Cheque / Ref #"
-                value={form.reference_number}
-                onChange={e => setForm(f => ({ ...f, reference_number: e.target.value }))}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-          </div>
+          )}
+
           <div>
-            <label className="block text-xs text-slate-500 mb-1">Notes</label>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Payment Date</label>
             <input
-              type="text" placeholder="e.g. 50% advance payment"
-              value={form.notes}
-              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              type="date"
+              required
+              value={form.payment_date}
+              onChange={e => setForm(f => ({ ...f, payment_date: e.target.value }))}
+              className={inputCls}
             />
           </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Amount (KWD)</label>
+            <input
+              type="number"
+              required
+              step="0.001"
+              min="0.001"
+              placeholder="0.000"
+              value={form.amount}
+              onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+              className={inputCls}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Payment Mode</label>
+            <select
+              value={form.payment_mode}
+              onChange={e => setForm(f => ({ ...f, payment_mode: e.target.value }))}
+              className={inputCls}
+            >
+              {PAYMENT_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Reference No. <span className="font-normal text-slate-400">(optional)</span></label>
+            <input
+              type="text"
+              placeholder="Cheque no. / transfer ref"
+              value={form.reference_number}
+              onChange={e => setForm(f => ({ ...f, reference_number: e.target.value }))}
+              className={inputCls}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Notes <span className="font-normal text-slate-400">(optional)</span></label>
+            <input
+              type="text"
+              placeholder="e.g. 50% advance payment"
+              value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              className={inputCls}
+            />
+          </div>
+
           {/* Pre-opening balance checkbox */}
-          <label className="flex items-start gap-2.5 cursor-pointer select-none">
+          <label className="flex items-start gap-2.5 cursor-pointer select-none bg-amber-50 border border-amber-200 rounded-lg p-3">
             <input
               type="checkbox"
               checked={form.is_pre_opening}
               onChange={e => setForm(f => ({ ...f, is_pre_opening: e.target.checked }))}
-              className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              className="mt-0.5 w-4 h-4 accent-amber-500"
             />
             <div>
-              <p className="text-xs font-semibold text-slate-700">Already in opening balance</p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Tick this if the payment was received before you started using this system and is already included in your opening cash/bank balance. It will track the amount on this contract but will <span className="font-medium">not</span> appear again in the Cash/Bank Book.
+              <p className="text-xs font-semibold text-amber-800">Already in opening balance</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Tick if this payment was received before you started using the system and is already included in your opening cash/bank balance. It will show on this contract but will <strong>not</strong> appear in Cash/Bank Book again.
               </p>
             </div>
           </label>
-          {error && <p className="text-xs text-red-600">{error}</p>}
+
           <div className="flex items-center gap-2 pt-1">
             <button
-              type="submit" disabled={saving}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60"
+              type="submit"
+              disabled={saving}
+              className="flex-1 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors"
             >
               {saving ? 'Saving…' : 'Save Payment'}
             </button>
             <button
-              type="button" onClick={() => { setShowForm(false); setError('') }}
-              className="px-4 py-2 border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-100"
+              type="button"
+              onClick={() => { setShowForm(false); setError('') }}
+              className="px-4 py-2.5 border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-100 transition-colors"
             >
               Cancel
             </button>
