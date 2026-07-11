@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, ShieldCheck, CheckCircle, Package } from 'lucide-react'
+import { ArrowLeft, ShieldCheck, CheckCircle, Package, Pencil } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
 import { AMCActions } from './AMCActions'
 
@@ -63,12 +63,20 @@ export default async function AMCDetailPage({
         title={contract.contract_number}
         subtitle="AMC Contract Details"
         actions={
-          <Link
-            href="/amc"
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/amc/${contract.id}/edit`}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition"
+            >
+              <Pencil className="w-4 h-4" /> Edit
+            </Link>
+            <Link
+              href="/amc"
+              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
+            >
+              <ArrowLeft className="w-4 h-4" /> Back
+            </Link>
+          </div>
         }
       />
 

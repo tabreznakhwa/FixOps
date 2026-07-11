@@ -9,7 +9,7 @@ import { Suspense } from 'react'
 
 export const metadata = { title: 'Inventory' }
 
-export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ q?: string; filter?: string; category?: string; brand?: string }> }) {
+export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ q?: string; filter?: string; category?: string; brand?: string; item_id?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
 
@@ -39,12 +39,14 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   const isLowItem = (i: InventoryItem) =>
     i.minimum_stock_level != null && Number(i.minimum_stock_level) > 0 && Number(i.current_stock) <= Number(i.minimum_stock_level)
 
-  // Unique categories and brands for dropdowns (sorted)
+  // Dropdown data
   const categories = [...new Set(allItems.map((i) => i.category).filter(Boolean))].sort() as string[]
   const brands = [...new Set(allItems.map((i) => i.brand).filter(Boolean))].sort() as string[]
+  const itemNames = allItems.map((i) => ({ id: i.id, name: i.item_name })).sort((a, b) => a.name.localeCompare(b.name))
 
-  const hasFilter = !!(params.filter || params.q || params.category || params.brand)
+  const hasFilter = !!(params.filter || params.q || params.category || params.brand || params.item_id)
   let items: InventoryItem[] = params.filter === 'low' ? allItems.filter(isLowItem) : allItems
+  if (params.item_id) items = items.filter((i) => i.id === params.item_id)
   if (params.category) items = items.filter((i) => i.category === params.category)
   if (params.brand) items = items.filter((i) => i.brand === params.brand)
   if (!hasFilter) items = items.slice(0, 200)
@@ -94,7 +96,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
             <SearchBar basePath="/inventory" placeholder="Search by name, code, brand, category…" />
           </Suspense>
           <Suspense>
-            <InventoryFilters categories={categories} brands={brands} />
+            <InventoryFilters categories={categories} brands={brands} itemNames={itemNames} />
           </Suspense>
           <Link
             href={params.filter === 'low' ? '/inventory' : '/inventory?filter=low'}
