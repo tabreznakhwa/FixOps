@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, ShieldCheck, CheckCircle, Package, Pencil } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
 import { AMCActions } from './AMCActions'
+import { AMCPayments } from './AMCPayments'
 
 export const metadata = { title: 'AMC Contract' }
 
@@ -16,15 +17,25 @@ export default async function AMCDetailPage({
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: contractRaw } = await supabase
+  const [{ data: contractRaw }, { data: paymentsRaw }] = await Promise.all([
+    supabase
     .from('amc_contracts')
     .select(
       'id, contract_number, contract_type, start_date, end_date, contract_amount, billing_frequency, services_included, visits_included, visits_used, parts_included, payment_terms, status, renewal_reminder_date, notes, customers(id, full_name, company_name, mobile_number, email)',
     )
     .eq('id', id)
-    .single()
+    .single(),
+    (supabase as any)
+      .from('amc_payments')
+      .select('id, payment_date, amount, payment_mode, reference_number, notes')
+      .eq('amc_contract_id', id)
+      .order('payment_date', { ascending: false }),
+  ])
 
   if (!contractRaw) notFound()
+
+  type AMCPayment = { id: string; payment_date: string; amount: number; payment_mode: string; reference_number: string | null; notes: string | null }
+  const amcPayments = (paymentsRaw ?? []) as AMCPayment[]
 
   const contract = contractRaw as unknown as {
     id: string
@@ -215,13 +226,18 @@ export default async function AMCDetailPage({
             )}
           </div>
 
-          {/* Right column — actions */}
-          <div>
+          {/* Right column — actions + payments */}
+          <div className="space-y-5">
             <AMCActions
               contractId={contract.id}
               currentStatus={contract.status}
               visitsUsed={contract.visits_used}
               visitsIncluded={contract.visits_included}
+            />
+            <AMCPayments
+              contractId={contract.id}
+              contractAmount={contract.contract_amount}
+              payments={amcPayments}
             />
           </div>
         </div>

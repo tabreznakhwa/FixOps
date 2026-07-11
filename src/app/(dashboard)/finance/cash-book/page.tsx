@@ -78,20 +78,30 @@ export default async function CashBookPage({
     .order('issued_date', { ascending: true })
     .limit(5000)
 
+  const { data: allAmcPaymentsRaw } = await (supabase as any)
+    .from('amc_payments')
+    .select('payment_date, amount, reference_number, amc_contracts(contract_number, customers(full_name))')
+    .eq('payment_mode', 'cash')
+    .order('payment_date', { ascending: true })
+    .limit(5000)
+
   type Receipt = { payment_date: string; payment_number: string; amount_received: number; reference_number: string | null; customers: { full_name: string } | null }
   type SupplierPay = { payment_date: string; amount_paid: number; reference_number: string | null; suppliers: { supplier_name: string } | null }
   type Expense = { expense_date: string; expense_number: string; category: string; description: string; amount: number; reference_number: string | null }
   type Salary = { payment_date: string; net_salary: number; staff: { full_name: string } | null; salary_runs: { salary_month: number; salary_year: number } | null }
   type AdvancePay = { issued_date: string; type: string; amount: number; notes: string | null; staff: { full_name: string } | null }
+  type AmcPay = { payment_date: string; amount: number; reference_number: string | null; amc_contracts: { contract_number: string; customers: { full_name: string } | null } | null }
 
   const allReceipts = (allReceiptsRaw ?? []) as Receipt[]
   const allSupplierPayments = (allSupplierPaymentsRaw ?? []) as SupplierPay[]
   const allExpenses = (allExpensesRaw ?? []) as Expense[]
   const allSalaries = (allSalariesRaw ?? []) as Salary[]
   const allAdvances = (allAdvancesRaw ?? []) as AdvancePay[]
+  const allAmcPayments = (allAmcPaymentsRaw ?? []) as AmcPay[]
 
   // Closing balance is always the all-time running total
   const totalCashIn = allReceipts.reduce((s, r) => s + r.amount_received, 0)
+    + allAmcPayments.reduce((s, p) => s + p.amount, 0)
   const totalCashOut = allSupplierPayments.reduce((s, r) => s + r.amount_paid, 0)
     + allExpenses.reduce((s, r) => s + r.amount, 0)
     + allSalaries.reduce((s, r) => s + r.net_salary, 0)
@@ -99,7 +109,10 @@ export default async function CashBookPage({
   const closingBalance = openingCash + totalCashIn - totalCashOut
 
   // "Opening Balance b/f" for the table = balance at the START of the selected period
-  const prePeriodIn = allTime ? 0 : allReceipts.filter((r) => r.payment_date < from).reduce((s, r) => s + r.amount_received, 0)
+  const prePeriodIn = allTime ? 0 : (
+    allReceipts.filter((r) => r.payment_date < from).reduce((s, r) => s + r.amount_received, 0)
+    + allAmcPayments.filter((p) => p.payment_date < from).reduce((s, p) => s + p.amount, 0)
+  )
   const prePeriodOut = allTime ? 0 : (
     allSupplierPayments.filter((p) => p.payment_date < from).reduce((s, p) => s + p.amount_paid, 0)
     + allExpenses.filter((e) => e.expense_date < from).reduce((s, e) => s + e.amount, 0)
@@ -148,6 +161,12 @@ export default async function CashBookPage({
       narration: `${a.type === 'loan' ? 'Loan' : 'Salary Advance'} — ${a.staff?.full_name ?? 'Staff'}${a.notes ? ` (${a.notes})` : ''}`,
       receipts: 0, payments: a.amount,
       ref: '—',
+    })),
+    ...allAmcPayments.filter((p) => inPeriod(p.payment_date)).map((p) => ({
+      date: p.payment_date,
+      narration: `AMC Payment — ${p.amc_contracts?.contract_number ?? ''}${p.amc_contracts?.customers?.full_name ? ` (${p.amc_contracts.customers.full_name})` : ''}`,
+      receipts: p.amount, payments: 0,
+      ref: p.reference_number ?? '—',
     })),
   ].sort((a, b) => a.date.localeCompare(b.date))
 
