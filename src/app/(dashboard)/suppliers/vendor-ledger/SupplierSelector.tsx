@@ -54,7 +54,7 @@ export function SupplierSelector({ suppliers, selectedId }: Props) {
           className="w-full flex items-center justify-between border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           {selected
-            ? <span className="text-slate-900 truncate">{selected.supplier_name} <span className="text-slate-400 text-xs">({selected.supplier_code})</span></span>
+            ? <span className="text-slate-900">{selected.supplier_name} <span className="text-slate-400 text-xs">({selected.supplier_code})</span></span>
             : <span className="text-slate-400">Select supplier…</span>}
           <div className="flex items-center gap-1 ml-2 flex-shrink-0">
             {selected && (
@@ -83,7 +83,7 @@ export function SupplierSelector({ suppliers, selectedId }: Props) {
                 : filtered.map(s => (
                     <button key={s.id} type="button" onClick={() => navigate(s.id)}
                       className={`w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 transition flex items-center justify-between gap-2 ${selectedId === s.id ? 'bg-blue-50 font-semibold' : ''}`}>
-                      <span className="text-slate-900 truncate">{s.supplier_name}</span>
+                      <span className="text-slate-900">{s.supplier_name}</span>
                       <span className="text-xs text-slate-400 flex-shrink-0">{s.supplier_code}</span>
                     </button>
                   ))}
