@@ -31,7 +31,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!contract) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await req.json()
-  const { payment_date, amount, payment_mode, reference_number, notes } = body
+  const { payment_date, amount, payment_mode, reference_number, notes, is_pre_opening } = body
   if (!payment_date || !amount || !payment_mode) {
     return NextResponse.json({ error: 'payment_date, amount, and payment_mode are required' }, { status: 400 })
   }
@@ -46,6 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       payment_mode,
       reference_number: reference_number || null,
       notes: notes || null,
+      is_pre_opening: is_pre_opening === true,
       created_by: user.id,
     })
     .select()

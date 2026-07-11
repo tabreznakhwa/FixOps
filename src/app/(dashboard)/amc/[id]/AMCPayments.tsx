@@ -27,6 +27,7 @@ interface Payment {
   payment_mode: string
   reference_number: string | null
   notes: string | null
+  is_pre_opening: boolean
 }
 
 interface Props {
@@ -49,6 +50,7 @@ export function AMCPayments({ contractId, contractAmount, payments: initialPayme
     payment_mode: 'cash',
     reference_number: '',
     notes: '',
+    is_pre_opening: false,
   })
 
   const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0)
@@ -70,6 +72,7 @@ export function AMCPayments({ contractId, contractAmount, payments: initialPayme
         payment_mode: form.payment_mode,
         reference_number: form.reference_number || null,
         notes: form.notes || null,
+        is_pre_opening: form.is_pre_opening,
       }),
     })
     setSaving(false)
@@ -79,7 +82,7 @@ export function AMCPayments({ contractId, contractAmount, payments: initialPayme
       [newPay, ...prev].sort((a, b) => b.payment_date.localeCompare(a.payment_date))
     )
     setShowForm(false)
-    setForm({ payment_date: today, amount: '', payment_mode: 'cash', reference_number: '', notes: '' })
+    setForm({ payment_date: today, amount: '', payment_mode: 'cash', reference_number: '', notes: '', is_pre_opening: false })
     router.refresh()
   }
 
@@ -186,6 +189,21 @@ export function AMCPayments({ contractId, contractAmount, payments: initialPayme
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             />
           </div>
+          {/* Pre-opening balance checkbox */}
+          <label className="flex items-start gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={form.is_pre_opening}
+              onChange={e => setForm(f => ({ ...f, is_pre_opening: e.target.checked }))}
+              className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <div>
+              <p className="text-xs font-semibold text-slate-700">Already in opening balance</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Tick this if the payment was received before you started using this system and is already included in your opening cash/bank balance. It will track the amount on this contract but will <span className="font-medium">not</span> appear again in the Cash/Bank Book.
+              </p>
+            </div>
+          </label>
           {error && <p className="text-xs text-red-600">{error}</p>}
           <div className="flex items-center gap-2 pt-1">
             <button
@@ -227,6 +245,11 @@ export function AMCPayments({ contractId, contractAmount, payments: initialPayme
                   )}
                 </p>
                 {p.notes && <p className="text-xs text-slate-400 mt-0.5 italic">{p.notes}</p>}
+                {p.is_pre_opening && (
+                  <span className="inline-block mt-1 text-xs bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded-md font-medium">
+                    Pre-opening balance
+                  </span>
+                )}
               </div>
               <button
                 onClick={() => handleDelete(p.id)}

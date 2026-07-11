@@ -82,6 +82,7 @@ export default async function CashBookPage({
     .from('amc_payments')
     .select('payment_date, amount, reference_number, amc_contracts(contract_number, customers(full_name))')
     .eq('payment_mode', 'cash')
+    .eq('is_pre_opening', false)
     .order('payment_date', { ascending: true })
     .limit(5000)
 

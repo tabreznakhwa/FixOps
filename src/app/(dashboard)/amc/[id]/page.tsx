@@ -27,14 +27,14 @@ export default async function AMCDetailPage({
     .single(),
     (supabase as any)
       .from('amc_payments')
-      .select('id, payment_date, amount, payment_mode, reference_number, notes')
+      .select('id, payment_date, amount, payment_mode, reference_number, notes, is_pre_opening')
       .eq('amc_contract_id', id)
       .order('payment_date', { ascending: false }),
   ])
 
   if (!contractRaw) notFound()
 
-  type AMCPayment = { id: string; payment_date: string; amount: number; payment_mode: string; reference_number: string | null; notes: string | null }
+  type AMCPayment = { id: string; payment_date: string; amount: number; payment_mode: string; reference_number: string | null; notes: string | null; is_pre_opening: boolean }
   const amcPayments = (paymentsRaw ?? []) as AMCPayment[]
 
   const contract = contractRaw as unknown as {
