@@ -77,6 +77,7 @@ const navGroups: Array<{
       { href: '/payroll', label: 'Payroll', icon: BarChart3, excludeRoles: ['attendance_kiosk'] },
       { href: '/payroll/process', label: 'Payslips', icon: Printer, excludeRoles: ['attendance_kiosk'] },
       { href: '/payroll/my-payslips', label: 'My Payslips', icon: Printer, onlyRoles: ['attendance_kiosk'] },
+      { href: '/staff/ledger', label: 'Staff Ledger', icon: FileBarChart, excludeRoles: ['technician', 'attendance_kiosk'] },
     ],
   },
   {
