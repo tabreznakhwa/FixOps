@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { Navigation, Radio } from 'lucide-react'
+import { LocationAutoRefresh } from './LocationAutoRefresh'
 
 export const metadata = { title: 'Technician Locations' }
 
@@ -26,6 +27,7 @@ export default async function TechnicianLocationsPage() {
 
   return (
     <div className="animate-fade-in">
+      <LocationAutoRefresh intervalMs={60000} />
       <Header title="Technician Locations" subtitle="Last known position while technicians are clocked in and the My Jobs page is open" />
 
       <div className="p-6 space-y-5">
