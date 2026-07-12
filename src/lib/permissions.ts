@@ -10,7 +10,7 @@ export const DEFAULT_PERMISSIONS: Record<string, ModuleAccess> = {
   admin:              { operations: 'full', finance: 'full', hr: 'full', inventory: 'full', reports: 'full', settings: 'full' },
   manager:            { operations: 'full', finance: 'view', hr: 'view', inventory: 'view', reports: 'full', settings: 'none' },
   call_center:        { operations: 'full', finance: 'none', hr: 'none', inventory: 'none', reports: 'none', settings: 'none' },
-  technician:         { operations: 'view', finance: 'none', hr: 'none', inventory: 'view', reports: 'none', settings: 'none' },
+  technician:         { operations: 'view', finance: 'none', hr: 'view', inventory: 'view', reports: 'none', settings: 'none' },
   accounts:           { operations: 'view', finance: 'none', hr: 'view', inventory: 'view', reports: 'full', settings: 'none' },
   hr:                 { operations: 'view', finance: 'none', hr: 'full', inventory: 'none', reports: 'view', settings: 'none' },
   store:              { operations: 'view', finance: 'none', hr: 'none', inventory: 'full', reports: 'none', settings: 'none' },
