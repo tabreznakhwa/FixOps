@@ -20,7 +20,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   vehicle_maintenance: 'Vehicle Maintenance', tools_equipment: 'Tools & Equipment',
   marketing: 'Marketing', bank_charges: 'Bank Charges', insurance: 'Insurance',
   professional_services: 'Professional Services', food_entertainment: 'Food & Refreshments',
-  other: 'Miscellaneous',
+  travel: 'Travel Expense', other: 'Miscellaneous',
 }
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -91,12 +91,27 @@ export default async function BankBookPage({
     .order('payment_date', { ascending: true })
     .limit(5000)
 
+  const { data: allTransfersRaw } = await (supabase as any)
+    .from('fund_transfers')
+    .select('transfer_date, from_account, to_account, amount, reference_number, notes')
+    .order('transfer_date', { ascending: true })
+    .limit(5000)
+
+  const { data: allWithdrawalsRaw } = await (supabase as any)
+    .from('owner_withdrawals')
+    .select('withdrawal_date, amount, payment_mode, purpose, notes')
+    .in('payment_mode', ['bank_transfer', 'cheque', 'pos', 'card', 'online'])
+    .order('withdrawal_date', { ascending: true })
+    .limit(5000)
+
   type Receipt = { payment_date: string; payment_number: string; amount_received: number; payment_mode: string; reference_number: string | null; customers: { full_name: string } | null }
   type SupplierPay = { payment_date: string; amount_paid: number; payment_mode: string; reference_number: string | null; suppliers: { supplier_name: string } | null }
   type Expense = { expense_date: string; expense_number: string; category: string; description: string; amount: number; payment_method: string; reference_number: string | null }
   type Salary = { payment_date: string; net_salary: number; payment_mode: string; staff: { full_name: string } | null; salary_runs: { salary_month: number; salary_year: number } | null }
   type AdvancePay = { issued_date: string; type: string; amount: number; notes: string | null; staff: { full_name: string } | null }
   type AmcPay = { payment_date: string; amount: number; payment_mode: string; reference_number: string | null; amc_contracts: { contract_number: string; customers: { full_name: string } | null } | null }
+  type Transfer = { transfer_date: string; from_account: string; to_account: string; amount: number; reference_number: string | null; notes: string | null }
+  type Withdrawal = { withdrawal_date: string; amount: number; payment_mode: string; purpose: string | null; notes: string | null }
 
   const allReceipts = (allReceiptsRaw ?? []) as Receipt[]
   const allSupplierPayments = (allSupplierPaymentsRaw ?? []) as SupplierPay[]
@@ -104,26 +119,38 @@ export default async function BankBookPage({
   const allSalaries = (allSalariesRaw ?? []) as Salary[]
   const allAdvances = (allAdvancesRaw ?? []) as AdvancePay[]
   const allAmcPayments = (allAmcPaymentsRaw ?? []) as AmcPay[]
+  const allTransfers = (allTransfersRaw ?? []) as Transfer[]
+  const allWithdrawals = (allWithdrawalsRaw ?? []) as Withdrawal[]
+
+  // Bank transfers: cash→bank = receipt, bank→cash = payment
+  const bankTransfersIn = allTransfers.filter(t => t.to_account === 'bank')
+  const bankTransfersOut = allTransfers.filter(t => t.from_account === 'bank')
 
   // Closing balance is always the all-time running total
   const totalBankIn = allReceipts.reduce((s, r) => s + r.amount_received, 0)
     + allAmcPayments.reduce((s, p) => s + p.amount, 0)
+    + bankTransfersIn.reduce((s, t) => s + t.amount, 0)
   const totalBankOut = allSupplierPayments.reduce((s, r) => s + r.amount_paid, 0)
     + allExpenses.reduce((s, r) => s + r.amount, 0)
     + allSalaries.reduce((s, r) => s + r.net_salary, 0)
     + allAdvances.reduce((s, r) => s + r.amount, 0)
+    + bankTransfersOut.reduce((s, t) => s + t.amount, 0)
+    + allWithdrawals.reduce((s, w) => s + w.amount, 0)
   const closingBalance = openingBank + totalBankIn - totalBankOut
 
   // "Opening Balance b/f" for the table = balance at the START of the selected period
   const prePeriodIn = allTime ? 0 : (
     allReceipts.filter((r) => r.payment_date < from).reduce((s, r) => s + r.amount_received, 0)
     + allAmcPayments.filter((p) => p.payment_date < from).reduce((s, p) => s + p.amount, 0)
+    + bankTransfersIn.filter((t) => t.transfer_date < from).reduce((s, t) => s + t.amount, 0)
   )
   const prePeriodOut = allTime ? 0 : (
     allSupplierPayments.filter((p) => p.payment_date < from).reduce((s, p) => s + p.amount_paid, 0)
     + allExpenses.filter((e) => e.expense_date < from).reduce((s, e) => s + e.amount, 0)
     + allSalaries.filter((s) => s.payment_date < from).reduce((s2, s) => s2 + s.net_salary, 0)
     + allAdvances.filter((a) => a.issued_date < from).reduce((s, a) => s + a.amount, 0)
+    + bankTransfersOut.filter((t) => t.transfer_date < from).reduce((s, t) => s + t.amount, 0)
+    + allWithdrawals.filter((w) => w.withdrawal_date < from).reduce((s, w) => s + w.amount, 0)
   )
   const periodOpeningBalance = openingBank + prePeriodIn - prePeriodOut
   // Date label for the b/f row: one day before the period start
@@ -180,6 +207,27 @@ export default async function BankBookPage({
       mode: MODE_LABELS[p.payment_mode] ?? p.payment_mode,
       receipts: p.amount, payments: 0,
       ref: p.reference_number ?? '—',
+    })),
+    ...bankTransfersIn.filter((t) => inPeriod(t.transfer_date)).map((t) => ({
+      date: t.transfer_date,
+      narration: `Transfer — Cash → Bank${t.notes ? ` (${t.notes})` : ''}`,
+      mode: 'Transfer',
+      receipts: t.amount, payments: 0,
+      ref: t.reference_number ?? '—',
+    })),
+    ...bankTransfersOut.filter((t) => inPeriod(t.transfer_date)).map((t) => ({
+      date: t.transfer_date,
+      narration: `Transfer — Bank → Cash${t.notes ? ` (${t.notes})` : ''}`,
+      mode: 'Transfer',
+      receipts: 0, payments: t.amount,
+      ref: t.reference_number ?? '—',
+    })),
+    ...allWithdrawals.filter((w) => inPeriod(w.withdrawal_date)).map((w) => ({
+      date: w.withdrawal_date,
+      narration: `Owner Withdrawal${w.purpose ? ` — ${w.purpose}` : ''}`,
+      mode: MODE_LABELS[w.payment_mode] ?? w.payment_mode,
+      receipts: 0, payments: w.amount,
+      ref: '—',
     })),
   ].sort((a, b) => a.date.localeCompare(b.date))
 

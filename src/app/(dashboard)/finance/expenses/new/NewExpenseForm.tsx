@@ -19,6 +19,7 @@ const CATEGORIES = [
   { value: 'insurance', label: 'Insurance' },
   { value: 'professional_services', label: 'Professional Services' },
   { value: 'food_entertainment', label: 'Food & Refreshments' },
+  { value: 'travel', label: 'Travel Expense' },
   { value: 'other', label: 'Miscellaneous / Other' },
 ]
 

@@ -7,7 +7,8 @@ import {
   CreditCard, Package, UserCheck, DollarSign, BarChart3, Settings,
   Wrench, ChevronDown, LogOut, Menu, X, FileBarChart, ShieldCheck,
   Building2, Hammer, CalendarCheck, Banknote, Landmark, AlertCircle,
-  ShoppingCart, TrendingDown, Layers, Printer, BookOpen, Receipt, MapPin
+  ShoppingCart, TrendingDown, Layers, Printer, BookOpen, Receipt, MapPin,
+  ArrowLeftRight, Wallet
 } from 'lucide-react'
 import { useState, useRef, type ElementType } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -46,6 +47,8 @@ const navGroups: Array<{
       { href: '/finance/expenses', label: 'Expenses', icon: Receipt, excludeRoles: ['technician'] },
       { href: '/finance/cash-book', label: 'Cash Book', icon: Banknote },
       { href: '/finance/bank-book', label: 'Bank Book', icon: Landmark },
+      { href: '/finance/transfers', label: 'Fund Transfers', icon: ArrowLeftRight, excludeRoles: ['technician', 'attendance_kiosk'] },
+      { href: '/finance/owner-withdrawals', label: 'Owner Withdrawals', icon: Wallet, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/amc', label: 'AMC Contracts', icon: ShieldCheck },
     ],
   },
