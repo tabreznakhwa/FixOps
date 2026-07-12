@@ -80,7 +80,7 @@ const navGroups: Array<{
       { href: '/attendance', label: 'Attendance', icon: CalendarCheck, excludeRoles: ['technician'] },
       { href: '/payroll', label: 'Payroll', icon: BarChart3, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/payroll/process', label: 'Payslips', icon: Printer, excludeRoles: ['technician', 'attendance_kiosk'] },
-      { href: '/payroll/my-payslips', label: 'My Payslips', icon: Printer, onlyRoles: ['attendance_kiosk'] },
+      { href: '/payroll/my-payslips', label: 'My Payslips', icon: Printer, onlyRoles: ['attendance_kiosk', 'technician'] },
       { href: '/staff/ledger', label: 'Staff Ledger', icon: FileBarChart, excludeRoles: ['technician', 'attendance_kiosk'] },
     ],
   },
