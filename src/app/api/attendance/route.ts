@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient()
 
-    // Block duplicate same-day records
+    // Check for existing record (technician may have already self-clocked in)
     const { data: existing } = await (supabase as any)
       .from('attendance')
       .select('id')
@@ -50,28 +50,29 @@ export async function POST(request: NextRequest) {
       .eq('staff_id', staff_id)
       .eq('date', date)
       .maybeSingle()
-    if (existing) {
-      return NextResponse.json({ error: 'Attendance already recorded for this staff member on this date' }, { status: 409 })
+
+    const payload = {
+      check_in: check_in || null,
+      check_out: check_out || null,
+      hours_worked: Number(hours_worked ?? 0),
+      overtime_hours: Number(overtime_hours ?? 0),
+      status,
+      notes: notes?.trim() || null,
+      is_public_holiday: Boolean(is_public_holiday ?? false),
+      friday_ot_amount: Number(body.friday_ot_amount ?? 0),
     }
 
-    const { data: record, error } = await (supabase as any)
-      .from('attendance')
-      .insert({
-        organization_id: profile.organization_id,
-        staff_id,
-        date,
-        check_in: check_in || null,
-        check_out: check_out || null,
-        hours_worked: Number(hours_worked ?? 0),
-        overtime_hours: Number(overtime_hours ?? 0),
-        status,
-        notes: notes?.trim() || null,
-        is_public_holiday: Boolean(is_public_holiday ?? false),
-        friday_ot_amount: Number(body.friday_ot_amount ?? 0),
-        created_by: user.id,
-      })
-      .select('id')
-      .single()
+    let record, error
+    if (existing) {
+      // Update the existing record (e.g. technician self-clocked in — admin finalises at end of day)
+      ;({ data: record, error } = await (supabase as any)
+        .from('attendance').update(payload).eq('id', existing.id).select('id').single())
+    } else {
+      ;({ data: record, error } = await (supabase as any)
+        .from('attendance')
+        .insert({ organization_id: profile.organization_id, staff_id, date, ...payload, created_by: user.id })
+        .select('id').single())
+    }
 
     if (error) throw error
 

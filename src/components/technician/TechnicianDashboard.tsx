@@ -162,43 +162,18 @@ export function TechnicianDashboard({
           </button>
         </div>
 
-        {/* Clock In / Clock Out */}
+        {/* Compact status bar in header */}
         {staffLinked === false ? (
           <div className="mt-3 flex items-center gap-2 bg-amber-900/30 border border-amber-700/50 rounded-xl px-3 py-2 text-xs text-amber-300">
             <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" /> Your login isn't linked to a staff profile — ask HR to link it so your hours count toward salary.
           </div>
-        ) : (
-          <div className="mt-3 flex items-center justify-between gap-3 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5">
-            {attendanceError && <p className="text-xs text-red-400">{attendanceError}</p>}
-            {!attendance?.check_in ? (
-              <>
-                <span className="text-xs text-slate-400">Not clocked in yet</span>
-                <button
-                  onClick={() => clockAction('clock_in')}
-                  disabled={attendanceLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg text-xs font-bold transition-colors"
-                >
-                  <LogIn className="w-3.5 h-3.5" /> Clock In
-                </button>
-              </>
-            ) : !attendance.check_out ? (
-              <>
-                <span className="text-xs text-slate-300">Clocked in at <span className="font-bold text-white">{attendance.check_in}</span></span>
-                <button
-                  onClick={() => clockAction('clock_out')}
-                  disabled={attendanceLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg text-xs font-bold transition-colors"
-                >
-                  <LogOut className="w-3.5 h-3.5" /> Clock Out
-                </button>
-              </>
-            ) : (
-              <span className="text-xs text-green-400 font-semibold flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5" /> {attendance.check_in} – {attendance.check_out} · Done for today
-              </span>
-            )}
+        ) : attendance?.check_out ? (
+          <div className="mt-3 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl">
+            <span className="text-xs text-green-400 font-semibold flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5" /> {attendance.check_in} – {attendance.check_out} · Done for today
+            </span>
           </div>
-        )}
+        ) : null}
       </div>
 
       {selectedJob ? (
@@ -314,6 +289,47 @@ export function TechnicianDashboard({
       ) : (
         /* Job List */
         <div className="p-4 space-y-6 max-w-lg mx-auto">
+          {/* Big Clock-In CTA when technician hasn't started their day */}
+          {staffLinked !== false && !attendance?.check_in && (
+            <div className="bg-green-950 border border-green-700/50 rounded-2xl p-6 text-center">
+              <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <LogIn className="w-8 h-8 text-white" />
+              </div>
+              <h2 className="text-lg font-bold text-white mb-1">Ready to start your day?</h2>
+              <p className="text-sm text-slate-400 mb-5">
+                Clock in to begin your shift and enable live location sharing for your jobs.
+              </p>
+              <button
+                onClick={() => clockAction('clock_in')}
+                disabled={attendanceLoading}
+                className="w-full py-4 bg-green-600 hover:bg-green-700 active:bg-green-800 disabled:opacity-50 rounded-xl text-white font-bold text-base transition-colors"
+              >
+                {attendanceLoading ? 'Clocking In...' : 'Clock In & Start Day'}
+              </button>
+              {attendanceError && <p className="text-xs text-red-400 mt-3">{attendanceError}</p>}
+            </div>
+          )}
+
+          {/* Clock-Out reminder when on duty */}
+          {staffLinked !== false && attendance?.check_in && !attendance.check_out && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3 bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3">
+                <div className="flex items-center gap-2 text-sm text-slate-300">
+                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                  On duty since <span className="font-semibold text-white">{attendance.check_in}</span>
+                </div>
+                <button
+                  onClick={() => clockAction('clock_out')}
+                  disabled={attendanceLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg text-xs font-bold transition-colors flex-shrink-0"
+                >
+                  <LogOut className="w-3.5 h-3.5" /> {attendanceLoading ? '...' : 'Clock Out'}
+                </button>
+              </div>
+              {attendanceError && <p className="text-xs text-red-400 text-center">{attendanceError}</p>}
+            </div>
+          )}
+
           {/* Today's Jobs */}
           {todayJobs.length > 0 && (
             <div>
