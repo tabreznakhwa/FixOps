@@ -6,6 +6,7 @@ import { DeleteAttendanceButton } from './DeleteAttendanceButton'
 import { formatDate } from '@/lib/utils'
 import { isFriday } from '@/lib/attendance'
 import { StaffFilterSelect } from './StaffFilterSelect'
+import { redirect } from 'next/navigation'
 
 export const metadata = { title: 'Attendance' }
 
@@ -70,6 +71,10 @@ export default async function AttendancePage({
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
   const userRole = (profileRaw as { role: string } | null)?.role ?? ''
+
+  // Technicians have their own self-service page — block access to the full staff list
+  if (userRole === 'technician') redirect('/my-attendance')
+
   const isKiosk = userRole === 'attendance_kiosk'
   const canEdit = ['owner', 'admin', 'hr', 'manager'].includes(userRole)
 

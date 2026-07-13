@@ -24,7 +24,8 @@ export default async function MyPayslipsPage() {
   const { data: profileRaw } = await (supabase as any)
     .from('users').select('organization_id, role').eq('id', user.id).single()
   const profile = profileRaw as { organization_id: string; role: string } | null
-  if (!profile || profile.role !== 'attendance_kiosk') redirect('/attendance')
+  const selfServiceRoles = ['attendance_kiosk', 'technician']
+  if (!profile || !selfServiceRoles.includes(profile.role)) redirect('/dashboard')
 
   const admin = createAdminClient() as any
 
