@@ -48,7 +48,7 @@ export async function PATCH(
     // Fetch current payment
     const { data: payment } = await supabase
       .from('payments')
-      .select('id, payment_number, amount_received, invoice_id, is_cancelled')
+      .select('id, payment_number, amount_received, invoice_id, is_advance, is_cancelled')
       .eq('id', id)
       .single()
     if (!payment) return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
