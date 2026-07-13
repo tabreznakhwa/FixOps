@@ -76,8 +76,8 @@ const navGroups: Array<{
     items: [
       { href: '/staff', label: 'Staff', icon: UserCheck, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/staff/locations', label: 'Technician Locations', icon: MapPin, excludeRoles: ['technician', 'attendance_kiosk'] },
-      { href: '/my-attendance', label: 'My Attendance', icon: Clock, excludeRoles: ['attendance_kiosk'] },
-      { href: '/attendance', label: 'Attendance', icon: CalendarCheck, excludeRoles: ['technician'] },
+      { href: '/my-attendance', label: 'My Attendance', icon: Clock },
+      { href: '/attendance', label: 'Attendance', icon: CalendarCheck, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/payroll', label: 'Payroll', icon: BarChart3, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/payroll/process', label: 'Payslips', icon: Printer, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/payroll/my-payslips', label: 'My Payslips', icon: Printer, onlyRoles: ['attendance_kiosk', 'technician'] },

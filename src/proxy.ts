@@ -62,13 +62,13 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard?error=unauthorized', request.url))
     }
 
-    // Attendance kiosk: /attendance and own payslips only
+    // Attendance kiosk: self-clock and own payslips only
     if (profile.role === 'attendance_kiosk' &&
-      !pathname.startsWith('/attendance') &&
+      !pathname.startsWith('/my-attendance') &&
       !pathname.startsWith('/payroll/my-payslips') &&
       !pathname.startsWith('/payroll/slips') &&
       !pathname.startsWith('/api')) {
-      return NextResponse.redirect(new URL('/attendance', request.url))
+      return NextResponse.redirect(new URL('/my-attendance', request.url))
     }
 
     // Skip API routes (enforced at DB/RLS) and locked roles (always full access)

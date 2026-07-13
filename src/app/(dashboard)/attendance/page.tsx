@@ -72,8 +72,8 @@ export default async function AttendancePage({
   const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
   const userRole = (profileRaw as { role: string } | null)?.role ?? ''
 
-  // Technicians have their own self-service page — block access to the full staff list
-  if (userRole === 'technician') redirect('/my-attendance')
+  // Non-admin staff have their own self-service page — block access to the full staff list
+  if (userRole === 'technician' || userRole === 'attendance_kiosk') redirect('/my-attendance')
 
   const isKiosk = userRole === 'attendance_kiosk'
   const canEdit = ['owner', 'admin', 'hr', 'manager'].includes(userRole)
