@@ -236,6 +236,7 @@ export default async function InvoiceDetailPage({
       </div>
       {/* ── END PRINT TEMPLATE ──────────────────────────────── */}
 
+      <div className="print:hidden">
       <Header
         title={invoice.invoice_number}
         subtitle={`Invoice · ${formatStatus(invoice.invoice_type)}`}
@@ -531,6 +532,7 @@ export default async function InvoiceDetailPage({
           </div>
         </div>
       </div>
+      </div>{/* end print:hidden */}
     </div>
   )
 }
