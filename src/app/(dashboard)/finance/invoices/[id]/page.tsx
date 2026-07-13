@@ -89,6 +89,20 @@ export default async function InvoiceDetailPage({
     is_cancelled: boolean
   }>
 
+  // Fetch unlinked advance payments from this customer (can be applied to settle this invoice)
+  const customerId = (invoiceRaw as any).customer_id as string
+  const { data: advancesRaw } = await admin
+    .from('payments')
+    .select('id, payment_number, payment_date, amount_received, payment_mode')
+    .eq('customer_id', customerId)
+    .eq('is_advance', true)
+    .eq('is_cancelled', false)
+    .is('invoice_id', null)
+    .order('payment_date', { ascending: false })
+  const customerAdvances = (advancesRaw ?? []) as Array<{
+    id: string; payment_number: string; payment_date: string; amount_received: number; payment_mode: string
+  }>
+
   // Role check for edit access
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profileRaw } = await (supabase as any)
@@ -528,6 +542,7 @@ export default async function InvoiceDetailPage({
               currentStatus={invoice.status}
               balanceDue={invoice.balance_due}
               customerId={customer ? (invoiceRaw as any).customer_id : ''}
+              advances={customerAdvances}
             />
           </div>
         </div>

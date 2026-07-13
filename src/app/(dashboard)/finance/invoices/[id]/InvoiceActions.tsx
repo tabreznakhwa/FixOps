@@ -1,22 +1,49 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle, CreditCard, XCircle, ArrowLeft, AlertCircle, Loader2 } from 'lucide-react'
+import { CheckCircle, CreditCard, XCircle, ArrowLeft, AlertCircle, Loader2, Banknote } from 'lucide-react'
 import Link from 'next/link'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
+
+interface Advance {
+  id: string
+  payment_number: string
+  payment_date: string
+  amount_received: number
+  payment_mode: string
+}
 
 interface Props {
   invoiceId: string
   currentStatus: string
   balanceDue: number
   customerId: string
+  advances?: Advance[]
 }
 
-export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerId }: Props) {
+export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerId, advances = [] }: Props) {
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
+
+  const applyAdvance = async (paymentId: string) => {
+    setError('')
+    setLoading(`adv-${paymentId}`)
+    try {
+      const res = await fetch(`/api/payments/${paymentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apply_to_invoice_id: invoiceId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to apply advance')
+      window.location.reload()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to apply advance')
+      setLoading(null)
+    }
+  }
 
   const patch = async (body: Record<string, unknown>) => {
     const res = await fetch(`/api/invoices/${invoiceId}`, {
@@ -82,6 +109,30 @@ export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerI
           )}
           Issue Invoice
         </button>
+      )}
+
+      {/* Apply available advance payments from this customer */}
+      {canRecordPayment && advances.length > 0 && (
+        <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 space-y-2.5">
+          <p className="text-xs font-bold text-amber-800 flex items-center gap-1.5">
+            <Banknote className="w-3.5 h-3.5" /> Customer Advance Available
+          </p>
+          {advances.map((adv) => (
+            <div key={adv.id} className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs font-mono font-semibold text-slate-800">{adv.payment_number}</p>
+                <p className="text-xs text-slate-500">{formatDate(adv.payment_date)} · {formatCurrency(adv.amount_received)}</p>
+              </div>
+              <button
+                onClick={() => applyAdvance(adv.id)}
+                disabled={loading === `adv-${adv.id}`}
+                className="flex-shrink-0 text-xs font-bold px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition disabled:opacity-50"
+              >
+                {loading === `adv-${adv.id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Apply'}
+              </button>
+            </div>
+          ))}
+        </div>
       )}
 
       {canRecordPayment && (

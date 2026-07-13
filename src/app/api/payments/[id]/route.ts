@@ -87,6 +87,38 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    // Apply advance payment to an invoice
+    if (body.apply_to_invoice_id) {
+      if (!payment.is_advance || payment.invoice_id) {
+        return NextResponse.json({ error: 'This payment is already linked to an invoice' }, { status: 400 })
+      }
+      const targetId = body.apply_to_invoice_id
+      const { data: inv } = await supabase
+        .from('invoices')
+        .select('id, total_amount, amount_paid, balance_due, status, work_order_id')
+        .eq('id', targetId).single()
+      if (!inv) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
+
+      const applied = Math.min(Number(payment.amount_received), Number(inv.balance_due))
+      const newPaid = Math.min(Number(inv.total_amount), Number(inv.amount_paid) + applied)
+      const newBalance = Math.max(0, Number(inv.total_amount) - newPaid)
+      const newStatus = newBalance <= 0 ? 'paid' : newPaid > 0 ? 'partial' : inv.status
+
+      await supabase.from('payments').update({ invoice_id: targetId, is_advance: false }).eq('id', id)
+      await supabase.from('invoices').update({ amount_paid: newPaid, balance_due: newBalance, status: newStatus, updated_at: new Date().toISOString() }).eq('id', targetId)
+
+      if (newStatus === 'paid' && inv.work_order_id) {
+        await supabase.from('work_orders').update({ payment_status: 'paid', status: 'paid' }).eq('id', inv.work_order_id)
+      }
+
+      // Update the ledger entry type from advance → payment
+      await supabase.from('customer_ledger_entries').update({ entry_type: 'payment' })
+        .eq('reference_id', id).eq('reference_type', 'payment')
+
+      await logAudit({ orgId: profile.organization_id, userId: user.id, action: 'update', entityType: 'payment', entityId: id, entityLabel: payment.payment_number })
+      return NextResponse.json({ success: true })
+    }
+
     const { payment_date, payment_mode, reference_number, notes, amount_received } = body
     const updatePayload: Record<string, unknown> = {}
 
