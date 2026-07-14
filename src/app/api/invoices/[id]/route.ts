@@ -183,6 +183,11 @@ export async function PATCH(
       }
     }
 
+    // work_order_id can be linked/unlinked by admin/owner/manager even on paid invoices
+    if ('work_order_id' in body && ['admin', 'owner', 'manager'].includes(profile.role)) {
+      updatePayload.work_order_id = body.work_order_id ?? null
+    }
+
     if (Object.keys(updatePayload).length === 0) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }

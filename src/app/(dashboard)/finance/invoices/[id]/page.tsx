@@ -7,6 +7,7 @@ import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/
 import { InvoiceActions } from './InvoiceActions'
 import { PrintActions } from '@/components/print/PrintActions'
 import { InvoiceDateEditor } from './InvoiceDateEditor'
+import { InvoiceWorkOrderEditor } from './InvoiceWorkOrderEditor'
 
 export const metadata = { title: 'Invoice Detail' }
 
@@ -109,6 +110,20 @@ export default async function InvoiceDetailPage({
     .from('users').select('role').eq('id', user!.id).single()
   const role = (profileRaw as { role: string } | null)?.role ?? ''
   const canEdit = ['admin', 'owner', 'manager'].includes(role) && !['cancelled', 'paid'].includes(invoice.status)
+  const canManageLinks = ['admin', 'owner', 'manager'].includes(role)
+
+  // Fetch work orders for the customer so admins can link/re-link (even on paid invoices)
+  let linkableWorkOrders: Array<{ id: string; work_order_number: string }> = []
+  if (canManageLinks) {
+    const { data: linkableWoRaw } = await admin
+      .from('work_orders')
+      .select('id, work_order_number')
+      .eq('customer_id', customerId)
+      .not('status', 'in', '(cancelled)')
+      .order('created_at', { ascending: false })
+      .limit(100)
+    linkableWorkOrders = (linkableWoRaw ?? []) as Array<{ id: string; work_order_number: string }>
+  }
 
   // Fetch org for print letterhead
   const { data: orgRaw } = await admin
@@ -322,7 +337,14 @@ export default async function InvoiceDetailPage({
                     <p className="font-semibold text-slate-900 font-mono">{invoice.ref_number}</p>
                   </div>
                 )}
-                {workOrder && (
+                {canManageLinks ? (
+                  <InvoiceWorkOrderEditor
+                    invoiceId={invoice.id}
+                    workOrderId={(invoiceRaw as any).work_order_id ?? null}
+                    workOrderNumber={workOrder?.work_order_number ?? null}
+                    availableWorkOrders={linkableWorkOrders}
+                  />
+                ) : workOrder && (
                   <div>
                     <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Work Order</p>
                     <p className="font-semibold text-slate-900 font-mono">{workOrder.work_order_number}</p>
