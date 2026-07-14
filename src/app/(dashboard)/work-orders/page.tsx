@@ -24,7 +24,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
   // Without a date filter, keep the list short by hiding already-closed-out work orders.
   // With a date filter, show everything in range (including invoiced/paid/cancelled) since
   // the user is looking back at a specific period rather than the active queue.
-  if (!hasDateFilter) query = query.not('status', 'in', '(invoiced,paid,cancelled)')
+  if (!hasDateFilter) query = query.not('status', 'in', '(paid,cancelled)')
   if (params.status) query = (query as any).eq('status', params.status)
   if (params.from) query = query.gte('scheduled_date', params.from)
   if (params.to) query = query.lte('scheduled_date', params.to)
