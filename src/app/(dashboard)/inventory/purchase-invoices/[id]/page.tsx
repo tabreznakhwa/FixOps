@@ -6,6 +6,7 @@ import { ArrowLeft, Pencil } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { PrintActions } from '@/components/print/PrintActions'
 import { CancelPurchaseInvoiceButton } from '../CancelPurchaseInvoiceButton'
+import { PurchaseInvoiceAdvanceActions } from './PurchaseInvoiceAdvanceActions'
 
 export const metadata = { title: 'Purchase Invoice' }
 
@@ -42,6 +43,20 @@ export default async function PurchaseInvoiceDetailPage({ params }: { params: Pr
     inventory_items: { item_name: string; item_code: string; unit_of_measure: string; current_stock: number } | null
   }>
 
+  // Fetch supplier advances available to apply against this invoice
+  const isCancelled = invoice.status === 'cancelled'
+  let supplierAdvances: Array<{ id: string; advance_number: string; advance_date: string; balance: number; payment_mode: string }> = []
+  if (invoice.supplier_id && Number(invoice.balance_due) > 0 && !isCancelled) {
+    const { data: advancesRaw } = await admin
+      .from('supplier_advances')
+      .select('id, advance_number, advance_date, balance, payment_mode')
+      .eq('supplier_id', invoice.supplier_id)
+      .eq('is_cancelled', false)
+      .gt('balance', 0)
+      .order('advance_date', { ascending: false })
+    supplierAdvances = (advancesRaw ?? []) as typeof supplierAdvances
+  }
+
   // Fetch org for print letterhead
   const { data: orgRaw } = await admin.from('organizations')
     .select('name, logo_url, address, city, phone, email').limit(1).single()
@@ -49,7 +64,6 @@ export default async function PurchaseInvoiceDetailPage({ params }: { params: Pr
 
   const supplierDisplay = invoice.suppliers?.supplier_name ?? invoice.supplier_name ?? '—'
   const isCash = invoice.payment_type === 'cash'
-  const isCancelled = invoice.status === 'cancelled'
 
   return (
     <div className="animate-fade-in">
@@ -285,6 +299,14 @@ export default async function PurchaseInvoiceDetailPage({ params }: { params: Pr
             </div>
           </div>
         </div>
+
+        {/* Supplier Advance Actions */}
+        {supplierAdvances.length > 0 && (
+          <PurchaseInvoiceAdvanceActions
+            invoiceId={invoice.id}
+            advances={supplierAdvances}
+          />
+        )}
       </div>
     </div>
   )

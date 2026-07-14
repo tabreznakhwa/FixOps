@@ -19,6 +19,9 @@ interface HistoryRecord {
   check_in: string | null
   check_out: string | null
   hours_worked: number
+  overtime_hours: number
+  friday_ot_amount: number
+  is_public_holiday: boolean
   status: string
 }
 
@@ -132,6 +135,9 @@ export function MyAttendanceDashboard({
                 {(attendance.hours_worked ?? 0) > 0 && (
                   <span className="ml-2 font-semibold text-slate-700">· {attendance.hours_worked}h worked</span>
                 )}
+                {(attendance.overtime_hours ?? 0) > 0 && (
+                  <span className="ml-1 font-semibold text-amber-600">· {attendance.overtime_hours}h OT</span>
+                )}
               </p>
             </>
           ) : (
@@ -169,6 +175,7 @@ export function MyAttendanceDashboard({
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">In</th>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Out</th>
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Hours</th>
+                <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">OT</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -186,6 +193,15 @@ export function MyAttendanceDashboard({
                     {(r.hours_worked ?? 0) > 0
                       ? <span className="font-semibold text-slate-700">{r.hours_worked}h</span>
                       : <span className="text-slate-400">—</span>}
+                  </td>
+                  <td className="px-5 py-3 text-right text-sm">
+                    {(r.overtime_hours ?? 0) > 0 ? (
+                      <span className="font-semibold text-amber-600">{r.overtime_hours}h</span>
+                    ) : (r.friday_ot_amount ?? 0) > 0 ? (
+                      <span className="font-semibold text-purple-600 text-xs">Fri OT</span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

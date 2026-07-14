@@ -24,7 +24,8 @@ export default async function MyAttendancePage() {
   let todayAttendance = null
   let recentRecords: Array<{
     id: string; date: string; check_in: string | null; check_out: string | null
-    hours_worked: number; status: string
+    hours_worked: number; overtime_hours: number; friday_ot_amount: number
+    is_public_holiday: boolean; status: string
   }> = []
 
   if (staffRecord) {
@@ -42,7 +43,7 @@ export default async function MyAttendancePage() {
 
     const { data: records } = await admin
       .from('attendance')
-      .select('id, date, check_in, check_out, hours_worked, status')
+      .select('id, date, check_in, check_out, hours_worked, overtime_hours, friday_ot_amount, is_public_holiday, status')
       .eq('staff_id', staffRecord.id)
       .gte('date', fromDate)
       .order('date', { ascending: false })

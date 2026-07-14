@@ -63,6 +63,7 @@ const navGroups: Array<{
       { href: '/inventory/stock-trial', label: 'Stock Trial', icon: Layers, excludeRoles: ['technician'] },
       { href: '/suppliers', label: 'Suppliers & PO', icon: Building2, exact: true, excludeRoles: ['technician'] },
       { href: '/suppliers/purchase-register', label: 'Purchase Register', icon: ShoppingCart, excludeRoles: ['technician'] },
+      { href: '/suppliers/advances', label: 'Supplier Advances', icon: Banknote, excludeRoles: ['technician'] },
       { href: '/suppliers/vendor-payments', label: 'Vendor Payments', icon: TrendingDown, excludeRoles: ['technician'] },
       { href: '/suppliers/vendor-outstanding', label: 'Vendor Outstanding', icon: TrendingDown, excludeRoles: ['technician'] },
       { href: '/suppliers/vendor-ledger', label: 'Vendor Ledger', icon: TrendingDown, excludeRoles: ['technician'] },

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
-import { calcAttendanceBreakdown, kuwaitISODate, kuwaitTimeHHMM } from '@/lib/attendance'
+import { calcAttendanceBreakdown, isFriday, kuwaitISODate, kuwaitTimeHHMM } from '@/lib/attendance'
 
 async function resolveStaff(userId: string) {
   const admin = createAdminClient() as any
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
           created_by: user.id,
           ...(hasCoords ? { check_in_lat: lat, check_in_lng: lng } : {}),
         })
-        .select('id, check_in, check_out, hours_worked, overtime_hours')
+        .select('id, check_in, check_out, hours_worked, overtime_hours, friday_ot_amount')
         .single()
       if (error) throw error
       return NextResponse.json({ record })
@@ -87,17 +87,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ record: existing }) // already clocked out — idempotent
     }
 
-    const breakdown = calcAttendanceBreakdown(existing.check_in, nowTime)
+    const isTodayFriday = isFriday(today)
+    const breakdown = calcAttendanceBreakdown(existing.check_in, nowTime, isTodayFriday)
+
+    let fridayOtAmount = 0
+    if (isTodayFriday && breakdown) {
+      const { data: staffData } = await admin.from('staff').select('friday_ot_amount').eq('id', staff.id).single()
+      if (staffData && breakdown.fixedOtHrs > 0) fridayOtAmount = Number(staffData.friday_ot_amount ?? 0)
+    }
+
     const { data: record, error } = await admin
       .from('attendance')
       .update({
         check_out: nowTime,
         hours_worked: breakdown?.hoursWorked ?? 0,
         overtime_hours: breakdown?.normalOtPaidHrs ?? 0,
+        friday_ot_amount: fridayOtAmount,
         ...(hasCoords ? { check_out_lat: lat, check_out_lng: lng } : {}),
       })
       .eq('id', existing.id)
-      .select('id, check_in, check_out, hours_worked, overtime_hours')
+      .select('id, check_in, check_out, hours_worked, overtime_hours, friday_ot_amount')
       .single()
     if (error) throw error
     return NextResponse.json({ record })
