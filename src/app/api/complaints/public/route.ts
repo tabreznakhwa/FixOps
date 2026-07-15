@@ -21,8 +21,33 @@ export async function POST(request: NextRequest) {
     const VALID_PRIORITIES = ['low', 'medium', 'high', 'urgent']
     const priority = VALID_PRIORITIES.includes(rawPriority) ? rawPriority : 'medium'
 
+    const VALID_CATEGORIES = [
+      'ac_maintenance', 'plumbing', 'electrical', 'general',
+      'emergency', 'amc_visit', 'installation', 'inspection', 'quotation',
+    ]
+
     if (!customerName || !customerMobile || !serviceCategory || !description) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    // Length guards — prevent oversized payloads being stored / triggering notifications
+    if (typeof customerName !== 'string' || customerName.trim().length > 100) {
+      return NextResponse.json({ error: 'Invalid customer name' }, { status: 400 })
+    }
+    if (typeof customerMobile !== 'string' || customerMobile.trim().length > 20 || !/^[\d\s+\-().]+$/.test(customerMobile.trim())) {
+      return NextResponse.json({ error: 'Invalid mobile number' }, { status: 400 })
+    }
+    if (typeof description !== 'string' || description.trim().length > 2000) {
+      return NextResponse.json({ error: 'Description too long (max 2000 characters)' }, { status: 400 })
+    }
+    if (!VALID_CATEGORIES.includes(serviceCategory)) {
+      return NextResponse.json({ error: 'Invalid service category' }, { status: 400 })
+    }
+    if (location && (typeof location !== 'string' || location.length > 300)) {
+      return NextResponse.json({ error: 'Location too long' }, { status: 400 })
+    }
+    if (customerEmail && (typeof customerEmail !== 'string' || customerEmail.length > 200)) {
+      return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
     }
 
     const supabase = createAdminClient()
