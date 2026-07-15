@@ -9,6 +9,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { data: { user } } = await supabaseUser.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const { data: profileRaw } = await (supabaseUser as any)
+      .from('users').select('organization_id, role').eq('id', user.id).single()
+    const profile = profileRaw as { organization_id: string; role: string } | null
+    if (!profile || !['owner', 'admin', 'manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json()
     const supabase = createAdminClient() as any
 
@@ -17,6 +24,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .from('purchase_invoices')
         .update({ status: 'cancelled', updated_at: new Date().toISOString() })
         .eq('id', id)
+        .eq('organization_id', profile.organization_id)
       if (error) throw error
       return NextResponse.json({ success: true })
     }
@@ -27,7 +35,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       for (const key of allowed) {
         if (key in body) updates[key] = body[key] === '' ? null : body[key]
       }
-      const { error } = await supabase.from('purchase_invoices').update(updates).eq('id', id)
+      const { error } = await supabase.from('purchase_invoices').update(updates).eq('id', id).eq('organization_id', profile.organization_id)
       if (error) throw error
       return NextResponse.json({ success: true })
     }

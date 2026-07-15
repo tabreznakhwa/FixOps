@@ -11,12 +11,15 @@ export async function POST(request: NextRequest) {
       customerMobile,
       customerEmail,
       serviceCategory,
-      priority = 'medium',
+      priority: rawPriority = 'medium',
       description,
       location,
       preferredDate,
       organizationSlug,
     } = body
+
+    const VALID_PRIORITIES = ['low', 'medium', 'high', 'urgent']
+    const priority = VALID_PRIORITIES.includes(rawPriority) ? rawPriority : 'medium'
 
     if (!customerName || !customerMobile || !serviceCategory || !description) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })

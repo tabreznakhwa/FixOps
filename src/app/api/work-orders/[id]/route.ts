@@ -17,6 +17,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { data: { user } } = await supabaseUser.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const { data: profileRaw } = await (supabaseUser as any)
+      .from('users').select('organization_id, role').eq('id', user.id).single()
+    const profile = profileRaw as { organization_id: string; role: string } | null
+    if (!profile || !['owner', 'admin', 'manager', 'technician'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json()
     const allowed = ['status', 'assigned_to', 'assigned_staff_id', 'technician_name', 'priority', 'notes', 'final_amount', 'payment_status', 'scheduled_date', 'scheduled_time', 'service_category']
     const updates: Record<string, unknown> = {}
@@ -29,6 +36,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const supabase = createAdminClient()
+
+    // Verify the work order belongs to this org
+    const { data: wo0 } = await (supabase as any)
+      .from('work_orders').select('organization_id').eq('id', id).single()
+    if (!wo0 || wo0.organization_id !== profile.organization_id) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
     const { error } = await (supabase as any)
       .from('work_orders')
       .update({ ...updates, updated_at: new Date().toISOString() })

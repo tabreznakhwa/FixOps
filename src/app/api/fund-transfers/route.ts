@@ -10,6 +10,8 @@ async function getProfile(supabase: any) {
 
 export async function GET() {
   const supabase = await createClient()
+  const profile = await getProfile(supabase as any)
+  if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { data, error } = await (supabase as any)
     .from('fund_transfers')
     .select('id, transfer_date, from_account, to_account, amount, reference_number, notes, created_at')
@@ -23,6 +25,9 @@ export async function POST(req: Request) {
   const supabase = await createClient()
   const profile = await getProfile(supabase as any)
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!['owner', 'admin'].includes(profile.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const body = await req.json()
   const { transfer_date, from_account, to_account, amount, reference_number, notes } = body
@@ -56,11 +61,14 @@ export async function DELETE(req: Request) {
   const supabase = await createClient()
   const profile = await getProfile(supabase as any)
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!['owner', 'admin'].includes(profile.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { id } = await req.json()
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-  const { error } = await (supabase as any).from('fund_transfers').delete().eq('id', id)
+  const { error } = await (supabase as any).from('fund_transfers').delete().eq('id', id).eq('organization_id', profile.organization_id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })
 }

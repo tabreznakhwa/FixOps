@@ -45,6 +45,13 @@ export async function GET(request: NextRequest) {
     } = await supabaseUser.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const { data: profileRaw } = await (supabaseUser as any)
+      .from('users').select('organization_id, role').eq('id', user.id).single()
+    const profile = profileRaw as { organization_id: string; role: string } | null
+    if (!profile || !['owner', 'admin', 'manager', 'accounts'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const rawRange = searchParams.get('range') as Range | null
     const range: Range = ['month', 'last_month', 'quarter', 'year', 'all'].includes(rawRange ?? '')
@@ -60,6 +67,7 @@ export async function GET(request: NextRequest) {
       .select(
         'invoice_number, invoice_date, due_date, status, invoice_type, subtotal, discount_amount, tax_amount, total_amount, amount_paid, balance_due, customers(full_name)',
       )
+      .eq('organization_id', profile.organization_id)
       .not('status', 'in', '(cancelled,written_off)')
       .order('invoice_date', { ascending: false })
 

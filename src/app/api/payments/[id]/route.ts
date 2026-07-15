@@ -13,11 +13,17 @@ export async function GET(
     const { data: { user } } = await supabaseUser.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const { data: profileRaw } = await (supabaseUser as any)
+      .from('users').select('organization_id, role').eq('id', user.id).single()
+    const profile = profileRaw as { organization_id: string; role: string } | null
+    if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
     const supabase = createAdminClient() as any
     const { data, error } = await supabase
       .from('payments')
       .select('id, payment_number, payment_date, amount_received, payment_mode, reference_number, notes, is_advance, is_cancelled, cancelled_reason, customers(id, full_name, mobile_number), invoices(id, invoice_number, total_amount)')
       .eq('id', id)
+      .eq('organization_id', profile.organization_id)
       .single()
 
     if (error || !data) return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
@@ -45,17 +51,23 @@ export async function PATCH(
     const body = await request.json()
     const supabase = createAdminClient() as any
 
-    // Fetch current payment
+    // Fetch current payment — scoped to org
     const { data: payment } = await supabase
       .from('payments')
-      .select('id, payment_number, amount_received, invoice_id, is_advance, is_cancelled')
+      .select('id, payment_number, amount_received, invoice_id, is_advance, is_cancelled, organization_id')
       .eq('id', id)
       .single()
     if (!payment) return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
+    if (payment.organization_id !== profile.organization_id) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
     if (payment.is_cancelled) return NextResponse.json({ error: 'Cannot edit a cancelled payment' }, { status: 400 })
 
-    // Cancellation
+    // Cancellation — restricted to admin/owner/manager
     if (body.is_cancelled === true) {
+      if (!['admin', 'owner', 'manager'].includes(profile.role)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
       if (!body.cancelled_reason?.trim()) {
         return NextResponse.json({ error: 'Cancellation reason is required' }, { status: 400 })
       }

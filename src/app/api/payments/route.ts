@@ -15,6 +15,9 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!['owner', 'admin', 'manager', 'accounts'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const body = await request.json()
     const {

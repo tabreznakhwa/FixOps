@@ -18,6 +18,9 @@ export async function PATCH(
       .single()
     const profile = profileRaw as { organization_id: string; role: string } | null
     if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!['owner', 'admin', 'manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const body = await request.json()
 
@@ -43,6 +46,7 @@ export async function PATCH(
       .from('suppliers')
       .update({ ...updatePayload, updated_at: new Date().toISOString() })
       .eq('id', id)
+      .eq('organization_id', profile.organization_id)
       .select('id, supplier_code, supplier_name, status')
       .single()
 

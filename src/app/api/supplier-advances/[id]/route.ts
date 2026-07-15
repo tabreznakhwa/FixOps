@@ -21,14 +21,17 @@ export async function PATCH(
     const body = await request.json()
     const admin = createAdminClient() as any
 
-    // Fetch advance
+    // Fetch advance — scoped to org
     const { data: advance } = await admin
       .from('supplier_advances')
-      .select('id, advance_number, supplier_id, amount, amount_utilized, balance, is_cancelled')
+      .select('id, advance_number, supplier_id, amount, amount_utilized, balance, is_cancelled, organization_id')
       .eq('id', id)
       .single()
 
     if (!advance) return NextResponse.json({ error: 'Advance not found' }, { status: 404 })
+    if (advance.organization_id !== profile.organization_id) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
     if (advance.is_cancelled) return NextResponse.json({ error: 'Advance is cancelled' }, { status: 400 })
     if (Number(advance.balance) <= 0) return NextResponse.json({ error: 'No balance remaining on this advance' }, { status: 400 })
 
@@ -38,11 +41,14 @@ export async function PATCH(
 
       const { data: inv } = await admin
         .from('purchase_invoices')
-        .select('id, total_amount, amount_paid, balance_due, payment_status, supplier_id')
+        .select('id, total_amount, amount_paid, balance_due, payment_status, supplier_id, organization_id')
         .eq('id', targetId)
         .single()
 
       if (!inv) return NextResponse.json({ error: 'Purchase invoice not found' }, { status: 404 })
+      if (inv.organization_id !== profile.organization_id) {
+        return NextResponse.json({ error: 'Purchase invoice not found' }, { status: 404 })
+      }
       if (inv.supplier_id !== advance.supplier_id) {
         return NextResponse.json({ error: 'Advance supplier does not match invoice supplier' }, { status: 400 })
       }

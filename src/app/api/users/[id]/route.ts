@@ -36,9 +36,12 @@ export async function PATCH(
     }
 
     const admin = createAdminClient() as any
-    const { data: targetRaw } = await admin.from('users').select('full_name, role, status').eq('id', targetUserId).single()
-    const target = targetRaw as { full_name: string; role: string; status: string } | null
+    const { data: targetRaw } = await admin.from('users').select('full_name, role, status, organization_id').eq('id', targetUserId).single()
+    const target = targetRaw as { full_name: string; role: string; status: string; organization_id: string } | null
     if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    if (target.organization_id !== actor.organization_id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const updates: Record<string, string> = {}
     if (role) updates.role = role
@@ -95,7 +98,10 @@ export async function POST(
     }
 
     const admin = createAdminClient() as any
-    const { data: targetRaw } = await admin.from('users').select('full_name').eq('id', targetUserId).single()
+    const { data: targetRaw } = await admin.from('users').select('full_name, organization_id').eq('id', targetUserId).single()
+    if (!targetRaw || (targetRaw as any).organization_id !== actor.organization_id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const newStatus = action === 'approve' ? 'active' : 'rejected'
     const { error } = await admin.from('users').update({ status: newStatus }).eq('id', targetUserId)

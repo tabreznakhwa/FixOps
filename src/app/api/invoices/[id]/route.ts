@@ -13,12 +13,18 @@ export async function GET(
     const { data: { user } } = await supabaseUser.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const { data: getProfileRaw } = await (supabaseUser as any)
+      .from('users').select('organization_id').eq('id', user.id).single()
+    const getProfile = getProfileRaw as { organization_id: string } | null
+    if (!getProfile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
     const supabase = createAdminClient()
 
     const { data: invoice, error: invError } = await (supabase as any)
       .from('invoices')
       .select('*, customers(full_name, mobile_number, email, area, city), work_orders(work_order_number)')
       .eq('id', id)
+      .eq('organization_id', getProfile.organization_id)
       .single()
 
     if (invError || !invoice) {
@@ -143,8 +149,11 @@ export async function PATCH(
 
       const supabaseAdmin = createAdminClient() as any
       const { data: existing } = await supabaseAdmin
-        .from('invoices').select('id, invoice_number, status, amount_paid').eq('id', id).single()
+        .from('invoices').select('id, invoice_number, status, amount_paid, organization_id').eq('id', id).single()
       if (!existing) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
+      if (existing.organization_id !== profile.organization_id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
       if (['cancelled', 'paid'].includes(existing.status)) return NextResponse.json({ error: 'Cannot edit a paid or cancelled invoice' }, { status: 400 })
 
       const subtotal = items.reduce((sum: number, it: { quantity: number; unit_price: number }) => sum + it.quantity * it.unit_price, 0)
@@ -172,6 +181,10 @@ export async function PATCH(
 
       await logAudit({ orgId: profile.organization_id, userId: user.id, action: 'update', entityType: 'invoice', entityId: id, entityLabel: `${existing.invoice_number} — KWD ${totalAmount.toFixed(3)}` })
       return NextResponse.json({ success: true, id })
+    }
+
+    if (!['admin', 'owner', 'manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const ALLOWED_FIELDS = ['status', 'notes', 'terms_and_conditions', 'cancelled_reason', 'due_date', 'invoice_date']
@@ -232,6 +245,7 @@ export async function PATCH(
       .from('invoices')
       .update({ ...updatePayload, updated_at: new Date().toISOString() })
       .eq('id', id)
+      .eq('organization_id', profile.organization_id)
       .select('id, invoice_number, status')
       .single()
 

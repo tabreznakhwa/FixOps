@@ -20,9 +20,12 @@ export async function POST(request: Request) {
   }
   if (!month || !year) return NextResponse.json({ error: 'Month and year are required' }, { status: 400 })
 
-  const { data: profileRaw } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
-  const profile = profileRaw as unknown as { organization_id: string } | null
+  const { data: profileRaw } = await supabase.from('users').select('organization_id, role').eq('id', user.id).single()
+  const profile = profileRaw as unknown as { organization_id: string; role: string } | null
   if (!profile?.organization_id) return NextResponse.json({ error: 'No organization found' }, { status: 400 })
+  if (!['owner', 'admin', 'manager'].includes(profile.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   const orgId = profile.organization_id
 
   const admin = createAdminClient()
