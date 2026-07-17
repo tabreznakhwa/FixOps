@@ -4,7 +4,54 @@ import { getRouteModule, getDefaultPermission, LOCKED_ROLES } from '@/lib/permis
 
 const PUBLIC_PATHS = ['/login', '/auth/callback', '/pending', '/api/auth', '/portal', '/api/complaints/public']
 
+// ---------------------------------------------------------------------------
+// IP-based rate limiter (in-memory per edge-worker instance).
+// For global enforcement across Vercel regions, swap for Upstash Redis / Vercel KV.
+// ---------------------------------------------------------------------------
+interface RLEntry { count: number; resetAt: number }
+const rl = new Map<string, RLEntry>()
+let pruneCounter = 0
+function pruneExpired() {
+  if (++pruneCounter % 500 !== 0) return
+  const now = Date.now()
+  for (const [k, v] of rl) { if (now > v.resetAt) rl.delete(k) }
+}
+function rlAllow(key: string, limit: number, windowMs: number): boolean {
+  pruneExpired()
+  const now = Date.now()
+  const entry = rl.get(key)
+  if (!entry || now > entry.resetAt) { rl.set(key, { count: 1, resetAt: now + windowMs }); return true }
+  if (entry.count >= limit) return false
+  entry.count++
+  return true
+}
+function getIp(req: NextRequest): string {
+  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    ?? req.headers.get('x-real-ip')
+    ?? 'unknown'
+}
+function tooMany(retryAfterSecs: number) {
+  return NextResponse.json(
+    { error: 'Too many requests. Please try again later.' },
+    { status: 429, headers: { 'Retry-After': String(retryAfterSecs) } },
+  )
+}
+
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl
+  const { method } = request
+  const ip = getIp(request)
+
+  // Rate limiting — applied before auth so bots never reach Supabase
+  if (pathname === '/api/complaints/public' && method === 'POST') {
+    if (!rlAllow(`cmp:${ip}`, 5, 60 * 60 * 1000)) return tooMany(3600)
+  } else if (pathname.startsWith('/api/auth/') && method === 'POST') {
+    if (!rlAllow(`auth:${ip}`, 15, 15 * 60 * 1000)) return tooMany(900)
+  } else if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/callback')) {
+    if (!rlAllow(`api:${ip}`, 300, 60 * 1000)) return tooMany(60)
+  }
+
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -25,7 +72,6 @@ export async function proxy(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { pathname } = request.nextUrl
 
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p))
 
