@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { AssignmentNotifier } from '@/components/layout/AssignmentNotifier'
 import { getRoleAccess } from '@/lib/orgPermissions'
 import { TabInitializer } from '@/components/layout/TabInitializer'
+import { TabModeGuard } from '@/components/layout/TabModeGuard'
 import { TabBar } from '@/components/layout/TabBar'
 import { TabShell } from '@/components/layout/TabShell'
 
@@ -35,6 +36,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (isTabMode) {
     return (
       <div className="min-h-screen bg-slate-50 overflow-y-auto">
+        <TabModeGuard />
         {children}
       </div>
     )
