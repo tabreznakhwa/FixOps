@@ -132,7 +132,7 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
 
   function scheduleClose() {
     if (closeTimer.current) clearTimeout(closeTimer.current)
-    closeTimer.current = setTimeout(() => setActiveGroup(null), 150)
+    closeTimer.current = setTimeout(() => setActiveGroup(null), 350)
   }
 
   function cancelClose() {
@@ -146,6 +146,14 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
   }
 
   const visibleGroups = navGroups.filter((g) => (moduleAccess[g.module] ?? 'none') !== 'none')
+
+  function groupPrimaryHref(group: typeof navGroups[0]) {
+    const first = group.items.find(
+      ({ excludeRoles, onlyRoles }) =>
+        !excludeRoles?.includes(user.role) && (!onlyRoles || onlyRoles.includes(user.role))
+    )
+    return first?.href ?? '/dashboard'
+  }
 
   const activeGroupData = visibleGroups.find(g => g.label === activeGroup) ?? null
   const activeGroupItems = activeGroupData?.items.filter(
@@ -171,11 +179,13 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
             const groupActive = isGroupActive(group)
             const isHovered = activeGroup === group.label
             return (
-              <button
+              <Link
                 key={group.label}
+                href={groupPrimaryHref(group)}
                 title={group.label}
                 onMouseEnter={() => openGroup(group.label)}
                 onMouseLeave={scheduleClose}
+                onClick={() => setActiveGroup(null)}
                 className={cn(
                   'w-10 h-10 rounded-lg flex items-center justify-center transition-all flex-shrink-0',
                   groupActive
@@ -186,7 +196,7 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
                 )}
               >
                 <GroupIcon className="w-5 h-5" />
-              </button>
+              </Link>
             )
           })}
         </nav>
