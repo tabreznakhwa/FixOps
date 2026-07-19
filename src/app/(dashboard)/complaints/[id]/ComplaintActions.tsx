@@ -16,14 +16,16 @@ interface Props {
   complaintId: string
   currentStatus: string
   currentAssigneeKey: string | null  // "user:UUID" or "staff:UUID"
+  currentVisitOrder: number | null
   technicians: Person[]
   statusFlow: string[]
 }
 
-export function ComplaintActions({ complaintId, currentStatus, currentAssigneeKey, technicians, statusFlow }: Props) {
+export function ComplaintActions({ complaintId, currentStatus, currentAssigneeKey, currentVisitOrder, technicians, statusFlow }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [assigneeKey, setAssigneeKey] = useState(currentAssigneeKey ?? '')
+  const [visitOrder, setVisitOrder] = useState(currentVisitOrder?.toString() ?? '')
 
   const currentIdx = statusFlow.indexOf(currentStatus)
   const nextStatus = currentIdx < statusFlow.length - 1 ? statusFlow[currentIdx + 1] : null
@@ -55,6 +57,7 @@ export function ComplaintActions({ complaintId, currentStatus, currentAssigneeKe
       assigned_staff_id: pType === 'staff' ? pId ?? null : null,
       technician_name: person?.full_name ?? null,
       status: person ? 'assigned' : currentStatus,
+      visit_order: visitOrder ? parseInt(visitOrder) || null : null,
     })
   }
 
@@ -91,6 +94,36 @@ export function ComplaintActions({ complaintId, currentStatus, currentAssigneeKe
           </select>
           <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         </div>
+
+        <div>
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Visit Order</label>
+          <div className="flex items-center gap-2">
+            {[1,2,3,4,5].map(n => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setVisitOrder(visitOrder === String(n) ? '' : String(n))}
+                className={`w-9 h-9 rounded-lg text-sm font-bold border-2 transition-all ${
+                  visitOrder === String(n)
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-600'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+            <input
+              type="number"
+              min="1"
+              value={visitOrder}
+              onChange={e => setVisitOrder(e.target.value)}
+              placeholder="—"
+              className="w-14 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-center text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <p className="text-xs text-slate-400 mt-1">Tap to set the visit sequence for the technician</p>
+        </div>
+
         <button
           onClick={saveAssignment}
           disabled={loading === 'assigned_to' || loading === 'technician_name'}

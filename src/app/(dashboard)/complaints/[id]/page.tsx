@@ -36,7 +36,7 @@ export default async function ComplaintDetailPage({ params }: { params: Promise<
     priority: string; status: string; service_category: string | string[]
     created_at: string; preferred_date: string | null; preferred_time: string | null
     location: string | null; complaint_source: string | null; notes: string | null
-    technician_name: string | null; assigned_staff_id: string | null
+    technician_name: string | null; assigned_staff_id: string | null; visit_order: number | null
     customers: { full_name: string; mobile_number: string; email: string | null; area: string | null; city: string | null } | null
     users: { id: string; full_name: string } | null
   }
@@ -204,7 +204,14 @@ export default async function ComplaintDetailPage({ params }: { params: Promise<
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <h2 className="font-semibold text-slate-900 mb-3">Assigned Technician</h2>
             {(complaint.technician_name ?? complaint.users?.full_name) ? (
-              <p className="text-sm font-medium text-slate-800">🔧 {complaint.technician_name ?? complaint.users?.full_name}</p>
+              <div className="flex items-center gap-3">
+                <p className="text-sm font-medium text-slate-800">🔧 {complaint.technician_name ?? complaint.users?.full_name}</p>
+                {complaint.visit_order != null && (
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-bold flex-shrink-0">
+                    #{complaint.visit_order}
+                  </span>
+                )}
+              </div>
             ) : (
               <p className="text-sm text-slate-400 italic">Unassigned</p>
             )}
@@ -253,6 +260,7 @@ export default async function ComplaintDetailPage({ params }: { params: Promise<
               complaint.users?.id ? `user:${complaint.users.id}` :
               complaint.assigned_staff_id ? `staff:${complaint.assigned_staff_id}` : null
             }
+            currentVisitOrder={complaint.visit_order}
             technicians={technicians}
             statusFlow={STATUS_FLOW}
           />

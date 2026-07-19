@@ -17,7 +17,8 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
 
   let query = supabase
     .from('complaints')
-    .select('id, complaint_number, description, priority, status, service_category, created_at, preferred_date, preferred_time, customer_id, customers(full_name, mobile_number), users!complaints_assigned_to_fkey(full_name)')
+    .select('id, complaint_number, description, priority, status, service_category, created_at, preferred_date, preferred_time, customer_id, visit_order, customers(full_name, mobile_number), users!complaints_assigned_to_fkey(full_name)')
+    .order('visit_order', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false })
 
   if (params.status) query = query.eq('status', params.status)
@@ -42,7 +43,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     id: string; complaint_number: string; description: string; priority: string; status: string;
     service_category: string | string[]; created_at: string;
     preferred_date: string | null; preferred_time: string | null;
-    customer_id: string | null;
+    customer_id: string | null; visit_order: number | null;
     customers: { full_name: string; mobile_number: string } | null;
     users: { full_name: string } | null
   }>
@@ -150,8 +151,15 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
                   href={`/complaints/${c.id}`}
                   className="flex items-start gap-4 bg-white rounded-xl border border-slate-200 p-4 hover:border-blue-300 hover:shadow-sm transition-all group"
                 >
-                  <div className="text-2xl flex-shrink-0 mt-0.5">
-                    {categoryIcons[Array.isArray(c.service_category) ? c.service_category[0] : c.service_category ?? ''] ?? '🔧'}
+                  <div className="flex flex-col items-center gap-1 flex-shrink-0 mt-0.5">
+                    <div className="text-2xl">
+                      {categoryIcons[Array.isArray(c.service_category) ? c.service_category[0] : c.service_category ?? ''] ?? '🔧'}
+                    </div>
+                    {c.visit_order != null && (
+                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-[11px] font-bold">
+                        {c.visit_order}
+                      </span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">

@@ -57,10 +57,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ success: true })
     }
 
-    const allowed = ['status', 'assigned_to', 'assigned_staff_id', 'technician_name', 'priority', 'notes']
-    const updates: Record<string, string | null> = {}
+    const allowed = ['status', 'assigned_to', 'assigned_staff_id', 'technician_name', 'priority', 'notes', 'visit_order']
+    const updates: Record<string, unknown> = {}
     for (const key of allowed) {
-      if (key in body) updates[key] = body[key] || null
+      if (key in body) {
+        if (key === 'visit_order') {
+          updates[key] = body[key] != null ? parseInt(body[key]) || null : null
+        } else {
+          updates[key] = body[key] || null
+        }
+      }
     }
 
     if (!Object.keys(updates).length) {
