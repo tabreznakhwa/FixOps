@@ -1,24 +1,19 @@
 'use client'
 
-import { useSearchParams } from 'next/navigation'
-import { Suspense, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { TabProvider } from '@/contexts/TabContext'
 import { TabBar } from '@/components/layout/TabBar'
 import { TabShell } from '@/components/layout/TabShell'
 import { TabModeGuard } from '@/components/layout/TabModeGuard'
 
-function Inner({
-  sidebar,
-  assigner,
-  children,
-}: {
+interface Props {
+  isTabMode: boolean
   sidebar: ReactNode
   assigner: ReactNode
   children: ReactNode
-}) {
-  const params = useSearchParams()
-  const isTabMode = params.has('__tab')
+}
 
+export function TabShellOrContent({ isTabMode, sidebar, assigner, children }: Props) {
   if (isTabMode) {
     return (
       <div className="min-h-screen bg-slate-50 overflow-y-auto">
@@ -39,17 +34,5 @@ function Inner({
       </div>
       {assigner}
     </TabProvider>
-  )
-}
-
-export function TabShellOrContent(props: {
-  sidebar: ReactNode
-  assigner: ReactNode
-  children: ReactNode
-}) {
-  return (
-    <Suspense>
-      <Inner {...props} />
-    </Suspense>
   )
 }

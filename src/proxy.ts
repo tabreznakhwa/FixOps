@@ -54,7 +54,10 @@ export async function proxy(request: NextRequest) {
 
   // Pass tab-mode flag to the layout so it can strip the sidebar for iframe content
   const baseHeaders = new Headers(request.headers)
-  if (request.nextUrl.searchParams.has('__tab')) baseHeaders.set('x-tab-mode', '1')
+  const isTabRequest =
+    request.nextUrl.searchParams.has('__tab') ||
+    request.headers.get('sec-fetch-dest') === 'iframe'
+  if (isTabRequest) baseHeaders.set('x-tab-mode', '1')
 
   let supabaseResponse = NextResponse.next({ request: { headers: baseHeaders } })
 
