@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, Search, ChevronDown, X, AlertCircle, Loader2, Package } from 'lucide-react'
+import { Plus, Trash2, Search, ChevronDown, X, AlertCircle, Loader2, Package, PackagePlus } from 'lucide-react'
 
 interface Supplier { id: string; supplier_name: string; supplier_code: string }
 interface InvItem {
@@ -26,18 +26,136 @@ const TODAY = new Date().toISOString().split('T')[0]
 function emptyLine(): LineItem {
   return { inventory_item_id: '', description: '', unit_of_measure: '', quantity: '1', unit_cost: '', isNonInventory: false }
 }
-
 function emptyNonInventoryLine(): LineItem {
   return { inventory_item_id: '', description: '', unit_of_measure: '', quantity: '1', unit_cost: '', isNonInventory: true }
 }
 
+// ── Quick-Add Part Modal ───────────────────────────────────
+function QuickAddModal({
+  initialName,
+  onCreated,
+  onClose,
+}: {
+  initialName: string
+  onCreated: (item: InvItem) => void
+  onClose: () => void
+}) {
+  const [name, setName] = useState(initialName)
+  const [category, setCategory] = useState('')
+  const [uom, setUom] = useState('pcs')
+  const [purchasePrice, setPurchasePrice] = useState('')
+  const [sellingPrice, setSellingPrice] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function save() {
+    if (!name.trim()) { setErr('Item name is required'); return }
+    setSaving(true); setErr('')
+    try {
+      const res = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          item_name: name.trim(),
+          category: category.trim() || null,
+          unit_of_measure: uom || 'pcs',
+          purchase_price: parseFloat(purchasePrice) || 0,
+          selling_price: parseFloat(sellingPrice) || 0,
+          current_stock: 0,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to create item')
+      onCreated({
+        id: data.id,
+        item_code: data.item_code,
+        item_name: name.trim(),
+        category: category.trim() || null,
+        unit_of_measure: uom || 'pcs',
+        current_stock: 0,
+        purchase_price: parseFloat(purchasePrice) || 0,
+      })
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Failed to create item')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <PackagePlus className="w-5 h-5 text-blue-600" />
+            <h2 className="font-bold text-slate-900">Add New Part to Inventory</h2>
+          </div>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          {err && (
+            <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" /> {err}
+            </div>
+          )}
+          <div>
+            <label className={labelCls}>Part / Item Name <span className="text-red-500">*</span></label>
+            <input autoFocus type="text" value={name} onChange={e => setName(e.target.value)} className={inputCls} placeholder="e.g. AC Compressor 1.5 Ton" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Category</label>
+              <input type="text" value={category} onChange={e => setCategory(e.target.value)} placeholder="e.g. AC Parts" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Unit</label>
+              <select value={uom} onChange={e => setUom(e.target.value)} className={inputCls}>
+                <option value="pcs">pcs</option>
+                <option value="set">set</option>
+                <option value="kg">kg</option>
+                <option value="ltr">ltr</option>
+                <option value="m">m</option>
+                <option value="box">box</option>
+                <option value="roll">roll</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Purchase Price (KWD)</label>
+              <input type="number" min="0" step="0.001" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} placeholder="0.000" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Selling Price (KWD)</label>
+              <input type="number" min="0" step="0.001" value={sellingPrice} onChange={e => setSellingPrice(e.target.value)} placeholder="0.000" className={inputCls} />
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">Stock will start at 0 and increase when this purchase invoice is saved.</p>
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
+          <button type="button" onClick={save} disabled={saving}
+            className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2">
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating…</> : <><Plus className="w-4 h-4" /> Add Part</>}
+          </button>
+          <button type="button" onClick={onClose}
+            className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 border border-slate-200 rounded-lg transition-colors">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Inventory Item Combobox ────────────────────────────────
 function ItemCombobox({
-  items, value, onChange,
+  items, value, onChange, onCreateNew,
 }: {
   items: InvItem[]
   value: string
   onChange: (item: InvItem | null) => void
+  onCreateNew: (query: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -83,7 +201,7 @@ function ItemCombobox({
       </button>
 
       {open && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-72 overflow-hidden flex flex-col">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-80 overflow-hidden flex flex-col">
           <div className="p-2 border-b border-slate-100">
             <div className="flex items-center gap-2 px-2 py-1.5 bg-slate-50 rounded-lg">
               <Search className="w-4 h-4 text-slate-400" />
@@ -97,9 +215,9 @@ function ItemCombobox({
               />
             </div>
           </div>
-          <ul className="overflow-y-auto">
+          <ul className="overflow-y-auto flex-1">
             {filtered.length === 0 ? (
-              <li className="px-4 py-6 text-sm text-slate-400 text-center">No items found</li>
+              <li className="px-4 py-4 text-sm text-slate-400 text-center">No items found</li>
             ) : filtered.map(item => (
               <li key={item.id}>
                 <button
@@ -119,6 +237,17 @@ function ItemCombobox({
               </li>
             ))}
           </ul>
+          {/* Always show "Create new part" at the bottom */}
+          <div className="border-t border-slate-100 p-2">
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onCreateNew(query) }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            >
+              <PackagePlus className="w-4 h-4" />
+              {query ? `Create new part "${query}"` : 'Create new part…'}
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -148,6 +277,11 @@ export function NewPurchaseInvoiceForm({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Local items list — new parts created inline are appended here
+  const [localItems, setLocalItems] = useState<InvItem[]>(inventoryItems)
+  const [quickAddLineIdx, setQuickAddLineIdx] = useState<number | null>(null)
+  const [quickAddName, setQuickAddName] = useState('')
+
   const updateLine = useCallback((idx: number, field: keyof LineItem, val: string) => {
     setLines(prev => { const n = [...prev]; n[idx] = { ...n[idx], [field]: val }; return n })
   }, [])
@@ -170,6 +304,18 @@ export function NewPurchaseInvoiceForm({
     })
   }, [])
 
+  const openQuickAdd = useCallback((idx: number, query: string) => {
+    setQuickAddLineIdx(idx)
+    setQuickAddName(query)
+  }, [])
+
+  const handleItemCreated = useCallback((newItem: InvItem) => {
+    setLocalItems(prev => [newItem, ...prev])
+    if (quickAddLineIdx !== null) selectItem(quickAddLineIdx, newItem)
+    setQuickAddLineIdx(null)
+    setQuickAddName('')
+  }, [quickAddLineIdx, selectItem])
+
   const addLine = () => setLines(prev => [...prev, emptyLine()])
   const addNonInventoryLine = () => setLines(prev => [...prev, emptyNonInventoryLine()])
   const removeLine = (idx: number) => { if (lines.length > 1) setLines(prev => prev.filter((_, i) => i !== idx)) }
@@ -182,7 +328,6 @@ export function NewPurchaseInvoiceForm({
     e.preventDefault()
     setError('')
 
-    // Strip untouched empty inventory placeholder rows before validating
     const activeLines = lines.filter((l) =>
       l.isNonInventory ? l.description.trim() !== '' : l.inventory_item_id !== ''
     )
@@ -234,272 +379,284 @@ export function NewPurchaseInvoiceForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
-
-      {error && (
-        <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          {error}
-        </div>
+    <>
+      {/* Quick-Add Modal */}
+      {quickAddLineIdx !== null && (
+        <QuickAddModal
+          initialName={quickAddName}
+          onCreated={handleItemCreated}
+          onClose={() => { setQuickAddLineIdx(null); setQuickAddName('') }}
+        />
       )}
 
-      {/* Header */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-slate-700">Purchase Details</h2>
+      <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Supplier */}
-          <div>
-            <label className={labelCls}>Supplier</label>
-            <select
-              value={supplierId}
-              onChange={e => { setSupplierId(e.target.value); if (e.target.value) setSupplierName('') }}
-              className={inputCls}
-            >
-              <option value="">— Select supplier —</option>
-              {suppliers.map(s => (
-                <option key={s.id} value={s.id}>{s.supplier_name}</option>
-              ))}
-            </select>
+        {error && (
+          <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            {error}
           </div>
+        )}
 
-          {!supplierId && (
+        {/* Header */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+          <h2 className="text-sm font-semibold text-slate-700">Purchase Details</h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className={labelCls}>Supplier Name <span className="text-slate-400 font-normal text-xs">(if not in list)</span></label>
+              <label className={labelCls}>Supplier</label>
+              <select
+                value={supplierId}
+                onChange={e => { setSupplierId(e.target.value); if (e.target.value) setSupplierName('') }}
+                className={inputCls}
+              >
+                <option value="">— Select supplier —</option>
+                {suppliers.map(s => (
+                  <option key={s.id} value={s.id}>{s.supplier_name}</option>
+                ))}
+              </select>
+            </div>
+
+            {!supplierId && (
+              <div>
+                <label className={labelCls}>Supplier Name <span className="text-slate-400 font-normal text-xs">(if not in list)</span></label>
+                <input
+                  type="text"
+                  value={supplierName}
+                  onChange={e => setSupplierName(e.target.value)}
+                  placeholder="e.g. Al-Sayer Trading"
+                  className={inputCls}
+                />
+              </div>
+            )}
+
+            <div>
+              <label className={labelCls}>Invoice Date <span className="text-red-500">*</span></label>
+              <input type="date" required value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className={inputCls} />
+            </div>
+
+            <div>
+              <label className={labelCls}>Supplier Invoice No. <span className="text-slate-400 font-normal text-xs">(optional)</span></label>
               <input
                 type="text"
-                value={supplierName}
-                onChange={e => setSupplierName(e.target.value)}
-                placeholder="e.g. Al-Sayer Trading"
+                value={supplierInvoiceNumber}
+                onChange={e => setSupplierInvoiceNumber(e.target.value)}
+                placeholder="e.g. INV-232496"
                 className={inputCls}
               />
+            </div>
+          </div>
+
+          <div>
+            <label className={labelCls}>Payment Type <span className="text-red-500">*</span></label>
+            <div className="flex gap-3">
+              {(['credit', 'cash'] as const).map(pt => (
+                <label key={pt} className="cursor-pointer flex-1">
+                  <input type="radio" className="sr-only" checked={paymentType === pt} onChange={() => setPaymentType(pt)} />
+                  <div className={`text-center py-3 rounded-xl border-2 text-sm font-semibold transition-all ${paymentType === pt ? (pt === 'cash' ? 'bg-green-600 border-green-600 text-white' : 'bg-blue-600 border-blue-600 text-white') : 'border-slate-200 text-slate-500 hover:border-blue-200'}`}>
+                    {pt === 'cash' ? '💵 Cash Purchase' : '🏦 Credit Purchase'}
+                  </div>
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500 mt-1.5">
+              {paymentType === 'cash' ? 'Payment made immediately — inventory and cash updated.' : 'Goods received now, payment to supplier due later.'}
+            </p>
+          </div>
+
+          {paymentType === 'cash' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Payment Mode</label>
+                <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} className={inputCls}>
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="knet">KNET</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {paymentType === 'credit' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Due Date</label>
+                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
+              </div>
             </div>
           )}
 
           <div>
-            <label className={labelCls}>Invoice Date <span className="text-red-500">*</span></label>
-            <input type="date" required value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className={inputCls} />
-          </div>
-
-          <div>
-            <label className={labelCls}>Supplier Invoice No. <span className="text-slate-400 font-normal text-xs">(optional)</span></label>
-            <input
-              type="text"
-              value={supplierInvoiceNumber}
-              onChange={e => setSupplierInvoiceNumber(e.target.value)}
-              placeholder="e.g. INV-232496"
-              className={inputCls}
-            />
+            <label className={labelCls}>Notes</label>
+            <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional notes…"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none" />
           </div>
         </div>
 
-        {/* Payment Type */}
-        <div>
-          <label className={labelCls}>Payment Type <span className="text-red-500">*</span></label>
-          <div className="flex gap-3">
-            {(['credit', 'cash'] as const).map(pt => (
-              <label key={pt} className="cursor-pointer flex-1">
-                <input type="radio" className="sr-only" checked={paymentType === pt} onChange={() => setPaymentType(pt)} />
-                <div className={`text-center py-3 rounded-xl border-2 text-sm font-semibold transition-all ${paymentType === pt ? (pt === 'cash' ? 'bg-green-600 border-green-600 text-white' : 'bg-blue-600 border-blue-600 text-white') : 'border-slate-200 text-slate-500 hover:border-blue-200'}`}>
-                  {pt === 'cash' ? '💵 Cash Purchase' : '🏦 Credit Purchase'}
-                </div>
-              </label>
-            ))}
+        {/* Line Items */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-slate-700">Items Purchased</h2>
+            <span className="text-xs text-slate-500">Inventory items update stock; non-inventory items (e.g. delivery, services) do not</span>
           </div>
-          <p className="text-xs text-slate-500 mt-1.5">
-            {paymentType === 'cash' ? 'Payment made immediately — inventory and cash updated.' : 'Goods received now, payment to supplier due later.'}
-          </p>
-        </div>
 
-        {paymentType === 'cash' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Payment Mode</label>
-              <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} className={inputCls}>
-                <option value="cash">Cash</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="cheque">Cheque</option>
-                <option value="knet">KNET</option>
-              </select>
+          <div className="space-y-3">
+            <div className="hidden sm:grid sm:grid-cols-12 gap-3 px-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <div className="col-span-5">Item</div>
+              <div className="col-span-2">Qty</div>
+              <div className="col-span-2">Unit</div>
+              <div className="col-span-2">Unit Cost (KWD)</div>
+              <div className="col-span-1">Total</div>
             </div>
-          </div>
-        )}
 
-        {paymentType === 'credit' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Due Date</label>
-              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
-            </div>
-          </div>
-        )}
-
-        <div>
-          <label className={labelCls}>Notes</label>
-          <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional notes…"
-            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none" />
-        </div>
-      </div>
-
-      {/* Line Items */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-slate-700">Items Purchased</h2>
-          <span className="text-xs text-slate-500">Inventory items update stock; non-inventory items (e.g. delivery, services) do not</span>
-        </div>
-
-        <div className="space-y-3">
-          {/* Column headers */}
-          <div className="hidden sm:grid sm:grid-cols-12 gap-3 px-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            <div className="col-span-5">Item</div>
-            <div className="col-span-2">Qty</div>
-            <div className="col-span-2">Unit</div>
-            <div className="col-span-2">Unit Cost (KWD)</div>
-            <div className="col-span-1">Total</div>
-          </div>
-
-          {lines.map((line, idx) => (
-            <div key={idx} className="sm:grid sm:grid-cols-12 gap-3 items-center space-y-2 sm:space-y-0 p-3 sm:p-0 bg-slate-50 sm:bg-transparent rounded-lg sm:rounded-none">
-              {/* Item Selector */}
-              <div className="sm:col-span-5">
-                {line.isNonInventory ? (
-                  <div className="space-y-1">
-                    <input
-                      type="text"
-                      value={line.description}
-                      onChange={e => updateLine(idx, 'description', e.target.value)}
-                      placeholder="Description (e.g. Delivery charges)"
-                      className={inputCls}
+            {lines.map((line, idx) => (
+              <div key={idx} className="sm:grid sm:grid-cols-12 gap-3 items-center space-y-2 sm:space-y-0 p-3 sm:p-0 bg-slate-50 sm:bg-transparent rounded-lg sm:rounded-none">
+                <div className="sm:col-span-5">
+                  {line.isNonInventory ? (
+                    <div className="space-y-1">
+                      <input
+                        type="text"
+                        value={line.description}
+                        onChange={e => updateLine(idx, 'description', e.target.value)}
+                        placeholder="Description (e.g. Delivery charges)"
+                        className={inputCls}
+                      />
+                      <span className="inline-block text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                        Non-Inventory
+                      </span>
+                    </div>
+                  ) : (
+                    <ItemCombobox
+                      items={localItems}
+                      value={line.inventory_item_id}
+                      onChange={item => selectItem(idx, item)}
+                      onCreateNew={query => openQuickAdd(idx, query)}
                     />
-                    <span className="inline-block text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                      Non-Inventory
-                    </span>
-                  </div>
-                ) : (
-                  <ItemCombobox
-                    items={inventoryItems}
-                    value={line.inventory_item_id}
-                    onChange={item => selectItem(idx, item)}
-                  />
-                )}
-              </div>
+                  )}
+                </div>
 
-              {/* Qty */}
-              <div className="sm:col-span-2">
-                <input
-                  type="number" min="0.001" step="0.001"
-                  value={line.quantity}
-                  onChange={e => updateLine(idx, 'quantity', e.target.value)}
-                  placeholder="Qty"
-                  className={inputCls}
-                />
-              </div>
-
-              {/* Unit */}
-              <div className="sm:col-span-2">
-                {line.isNonInventory ? (
+                <div className="sm:col-span-2">
                   <input
-                    type="text"
-                    value={line.unit_of_measure}
-                    onChange={e => updateLine(idx, 'unit_of_measure', e.target.value)}
-                    placeholder="e.g. pcs"
+                    type="number" min="0.001" step="0.001"
+                    value={line.quantity}
+                    onChange={e => updateLine(idx, 'quantity', e.target.value)}
+                    placeholder="Qty"
                     className={inputCls}
                   />
-                ) : (
-                  <input
-                    type="text" readOnly
-                    value={line.unit_of_measure}
-                    placeholder="—"
-                    className="w-full border border-slate-100 rounded-lg px-3 py-2.5 text-sm text-slate-500 bg-slate-50"
-                  />
-                )}
-              </div>
+                </div>
 
-              {/* Unit Cost */}
-              <div className="sm:col-span-2">
+                <div className="sm:col-span-2">
+                  {line.isNonInventory ? (
+                    <input
+                      type="text"
+                      value={line.unit_of_measure}
+                      onChange={e => updateLine(idx, 'unit_of_measure', e.target.value)}
+                      placeholder="e.g. pcs"
+                      className={inputCls}
+                    />
+                  ) : (
+                    <input
+                      type="text" readOnly
+                      value={line.unit_of_measure}
+                      placeholder="—"
+                      className="w-full border border-slate-100 rounded-lg px-3 py-2.5 text-sm text-slate-500 bg-slate-50"
+                    />
+                  )}
+                </div>
+
+                <div className="sm:col-span-2">
+                  <input
+                    type="number" min="0" step="0.001"
+                    value={line.unit_cost}
+                    onChange={e => updateLine(idx, 'unit_cost', e.target.value)}
+                    placeholder="0.000"
+                    className={inputCls}
+                  />
+                </div>
+
+                <div className="sm:col-span-1 flex items-center justify-between sm:justify-end gap-2">
+                  <span className="text-sm font-semibold text-slate-700">
+                    {((parseFloat(line.quantity) || 0) * (parseFloat(line.unit_cost) || 0)).toFixed(3)}
+                  </span>
+                  {lines.length > 1 && (
+                    <button type="button" onClick={() => removeLine(idx)}
+                      className="text-slate-400 hover:text-red-500 transition-colors p-1">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <div className="flex items-center gap-4">
+              <button type="button" onClick={addLine}
+                className="flex items-center gap-2 text-sm text-blue-600 font-semibold hover:text-blue-700 transition-colors px-1 py-1">
+                <Plus className="w-4 h-4" /> Add Item
+              </button>
+              <button type="button" onClick={addNonInventoryLine}
+                className="flex items-center gap-2 text-sm text-amber-700 font-semibold hover:text-amber-800 transition-colors px-1 py-1">
+                <Plus className="w-4 h-4" /> Add Non-Inventory Item
+              </button>
+              <button type="button" onClick={() => {
+                  const newIdx = lines.length
+                  setLines(prev => [...prev, emptyLine()])
+                  openQuickAdd(newIdx, '')
+                }}
+                className="flex items-center gap-2 text-sm text-green-700 font-semibold hover:text-green-800 transition-colors px-1 py-1">
+                <PackagePlus className="w-4 h-4" /> Create New Part
+              </button>
+            </div>
+          </div>
+
+          {/* Totals */}
+          <div className="border-t border-slate-100 mt-4 pt-4">
+            <div className="max-w-xs ml-auto space-y-2 text-sm">
+              <div className="flex justify-between text-slate-600">
+                <span>Subtotal</span>
+                <span className="font-medium">KWD {subtotal.toFixed(3)}</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-600">
+                <span>Discount</span>
                 <input
                   type="number" min="0" step="0.001"
-                  value={line.unit_cost}
-                  onChange={e => updateLine(idx, 'unit_cost', e.target.value)}
+                  value={discount}
+                  onChange={e => setDiscount(e.target.value)}
                   placeholder="0.000"
-                  className={inputCls}
+                  className="w-28 text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-
-              {/* Total + Remove */}
-              <div className="sm:col-span-1 flex items-center justify-between sm:justify-end gap-2">
-                <span className="text-sm font-semibold text-slate-700">
-                  {((parseFloat(line.quantity) || 0) * (parseFloat(line.unit_cost) || 0)).toFixed(3)}
-                </span>
-                {lines.length > 1 && (
-                  <button type="button" onClick={() => removeLine(idx)}
-                    className="text-slate-400 hover:text-red-500 transition-colors p-1">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-
-          <div className="flex items-center gap-4">
-            <button type="button" onClick={addLine}
-              className="flex items-center gap-2 text-sm text-blue-600 font-semibold hover:text-blue-700 transition-colors px-1 py-1">
-              <Plus className="w-4 h-4" /> Add Item
-            </button>
-            <button type="button" onClick={addNonInventoryLine}
-              className="flex items-center gap-2 text-sm text-amber-700 font-semibold hover:text-amber-800 transition-colors px-1 py-1">
-              <Plus className="w-4 h-4" /> Add Non-Inventory Item
-            </button>
-          </div>
-        </div>
-
-        {/* Totals */}
-        <div className="border-t border-slate-100 mt-4 pt-4">
-          <div className="max-w-xs ml-auto space-y-2 text-sm">
-            <div className="flex justify-between text-slate-600">
-              <span>Subtotal</span>
-              <span className="font-medium">KWD {subtotal.toFixed(3)}</span>
-            </div>
-            <div className="flex items-center justify-between text-slate-600">
-              <span>Discount</span>
-              <input
-                type="number" min="0" step="0.001"
-                value={discount}
-                onChange={e => setDiscount(e.target.value)}
-                placeholder="0.000"
-                className="w-28 text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="flex justify-between font-bold text-slate-900 border-t border-slate-200 pt-2 text-base">
-              <span>Total</span>
-              <span>KWD {total.toFixed(3)}</span>
-            </div>
-            {paymentType === 'cash' && (
-              <div className="flex justify-between text-green-700 font-semibold">
-                <span>Payment Status</span>
-                <span>Paid</span>
-              </div>
-            )}
-            {paymentType === 'credit' && (
-              <div className="flex justify-between text-amber-600 font-semibold">
-                <span>Balance Due</span>
+              <div className="flex justify-between font-bold text-slate-900 border-t border-slate-200 pt-2 text-base">
+                <span>Total</span>
                 <span>KWD {total.toFixed(3)}</span>
               </div>
-            )}
+              {paymentType === 'cash' && (
+                <div className="flex justify-between text-green-700 font-semibold">
+                  <span>Payment Status</span>
+                  <span>Paid</span>
+                </div>
+              )}
+              {paymentType === 'credit' && (
+                <div className="flex justify-between text-amber-600 font-semibold">
+                  <span>Balance Due</span>
+                  <span>KWD {total.toFixed(3)}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="flex items-center gap-3 pb-6">
-        <button type="submit" disabled={loading}
-          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors">
-          {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : '✅ Save & Update Inventory'}
-        </button>
-        <button type="button" onClick={() => router.back()}
-          className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors">
-          Cancel
-        </button>
-      </div>
-    </form>
+        <div className="flex items-center gap-3 pb-6">
+          <button type="submit" disabled={loading}
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors">
+            {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : '✅ Save & Update Inventory'}
+          </button>
+          <button type="button" onClick={() => router.back()}
+            className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </>
   )
 }
