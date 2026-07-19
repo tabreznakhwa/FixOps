@@ -35,6 +35,14 @@ type Customer = { id: string; full_name: string; company_name: string | null; mo
 const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
 const labelCls = 'block text-sm font-medium text-slate-700 mb-1.5'
 
+const CUSTOMER_TYPES = [
+  { value: 'individual', label: 'Individual' },
+  { value: 'company', label: 'Company' },
+  { value: 'amc', label: 'AMC' },
+  { value: 'one_time', label: 'One-Time' },
+  { value: 'credit', label: 'Credit' },
+]
+
 function QuickAddCustomerModal({
   onCreated,
   onClose,
@@ -42,13 +50,29 @@ function QuickAddCustomerModal({
   onCreated: (customer: Customer) => void
   onClose: () => void
 }) {
-  const [fullName, setFullName] = useState('')
-  const [mobile, setMobile] = useState('')
   const [type, setType] = useState('individual')
+  const [fullName, setFullName] = useState('')
+  const [printName, setPrintName] = useState('')
   const [company, setCompany] = useState('')
+  const [contactPerson, setContactPerson] = useState('')
+  const [mobile, setMobile] = useState('')
+  const [whatsapp, setWhatsapp] = useState('')
+  const [email, setEmail] = useState('')
+  const [address, setAddress] = useState('')
+  const [block, setBlock] = useState('')
+  const [street, setStreet] = useState('')
+  const [avenue, setAvenue] = useState('')
+  const [houseNumber, setHouseNumber] = useState('')
   const [area, setArea] = useState('')
+  const [city, setCity] = useState('')
+  const [paymentTerms, setPaymentTerms] = useState('30')
+  const [creditLimit, setCreditLimit] = useState('0')
+  const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+
+  const isCompanyType = type === 'company' || type === 'amc'
+  const isCreditType = type === 'credit'
 
   async function save() {
     if (!fullName.trim()) { setErr('Full name is required'); return }
@@ -59,11 +83,24 @@ function QuickAddCustomerModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          full_name: fullName.trim(),
-          mobile_number: mobile.trim(),
           customer_type: type,
+          full_name: fullName.trim(),
+          print_name: printName.trim() || null,
           company_name: company.trim() || null,
+          contact_person: contactPerson.trim() || null,
+          mobile_number: mobile.trim(),
+          whatsapp_number: whatsapp.trim() || null,
+          email: email.trim() || null,
+          address: address.trim() || null,
+          block: block.trim() || null,
+          street: street.trim() || null,
+          avenue: avenue.trim() || null,
+          house_number: houseNumber.trim() || null,
           area: area.trim() || null,
+          city: city.trim() || null,
+          payment_terms: isCreditType ? parseInt(paymentTerms) || 0 : 0,
+          credit_limit: isCreditType ? parseFloat(creditLimit) || 0 : 0,
+          notes: notes.trim() || null,
         }),
       })
       const data = await res.json()
@@ -77,8 +114,9 @@ function QuickAddCustomerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-blue-600" />
             <h2 className="font-bold text-slate-900">Add New Customer</h2>
@@ -87,44 +125,135 @@ function QuickAddCustomerModal({
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6 space-y-4">
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 p-6 space-y-5">
           {err && (
             <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" /> {err}
             </div>
           )}
+
+          {/* Type */}
           <div>
-            <label className={labelCls}>Full Name <span className="text-red-500">*</span></label>
-            <input autoFocus type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="e.g. Ahmed Al-Rashidi" className={inputCls} />
-          </div>
-          <div>
-            <label className={labelCls}>Mobile Number <span className="text-red-500">*</span></label>
-            <input type="text" value={mobile} onChange={e => setMobile(e.target.value)} placeholder="e.g. 99001234" className={inputCls} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Type</label>
-              <select value={type} onChange={e => setType(e.target.value)} className={inputCls}>
-                <option value="individual">Individual</option>
-                <option value="company">Company</option>
-                <option value="amc">AMC</option>
-                <option value="credit">Credit</option>
-                <option value="one_time">One Time</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Area</label>
-              <input type="text" value={area} onChange={e => setArea(e.target.value)} placeholder="e.g. Salmiya" className={inputCls} />
+            <label className={labelCls}>Customer Type</label>
+            <div className="flex gap-2 flex-wrap">
+              {CUSTOMER_TYPES.map(t => (
+                <button key={t.value} type="button" onClick={() => setType(t.value)}
+                  className={`px-3 py-1.5 rounded-lg border-2 text-xs font-semibold transition-all ${type === t.value ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200 text-slate-600 hover:border-blue-200'}`}>
+                  {t.label}
+                </button>
+              ))}
             </div>
           </div>
-          {(type === 'company' || type === 'amc' || type === 'credit') && (
+
+          {/* Contact Info */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact Information</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className={isCompanyType ? '' : 'col-span-2'}>
+                <label className={labelCls}>Full Name <span className="text-red-500">*</span></label>
+                <input autoFocus type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="e.g. Ahmed Al-Rashidi" className={inputCls} />
+              </div>
+              {isCompanyType && (
+                <div>
+                  <label className={labelCls}>Company Name</label>
+                  <input type="text" value={company} onChange={e => setCompany(e.target.value)} placeholder="e.g. Al-Sayer Group" className={inputCls} />
+                </div>
+              )}
+            </div>
+            {isCompanyType && (
+              <div>
+                <label className={labelCls}>Contact Person</label>
+                <input type="text" value={contactPerson} onChange={e => setContactPerson(e.target.value)} placeholder="Primary contact" className={inputCls} />
+              </div>
+            )}
             <div>
-              <label className={labelCls}>Company Name</label>
-              <input type="text" value={company} onChange={e => setCompany(e.target.value)} placeholder="e.g. Al-Sayer Group" className={inputCls} />
+              <label className={labelCls}>Print Name <span className="text-slate-400 font-normal text-xs">(shown on invoices)</span></label>
+              <input type="text" value={printName} onChange={e => setPrintName(e.target.value)} placeholder="Leave blank to use Full Name" className={inputCls} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Mobile <span className="text-red-500">*</span></label>
+                <input type="tel" value={mobile} onChange={e => setMobile(e.target.value)} placeholder="e.g. 99001234" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>WhatsApp</label>
+                <input type="tel" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="Same as mobile?" className={inputCls} />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="customer@email.com" className={inputCls} />
+            </div>
+          </div>
+
+          {/* Address */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Address</p>
+            <div>
+              <label className={labelCls}>Address / Building</label>
+              <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="e.g. Floor 3, Al-Hamra Tower" className={inputCls} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Block</label>
+                <input type="text" value={block} onChange={e => setBlock(e.target.value)} placeholder="e.g. 5" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Street</label>
+                <input type="text" value={street} onChange={e => setStreet(e.target.value)} placeholder="e.g. 12" className={inputCls} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Avenue</label>
+                <input type="text" value={avenue} onChange={e => setAvenue(e.target.value)} placeholder="e.g. 3" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>House / Building No.</label>
+                <input type="text" value={houseNumber} onChange={e => setHouseNumber(e.target.value)} placeholder="e.g. 47" className={inputCls} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Area</label>
+                <input type="text" value={area} onChange={e => setArea(e.target.value)} placeholder="e.g. Salmiya" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>City</label>
+                <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="e.g. Kuwait City" className={inputCls} />
+              </div>
+            </div>
+          </div>
+
+          {/* Credit Terms */}
+          {isCreditType && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Credit Terms</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Payment Terms (days)</label>
+                  <input type="number" min="0" value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Credit Limit (KWD)</label>
+                  <input type="number" min="0" step="0.01" value={creditLimit} onChange={e => setCreditLimit(e.target.value)} className={inputCls} />
+                </div>
+              </div>
             </div>
           )}
+
+          {/* Notes */}
+          <div>
+            <label className={labelCls}>Notes</label>
+            <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any additional notes…"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none" />
+          </div>
         </div>
-        <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
+
+        {/* Footer */}
+        <div className="flex gap-3 px-6 py-4 border-t border-slate-100 flex-shrink-0">
           <button type="button" onClick={save} disabled={saving}
             className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2">
             {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating…</> : <><UserPlus className="w-4 h-4" /> Add Customer</>}
