@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Suspense } from 'react'
-import { Plus, MessageSquare } from 'lucide-react'
+import { Plus, MessageSquare, UserPlus } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { ComplaintSearchBar } from './ComplaintSearchBar'
@@ -18,7 +18,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
 
   let query = supabase
     .from('complaints')
-    .select('id, complaint_number, description, priority, status, service_category, created_at, preferred_date, preferred_time, customers(full_name, mobile_number), users!complaints_assigned_to_fkey(full_name)')
+    .select('id, complaint_number, description, priority, status, service_category, created_at, preferred_date, preferred_time, customer_id, customers(full_name, mobile_number), users!complaints_assigned_to_fkey(full_name)')
     .order('created_at', { ascending: false })
 
   if (params.status) query = query.eq('status', params.status)
@@ -43,6 +43,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     id: string; complaint_number: string; description: string; priority: string; status: string;
     service_category: string | string[]; created_at: string;
     preferred_date: string | null; preferred_time: string | null;
+    customer_id: string | null;
     customers: { full_name: string; mobile_number: string } | null;
     users: { full_name: string } | null
   }>
@@ -78,6 +79,12 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
             <Suspense fallback={<div className="w-60 h-9 bg-slate-100 rounded-lg animate-pulse" />}>
               <ComplaintSearchBar />
             </Suspense>
+            <Link
+              href="/customers/new"
+              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              <UserPlus className="w-4 h-4" /> New Customer
+            </Link>
             <Link
               href="/complaints/new"
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
@@ -162,7 +169,18 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
                       {c.description}
                     </p>
                     <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500 flex-wrap">
-                      <span>👤 {customer?.full_name}</span>
+                      {c.customer_id ? (
+                        <Link
+                          href={`/customers/${c.customer_id}/edit`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 hover:text-blue-600 hover:underline transition-colors"
+                        >
+                          👤 {customer?.full_name}
+                          <span className="text-slate-300 text-xs">(edit)</span>
+                        </Link>
+                      ) : (
+                        <span>👤 {customer?.full_name}</span>
+                      )}
                       {assignee && <span>🔧 {assignee.full_name}</span>}
                       <span>🕒 {formatDateTime(c.created_at)}</span>
                       {c.preferred_date && (
