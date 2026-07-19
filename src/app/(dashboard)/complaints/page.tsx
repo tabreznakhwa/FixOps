@@ -169,18 +169,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
                       {c.description}
                     </p>
                     <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500 flex-wrap">
-                      {c.customer_id ? (
-                        <Link
-                          href={`/customers/${c.customer_id}/edit`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex items-center gap-1 hover:text-blue-600 hover:underline transition-colors"
-                        >
-                          👤 {customer?.full_name}
-                          <span className="text-slate-300 text-xs">(edit)</span>
-                        </Link>
-                      ) : (
-                        <span>👤 {customer?.full_name}</span>
-                      )}
+                      <span>👤 {customer?.full_name}</span>
                       {assignee && <span>🔧 {assignee.full_name}</span>}
                       <span>🕒 {formatDateTime(c.created_at)}</span>
                       {c.preferred_date && (
