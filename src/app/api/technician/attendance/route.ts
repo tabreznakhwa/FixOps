@@ -6,11 +6,11 @@ async function resolveStaff(userId: string) {
   const admin = createAdminClient() as any
   const { data } = await admin
     .from('staff')
-    .select('id, organization_id')
+    .select('id, organization_id, overtime_eligible, friday_ot_amount')
     .eq('user_id', userId)
     .eq('employment_status', 'active')
     .maybeSingle()
-  return data as { id: string; organization_id: string } | null
+  return data as { id: string; organization_id: string; overtime_eligible: boolean; friday_ot_amount: number | null } | null
 }
 
 export async function GET() {
@@ -91,9 +91,8 @@ export async function POST(request: NextRequest) {
     const breakdown = calcAttendanceBreakdown(existing.check_in, nowTime, isTodayFriday)
 
     let fridayOtAmount = 0
-    if (isTodayFriday && breakdown) {
-      const { data: staffData } = await admin.from('staff').select('friday_ot_amount').eq('id', staff.id).single()
-      if (staffData && breakdown.fixedOtHrs > 0) fridayOtAmount = Number(staffData.friday_ot_amount ?? 0)
+    if (staff.overtime_eligible && isTodayFriday && breakdown?.fixedOtHrs > 0) {
+      fridayOtAmount = Number(staff.friday_ot_amount ?? 0)
     }
 
     const { data: record, error } = await admin
@@ -101,7 +100,7 @@ export async function POST(request: NextRequest) {
       .update({
         check_out: nowTime,
         hours_worked: breakdown?.hoursWorked ?? 0,
-        overtime_hours: breakdown?.normalOtPaidHrs ?? 0,
+        overtime_hours: staff.overtime_eligible ? (breakdown?.normalOtPaidHrs ?? 0) : 0,
         friday_ot_amount: fridayOtAmount,
         ...(hasCoords ? { check_out_lat: lat, check_out_lng: lng } : {}),
       })

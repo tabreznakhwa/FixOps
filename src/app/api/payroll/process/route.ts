@@ -65,13 +65,13 @@ export async function POST(request: Request) {
     // housing/transport kept at 0; use other_allowance only
     const allowance = (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + (s.other_allowance ?? 0)
     const food = s.food_allowance ?? 0
-    const fixedOT = s.fixed_overtime_monthly ?? 0
     const allowanceName = s.allowance_name ?? 'Allowance'
 
-    const normalOtPaidHours = entry?.normal_ot_paid_hours ?? 0
+    const normalOtPaidHours = s.overtime_eligible ? (entry?.normal_ot_paid_hours ?? 0) : 0
     const hourlyRate = basic / 30 / 8
     const normalOT = hourlyRate * normalOtPaidHours
-    const fridayOT = entry?.friday_ot_amount ?? 0
+    const fridayOT = s.overtime_eligible ? (entry?.friday_ot_amount ?? 0) : 0
+    const fixedOT = s.overtime_eligible ? (s.fixed_overtime_monthly ?? 0) : 0
 
     const advDeduct = Math.min(entry?.advance_deduction ?? 0, s.advance_balance ?? 0)
 
