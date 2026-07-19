@@ -1,8 +1,8 @@
 import type { NextConfig } from 'next'
 
 const securityHeaders = [
-  // Prevent clickjacking — page cannot be embedded in an iframe
-  { key: 'X-Frame-Options', value: 'DENY' },
+  // Allow same-origin iframes (used by the in-app tab system)
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   // Stop browsers from guessing MIME type from content
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   // Restrict referrer info sent to third parties

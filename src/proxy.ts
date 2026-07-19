@@ -52,7 +52,11 @@ export async function proxy(request: NextRequest) {
   }
 
 
-  let supabaseResponse = NextResponse.next({ request })
+  // Pass tab-mode flag to the layout so it can strip the sidebar for iframe content
+  const baseHeaders = new Headers(request.headers)
+  if (request.nextUrl.searchParams.has('__tab')) baseHeaders.set('x-tab-mode', '1')
+
+  let supabaseResponse = NextResponse.next({ request: { headers: baseHeaders } })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -62,7 +66,7 @@ export async function proxy(request: NextRequest) {
         getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({ request })
+          supabaseResponse = NextResponse.next({ request: { headers: baseHeaders } })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )

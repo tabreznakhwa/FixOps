@@ -15,6 +15,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { type ModuleKey, type ModuleAccess } from '@/lib/permissions'
+import { useTabContext, labelForPath } from '@/contexts/TabContext'
 
 const navGroups: Array<{
   label: string
@@ -115,6 +116,7 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const { openTab } = useTabContext()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [mobileCollapsed, setMobileCollapsed] = useState<Record<string, boolean>>({})
   const [activeGroup, setActiveGroup] = useState<string | null>(null)
@@ -178,14 +180,20 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
             const GroupIcon = group.icon
             const groupActive = isGroupActive(group)
             const isHovered = activeGroup === group.label
+            const primaryHref = groupPrimaryHref(group)
             return (
               <Link
                 key={group.label}
-                href={groupPrimaryHref(group)}
+                href={primaryHref}
                 title={group.label}
                 onMouseEnter={() => openGroup(group.label)}
                 onMouseLeave={scheduleClose}
-                onClick={() => setActiveGroup(null)}
+                onClick={(e) => {
+                  if (e.ctrlKey || e.metaKey || e.altKey) return
+                  e.preventDefault()
+                  setActiveGroup(null)
+                  openTab(primaryHref, labelForPath(primaryHref))
+                }}
                 className={cn(
                   'w-10 h-10 rounded-lg flex items-center justify-center transition-all flex-shrink-0',
                   groupActive
@@ -245,7 +253,12 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
                 <Link
                   key={href}
                   href={href}
-                  onClick={() => setActiveGroup(null)}
+                  onClick={(e) => {
+                    if (e.ctrlKey || e.metaKey || e.altKey) return
+                    e.preventDefault()
+                    setActiveGroup(null)
+                    openTab(href, label)
+                  }}
                   className={cn(
                     'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group',
                     active
@@ -339,7 +352,12 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
                             <Link
                               key={href}
                               href={href}
-                              onClick={() => setMobileOpen(false)}
+                              onClick={(e) => {
+                                if (e.ctrlKey || e.metaKey) return
+                                e.preventDefault()
+                                setMobileOpen(false)
+                                openTab(href, label)
+                              }}
                               className={cn(
                                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group',
                                 active
