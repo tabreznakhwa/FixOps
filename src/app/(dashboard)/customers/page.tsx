@@ -162,7 +162,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-1">
                           <Link
                             href={`/customers/${c.id}/edit`}
                             className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
