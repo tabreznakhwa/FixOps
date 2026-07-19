@@ -10,7 +10,6 @@ import { ComplaintSearchBar } from './ComplaintSearchBar'
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Complaints' }
 
-const STATUSES = ['new', 'assigned', 'accepted', 'on_the_way', 'work_started', 'waiting_parts', 'waiting_approval', 'completed']
 
 export default async function ComplaintsPage({ searchParams }: { searchParams: Promise<{ status?: string; priority?: string; q?: string; from?: string; to?: string }> }) {
   const params = await searchParams
@@ -152,7 +151,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
                   className="flex items-start gap-4 bg-white rounded-xl border border-slate-200 p-4 hover:border-blue-300 hover:shadow-sm transition-all group"
                 >
                   <div className="text-2xl flex-shrink-0 mt-0.5">
-                    {categoryIcons[Array.isArray(c.service_category) ? c.service_category[0] : c.service_category] ?? '🔧'}
+                    {categoryIcons[Array.isArray(c.service_category) ? c.service_category[0] : c.service_category ?? ''] ?? '🔧'}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -161,8 +160,8 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
                         {c.priority}
                       </span>
                       <span className="text-xs text-slate-400 capitalize">
-                        {(Array.isArray(c.service_category) ? c.service_category : [c.service_category])
-                          .map(s => s.replace(/_/g, ' ')).join(' · ')}
+                        {(Array.isArray(c.service_category) ? c.service_category : [c.service_category ?? ''])
+                          .filter(Boolean).map((s: string) => s.replace(/_/g, ' ')).join(' · ')}
                       </span>
                     </div>
                     <p className="text-sm font-semibold text-slate-800 group-hover:text-blue-700 transition-colors line-clamp-1">
