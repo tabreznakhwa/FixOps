@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     const breakdown = calcAttendanceBreakdown(existing.check_in, nowTime, isTodayFriday)
 
     let fridayOtAmount = 0
-    if (staff.overtime_eligible && isTodayFriday && breakdown?.fixedOtHrs > 0) {
+    if (staff.overtime_eligible && isTodayFriday && (breakdown?.fixedOtHrs ?? 0) > 0) {
       fridayOtAmount = Number(staff.friday_ot_amount ?? 0)
     }
 

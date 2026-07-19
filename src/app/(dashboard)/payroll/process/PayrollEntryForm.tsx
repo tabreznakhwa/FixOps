@@ -56,9 +56,8 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
     return (basic / 30 / 8) * paidHours
   }
 
-  function calcAbsentDeduction(s: StaffRow, absentDays: number) {
+  function calcAbsentDeduction(s: StaffRow, absentDays: number, fixedOT: number) {
     const allowance = (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + (s.other_allowance ?? 0)
-    const fixedOT = s.fixed_overtime_monthly ?? 0
     return absentDays > 0 ? ((s.basic_salary ?? 0) + allowance + fixedOT) / 30 * absentDays : 0
   }
 
@@ -175,14 +174,13 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
               {staff.map((s) => {
                 const allowance = (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + (s.other_allowance ?? 0)
                 const food = s.food_allowance ?? 0
-                const fixedOT = s.fixed_overtime_monthly ?? 0
-
                 const normalOtPaidHours = normalOtPaidHoursMap[s.id] ?? 0
                 const normalOT = calcNormalOT(s.basic_salary ?? 0, normalOtPaidHours)
                 const fridayOT = fridayOtAmountMap[s.id] ?? 0
+                const fixedOT = fridayOT > 0 ? (s.fixed_overtime_monthly ?? 0) : 0
 
                 const absentDays = absentDaysMap[s.id] ?? 0
-                const absentDeduct = calcAbsentDeduction(s, absentDays)
+                const absentDeduct = calcAbsentDeduction(s, absentDays, fixedOT)
 
                 const foodDeduct = parseFloat(entries[s.id]?.food_deduction || '0') || 0
                 const advDeduct = parseFloat(entries[s.id]?.advance_deduction || '0') || 0

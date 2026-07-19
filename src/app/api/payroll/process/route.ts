@@ -71,7 +71,8 @@ export async function POST(request: Request) {
     const hourlyRate = basic / 30 / 8
     const normalOT = hourlyRate * normalOtPaidHours
     const fridayOT = s.overtime_eligible ? (entry?.friday_ot_amount ?? 0) : 0
-    const fixedOT = s.overtime_eligible ? (s.fixed_overtime_monthly ?? 0) : 0
+    const hasWorkedFridayOrHoliday = fridayOT > 0
+    const fixedOT = s.overtime_eligible && hasWorkedFridayOrHoliday ? (s.fixed_overtime_monthly ?? 0) : 0
 
     const advDeduct = Math.min(entry?.advance_deduction ?? 0, s.advance_balance ?? 0)
 
