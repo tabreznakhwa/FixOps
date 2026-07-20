@@ -138,7 +138,7 @@ export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerI
 
       {canRecordPayment && (
         <Link
-          href={`/finance/payments/new?invoice_id=${invoiceId}&customer_id=${customerId}&return_to=/finance/invoices/${invoiceId}`}
+          href={`/finance/payments/new?invoice_id=${invoiceId}&customer_id=${customerId}&return_to=${workOrderId ? `/work-orders/${workOrderId}` : `/finance/invoices/${invoiceId}`}`}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition"
         >
           <CreditCard className="w-4 h-4" />
