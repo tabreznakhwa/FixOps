@@ -30,6 +30,7 @@ interface Props {
   customers: Customer[]
   workOrders: WorkOrder[]
   inventoryItems: InventoryItem[]
+  complaintId?: string
 }
 
 const PRESET_SERVICES = [
@@ -72,7 +73,7 @@ function fmt(n: number) {
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
-export function EditInvoiceForm({ invoice, items: initialItems, customers, workOrders, inventoryItems }: Props) {
+export function EditInvoiceForm({ invoice, items: initialItems, customers, workOrders, inventoryItems, complaintId }: Props) {
   const [customerId, setCustomerId] = useState(invoice.customer_id)
   const [invoiceType, setInvoiceType] = useState(invoice.invoice_type)
   const [invoiceDate, setInvoiceDate] = useState(invoice.invoice_date)
@@ -182,9 +183,11 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to update invoice')
-      window.location.href = invoice.work_order_id
-        ? `/work-orders/${invoice.work_order_id}`
-        : `/finance/invoices/${invoice.id}`
+      window.location.href = complaintId
+        ? `/complaints/${complaintId}`
+        : invoice.work_order_id
+          ? `/work-orders/${invoice.work_order_id}`
+          : `/finance/invoices/${invoice.id}`
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setLoading(false)

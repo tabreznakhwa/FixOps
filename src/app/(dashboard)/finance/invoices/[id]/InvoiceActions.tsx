@@ -20,9 +20,10 @@ interface Props {
   customerId: string
   advances?: Advance[]
   workOrderId?: string
+  complaintId?: string
 }
 
-export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerId, advances = [], workOrderId }: Props) {
+export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerId, advances = [], workOrderId, complaintId }: Props) {
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [showCancelDialog, setShowCancelDialog] = useState(false)
@@ -138,7 +139,7 @@ export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerI
 
       {canRecordPayment && (
         <Link
-          href={`/finance/payments/new?invoice_id=${invoiceId}&customer_id=${customerId}&return_to=${workOrderId ? `/work-orders/${workOrderId}` : `/finance/invoices/${invoiceId}`}`}
+          href={`/finance/payments/new?invoice_id=${invoiceId}&customer_id=${customerId}&return_to=${complaintId ? `/complaints/${complaintId}` : workOrderId ? `/work-orders/${workOrderId}` : `/finance/invoices/${invoiceId}`}`}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition"
         >
           <CreditCard className="w-4 h-4" />
@@ -192,10 +193,10 @@ export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerI
       )}
 
       <Link
-        href={workOrderId ? `/work-orders/${workOrderId}` : '/finance/invoices'}
+        href={complaintId ? `/complaints/${complaintId}` : workOrderId ? `/work-orders/${workOrderId}` : '/finance/invoices'}
         className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
       >
-        <ArrowLeft className="w-4 h-4" /> {workOrderId ? 'Back to Work Order' : 'Back to Invoices'}
+        <ArrowLeft className="w-4 h-4" /> {complaintId ? 'Back to Complaint' : workOrderId ? 'Back to Work Order' : 'Back to Invoices'}
       </Link>
     </div>
   )

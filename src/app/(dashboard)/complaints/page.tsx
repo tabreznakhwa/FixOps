@@ -15,11 +15,22 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   const params = await searchParams
   const supabase = await createClient()
 
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileRaw } = user
+    ? await (supabase as any).from('users').select('role').eq('id', user.id).single()
+    : { data: null }
+  const role = (profileRaw as { role: string } | null)?.role ?? ''
+  const isTechnician = role === 'technician'
+
   let query = supabase
     .from('complaints')
     .select('id, complaint_number, description, priority, status, service_category, created_at, preferred_date, preferred_time, customer_id, visit_order, customers(full_name, mobile_number), users!complaints_assigned_to_fkey(full_name)')
-    .order('visit_order', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: false })
+
+  if (isTechnician) {
+    query = (query as any).order('visit_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false })
+  } else {
+    query = (query as any).order('complaint_number', { ascending: false })
+  }
 
   if (params.status) query = query.eq('status', params.status)
   if (params.priority) query = query.eq('priority', params.priority)
@@ -155,7 +166,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
                     <div className="text-2xl">
                       {categoryIcons[Array.isArray(c.service_category) ? c.service_category[0] : c.service_category ?? ''] ?? '🔧'}
                     </div>
-                    {c.visit_order != null && (
+                    {isTechnician && c.visit_order != null && (
                       <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-[11px] font-bold">
                         {c.visit_order}
                       </span>

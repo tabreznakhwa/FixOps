@@ -7,8 +7,9 @@ import { EditInvoiceForm } from './EditInvoiceForm'
 
 export const metadata = { title: 'Edit Invoice' }
 
-export default async function EditInvoicePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditInvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ complaint_id?: string }> }) {
   const { id } = await params
+  const { complaint_id } = await searchParams
   const supabase = await createClient()
 
   // Role guard — only admin/owner/manager
@@ -62,7 +63,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
         subtitle="Update invoice details and line items"
         actions={
           <Link
-            href={invoiceRaw.work_order_id ? `/work-orders/${invoiceRaw.work_order_id}` : `/finance/invoices/${id}`}
+            href={complaint_id ? `/complaints/${complaint_id}` : invoiceRaw.work_order_id ? `/work-orders/${invoiceRaw.work_order_id}` : `/finance/invoices/${id}`}
             className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
           >
             <ArrowLeft className="w-4 h-4" /> Cancel
@@ -76,6 +77,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
           customers={(customersRaw ?? []) as any[]}
           workOrders={(workOrdersRaw ?? []) as any[]}
           inventoryItems={(inventoryRaw ?? []) as any[]}
+          complaintId={complaint_id}
         />
       </div>
     </div>

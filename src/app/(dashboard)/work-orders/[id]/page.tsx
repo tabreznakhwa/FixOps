@@ -9,8 +9,9 @@ import { WorkOrderParts } from './WorkOrderParts'
 
 export const metadata = { title: 'Work Order' }
 
-export default async function WorkOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function WorkOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ complaint_id?: string }> }) {
   const { id } = await params
+  const { complaint_id } = await searchParams
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -238,6 +239,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
             paymentStatus={wo.payment_status}
             existingInvoiceId={existingInvoiceId}
             existingInvoiceStatus={existingInvoiceStatus}
+            complaintId={complaint_id}
           />
         </div>
       </div>

@@ -16,10 +16,10 @@ export default async function InvoiceDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ work_order_id?: string }>
+  searchParams: Promise<{ work_order_id?: string; complaint_id?: string }>
 }) {
   const { id } = await params
-  const { work_order_id } = await searchParams
+  const { work_order_id, complaint_id } = await searchParams
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -284,10 +284,10 @@ export default async function InvoiceDetailPage({
             )}
             <PrintActions label="Print Invoice" />
             <Link
-              href={work_order_id ? `/work-orders/${work_order_id}` : '/finance/invoices'}
+              href={complaint_id ? `/complaints/${complaint_id}` : work_order_id ? `/work-orders/${work_order_id}` : '/finance/invoices'}
               className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
             >
-              <ArrowLeft className="w-4 h-4" /> {work_order_id ? 'Work Order' : 'Invoices'}
+              <ArrowLeft className="w-4 h-4" /> {complaint_id ? 'Complaint' : work_order_id ? 'Work Order' : 'Invoices'}
             </Link>
           </div>
         }
@@ -569,6 +569,7 @@ export default async function InvoiceDetailPage({
               customerId={customer ? (invoiceRaw as any).customer_id : ''}
               advances={customerAdvances}
               workOrderId={work_order_id}
+              complaintId={complaint_id}
             />
           </div>
         </div>
