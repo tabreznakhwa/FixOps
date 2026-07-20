@@ -4,7 +4,6 @@ import { type ReactNode } from 'react'
 import { TabProvider } from '@/contexts/TabContext'
 import { TabBar } from '@/components/layout/TabBar'
 import { TabShell } from '@/components/layout/TabShell'
-import { TabModeGuard } from '@/components/layout/TabModeGuard'
 
 interface Props {
   isTabMode: boolean
@@ -17,7 +16,6 @@ export function TabShellOrContent({ isTabMode, sidebar, assigner, children }: Pr
   if (isTabMode) {
     return (
       <div className="min-h-screen bg-slate-50 overflow-y-auto">
-        <TabModeGuard />
         {children}
       </div>
     )

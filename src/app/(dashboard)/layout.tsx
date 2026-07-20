@@ -6,6 +6,18 @@ import { AssignmentNotifier } from '@/components/layout/AssignmentNotifier'
 import { getRoleAccess } from '@/lib/orgPermissions'
 import { TabShellOrContent } from '@/components/layout/TabShellOrContent'
 
+// Runs synchronously before React hydration — patches history API so that
+// Next.js App Router initialization cannot strip ?__tab=1 from the URL.
+const TAB_GUARD_SCRIPT = `(function(){
+  var a=function(u){
+    if(!u||typeof u!=='string'||u.indexOf('__tab=')!==-1)return u;
+    return u.indexOf('?')!==-1?u+'&__tab=1':u+'?__tab=1';
+  };
+  var op=history.pushState.bind(history),or=history.replaceState.bind(history);
+  history.pushState=function(s,t,u){return op(s,t,a(u));};
+  history.replaceState=function(s,t,u){return or(s,t,a(u));};
+})();`
+
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -29,12 +41,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const headersList = await headers()
   const isTabMode = headersList.get('x-tab-mode') === '1'
 
-  // In tab mode (inside an iframe), skip sidebar/tab-bar and module access check
   if (isTabMode) {
     return (
-      <TabShellOrContent isTabMode={true} sidebar={null} assigner={null}>
-        {children}
-      </TabShellOrContent>
+      <>
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script dangerouslySetInnerHTML={{ __html: TAB_GUARD_SCRIPT }} />
+        <div className="min-h-screen bg-slate-50 overflow-y-auto">
+          {children}
+        </div>
+      </>
     )
   }
 
