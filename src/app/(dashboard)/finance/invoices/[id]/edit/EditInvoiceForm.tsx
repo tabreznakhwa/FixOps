@@ -182,7 +182,9 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to update invoice')
-      window.location.href = `/finance/invoices/${invoice.id}`
+      window.location.href = invoice.work_order_id
+        ? `/work-orders/${invoice.work_order_id}`
+        : `/finance/invoices/${invoice.id}`
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setLoading(false)

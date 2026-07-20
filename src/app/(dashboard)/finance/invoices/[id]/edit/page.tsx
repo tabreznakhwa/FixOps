@@ -62,7 +62,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
         subtitle="Update invoice details and line items"
         actions={
           <Link
-            href={`/finance/invoices/${id}`}
+            href={invoiceRaw.work_order_id ? `/work-orders/${invoiceRaw.work_order_id}` : `/finance/invoices/${id}`}
             className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
           >
             <ArrowLeft className="w-4 h-4" /> Cancel

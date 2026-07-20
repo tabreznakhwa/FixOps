@@ -19,9 +19,10 @@ interface Props {
   balanceDue: number
   customerId: string
   advances?: Advance[]
+  workOrderId?: string
 }
 
-export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerId, advances = [] }: Props) {
+export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerId, advances = [], workOrderId }: Props) {
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [showCancelDialog, setShowCancelDialog] = useState(false)
@@ -191,10 +192,10 @@ export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerI
       )}
 
       <Link
-        href="/finance/invoices"
+        href={workOrderId ? `/work-orders/${workOrderId}` : '/finance/invoices'}
         className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
       >
-        <ArrowLeft className="w-4 h-4" /> Back to Invoices
+        <ArrowLeft className="w-4 h-4" /> {workOrderId ? 'Back to Work Order' : 'Back to Invoices'}
       </Link>
     </div>
   )

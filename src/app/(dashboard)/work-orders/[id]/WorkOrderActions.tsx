@@ -246,7 +246,7 @@ export function WorkOrderActions({
           {existingInvoiceId ? (
             <>
               <Link
-                href={`/finance/invoices/${existingInvoiceId}`}
+                href={`/finance/invoices/${existingInvoiceId}?work_order_id=${workOrderId}`}
                 className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
               >
                 <FileText className="w-4 h-4" />
@@ -254,7 +254,7 @@ export function WorkOrderActions({
               </Link>
               {existingInvoiceStatus !== 'paid' && (
                 <Link
-                  href={`/finance/invoices/${existingInvoiceId}/edit`}
+                  href={`/finance/invoices/${existingInvoiceId}/edit?work_order_id=${workOrderId}`}
                   className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
                 >
                   <FileText className="w-4 h-4" />
