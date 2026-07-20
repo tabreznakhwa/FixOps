@@ -870,7 +870,7 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
           {loading ? 'Creating…' : 'Create Invoice'}
         </button>
         <a
-          href="/finance/invoices"
+          href={initialWorkOrderId ? `/work-orders/${initialWorkOrderId}` : '/finance/invoices'}
           className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
         >
           Cancel
