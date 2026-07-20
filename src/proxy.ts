@@ -52,11 +52,16 @@ export async function proxy(request: NextRequest) {
   }
 
 
-  // Pass tab-mode flag to the layout so it can strip the sidebar for iframe content
+  // Pass tab-mode flag to the layout so it can strip the sidebar for iframe content.
+  // Three signals: explicit ?__tab=1 param, browser Sec-Fetch-Dest header for the initial
+  // iframe load, or Referer containing __tab= (catches router.push RSC fetches where
+  // Next.js's internal router strips ?__tab but the browser Referer still has it).
   const baseHeaders = new Headers(request.headers)
+  const referer = request.headers.get('referer') ?? ''
   const isTabRequest =
     request.nextUrl.searchParams.has('__tab') ||
-    request.headers.get('sec-fetch-dest') === 'iframe'
+    request.headers.get('sec-fetch-dest') === 'iframe' ||
+    referer.includes('__tab=')
   if (isTabRequest) baseHeaders.set('x-tab-mode', '1')
 
   let supabaseResponse = NextResponse.next({ request: { headers: baseHeaders } })

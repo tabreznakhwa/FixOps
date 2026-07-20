@@ -6,11 +6,15 @@ import { AssignmentNotifier } from '@/components/layout/AssignmentNotifier'
 import { getRoleAccess } from '@/lib/orgPermissions'
 import { TabShellOrContent } from '@/components/layout/TabShellOrContent'
 
-// Runs synchronously before React hydration — patches history API so that
-// Next.js App Router initialization cannot strip ?__tab=1 from the URL.
-const TAB_GUARD_SCRIPT = `(function(){
+// Injected on EVERY dashboard page (iframe or not).
+// At runtime it self-exits when not inside an iframe, so the outer shell is unaffected.
+// Running synchronously before hydration ensures Next.js App Router cannot strip
+// ?__tab=1 via its own history.replaceState calls during initialisation.
+const IFRAME_GUARD = `(function(){
+  if(window.self===window.top)return;
   var a=function(u){
     if(!u||typeof u!=='string'||u.indexOf('__tab=')!==-1)return u;
+    if(u[0]==='#'||u.slice(0,11)==='javascript:')return u;
     return u.indexOf('?')!==-1?u+'&__tab=1':u+'?__tab=1';
   };
   var op=history.pushState.bind(history),or=history.replaceState.bind(history);
@@ -45,7 +49,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     return (
       <>
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
-        <script dangerouslySetInnerHTML={{ __html: TAB_GUARD_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: IFRAME_GUARD }} />
         <div className="min-h-screen bg-slate-50 overflow-y-auto">
           {children}
         </div>
@@ -56,12 +60,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const moduleAccess = await getRoleAccess(profile.organization_id, profile.role)
 
   return (
-    <TabShellOrContent
-      isTabMode={false}
-      sidebar={<Sidebar user={profile} moduleAccess={moduleAccess} />}
-      assigner={<AssignmentNotifier userId={user.id} />}
-    >
-      {children}
-    </TabShellOrContent>
+    <>
+      {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+      <script dangerouslySetInnerHTML={{ __html: IFRAME_GUARD }} />
+      <TabShellOrContent
+        isTabMode={false}
+        sidebar={<Sidebar user={profile} moduleAccess={moduleAccess} />}
+        assigner={<AssignmentNotifier userId={user.id} />}
+      >
+        {children}
+      </TabShellOrContent>
+    </>
   )
 }
