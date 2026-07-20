@@ -40,6 +40,7 @@ export default async function NewInvoicePage({
     .select('work_order_id')
     .eq('organization_id', orgId)
     .not('work_order_id', 'is', null)
+    .neq('status', 'cancelled')
   const invoicedWoIds = new Set(
     ((invoicedWoIdsRaw ?? []) as Array<{ work_order_id: string }>).map((r) => r.work_order_id)
   )
