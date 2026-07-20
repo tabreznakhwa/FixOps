@@ -55,8 +55,8 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
       .select('description')
       .eq('organization_id', orgId)
       .order('description'),
-    // Has this work order already been invoiced?
-    admin.from('invoices').select('id').eq('work_order_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    // Has this work order already been invoiced? Ignore cancelled invoices so admin can re-create.
+    admin.from('invoices').select('id, status').eq('work_order_id', id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ])
 
   const systemUsers = (techniciansRaw.data ?? []) as unknown as { id: string; full_name: string; role: string }[]
@@ -80,7 +80,9 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
     ]),
   ].filter(Boolean).sort() as string[]
 
-  const existingInvoiceId = (invoiceRaw.data as { id: string } | null)?.id ?? null
+  const existingInvoice = invoiceRaw.data as { id: string; status: string } | null
+  const existingInvoiceId = existingInvoice?.id ?? null
+  const existingInvoiceStatus = existingInvoice?.status ?? null
 
   return (
     <div className="animate-fade-in">
@@ -235,6 +237,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
             finalAmount={wo.final_amount}
             paymentStatus={wo.payment_status}
             existingInvoiceId={existingInvoiceId}
+            existingInvoiceStatus={existingInvoiceStatus}
           />
         </div>
       </div>

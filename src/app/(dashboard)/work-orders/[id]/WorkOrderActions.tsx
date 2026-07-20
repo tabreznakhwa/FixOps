@@ -16,11 +16,12 @@ interface Props {
   finalAmount: number
   paymentStatus: string
   existingInvoiceId: string | null
+  existingInvoiceStatus: string | null
 }
 
 export function WorkOrderActions({
   workOrderId, currentStatus, currentAssigneeKey, technicians,
-  customerId, finalAmount, paymentStatus, existingInvoiceId,
+  customerId, finalAmount, paymentStatus, existingInvoiceId, existingInvoiceStatus,
 }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
@@ -241,15 +242,26 @@ export function WorkOrderActions({
 
       {/* Invoice */}
       {!isCancelled && (
-        <div className="border-t border-slate-100 pt-4">
+        <div className="border-t border-slate-100 pt-4 space-y-2">
           {existingInvoiceId ? (
-            <Link
-              href={`/finance/invoices/${existingInvoiceId}`}
-              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
-            >
-              <FileText className="w-4 h-4" />
-              View Invoice
-            </Link>
+            <>
+              <Link
+                href={`/finance/invoices/${existingInvoiceId}`}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                View Invoice
+              </Link>
+              {existingInvoiceStatus !== 'paid' && (
+                <Link
+                  href={`/finance/invoices/${existingInvoiceId}/edit`}
+                  className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  Edit Invoice
+                </Link>
+              )}
+            </>
           ) : isCompleted ? (
             <Link
               href={`/finance/invoices/new?work_order_id=${workOrderId}`}
