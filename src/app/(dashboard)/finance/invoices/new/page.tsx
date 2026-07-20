@@ -114,7 +114,7 @@ export default async function NewInvoicePage({
         subtitle="Create a new invoice"
         actions={
           <Link
-            href="/finance/invoices"
+            href={params.work_order_id ? `/work-orders/${params.work_order_id}` : '/finance/invoices'}
             className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
           >
             <ArrowLeft className="w-4 h-4" /> Back

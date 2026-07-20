@@ -331,7 +331,7 @@ export function NewPaymentForm({
           className="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed">
           {loading ? 'Recording…' : 'Record Payment'}
         </button>
-        <a href="/finance/payments"
+        <a href={returnTo ?? '/finance/payments'}
           className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
           Cancel
         </a>
