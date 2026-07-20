@@ -9,7 +9,7 @@ export const metadata = { title: 'Record Payment' }
 export default async function NewPaymentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ invoice_id?: string; customer_id?: string; amount?: string }>
+  searchParams: Promise<{ invoice_id?: string; customer_id?: string; amount?: string; return_to?: string }>
 }) {
   const params = await searchParams
   const supabase = await createClient()
@@ -73,6 +73,7 @@ export default async function NewPaymentPage({
           prefilledCustomerName={prefilledCustomerName}
           prefilledInvoiceId={params.invoice_id ?? ''}
           prefilledAmount={params.amount ?? (prefilledInvoice ? String(prefilledInvoice.balance_due) : '')}
+          returnTo={params.return_to}
         />
       </div>
     </div>

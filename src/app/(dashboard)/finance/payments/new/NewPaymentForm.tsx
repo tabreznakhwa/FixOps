@@ -25,6 +25,7 @@ interface Props {
   prefilledCustomerName: string
   prefilledInvoiceId: string
   prefilledAmount: string
+  returnTo?: string
 }
 
 const TODAY = new Date().toISOString().split('T')[0]
@@ -49,6 +50,7 @@ export function NewPaymentForm({
   prefilledCustomerName,
   prefilledInvoiceId,
   prefilledAmount,
+  returnTo,
 }: Props) {
   const [customerId, setCustomerId] = useState(prefilledCustomerId)
   const [customerName, setCustomerName] = useState(prefilledCustomerName)
@@ -165,7 +167,7 @@ export function NewPaymentForm({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to record payment')
-      window.location.href = '/finance/payments'
+      window.location.href = returnTo ?? '/finance/payments'
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setLoading(false)
