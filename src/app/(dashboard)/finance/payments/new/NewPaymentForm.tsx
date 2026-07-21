@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { AlertCircle, Search, X } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
 
 interface Customer {
   id: string
@@ -58,7 +59,7 @@ export function NewPaymentForm({
   const [searchResults, setSearchResults] = useState<Customer[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
   const [searching, setSearching] = useState(false)
-  const [invoiceId, setInvoiceId] = useState(prefilledInvoiceId)
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>(prefilledInvoiceId ? [prefilledInvoiceId] : [])
   const [isAdvance, setIsAdvance] = useState(false)
   const [paymentDate, setPaymentDate] = useState(TODAY)
   const [amountReceived, setAmountReceived] = useState(prefilledAmount)
@@ -98,45 +99,58 @@ export function NewPaymentForm({
     }, 250)
   }, [searchQuery])
 
+  const customerInvoices = customerId
+    ? openInvoices.filter(inv => inv.customer_id === customerId)
+    : openInvoices
+
+  const selectedInvoices = customerInvoices.filter(inv => selectedInvoiceIds.includes(inv.id))
+  const totalSelected = selectedInvoices.reduce((s, inv) => s + inv.balance_due, 0)
+
+  // Auto-fill amount when selection changes
+  useEffect(() => {
+    if (selectedInvoiceIds.length === 1) {
+      const inv = openInvoices.find(i => i.id === selectedInvoiceIds[0])
+      if (inv) setAmountReceived(String(inv.balance_due))
+    } else if (selectedInvoiceIds.length > 1) {
+      setAmountReceived(totalSelected.toFixed(3))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedInvoiceIds.join(',')])
+
+  function toggleInvoice(id: string) {
+    setSelectedInvoiceIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  function selectAllInvoices() {
+    if (selectedInvoiceIds.length === customerInvoices.length) {
+      setSelectedInvoiceIds([])
+      setAmountReceived('')
+    } else {
+      setSelectedInvoiceIds(customerInvoices.map(inv => inv.id))
+    }
+  }
+
   function selectCustomer(c: Customer) {
     setCustomerId(c.id)
     setCustomerName(c.full_name)
     setSearchQuery('')
     setShowDropdown(false)
-    // Clear invoice if it doesn't belong to this customer
-    if (invoiceId) {
-      const inv = openInvoices.find(i => i.id === invoiceId)
-      if (inv && inv.customer_id !== c.id) { setInvoiceId(''); setAmountReceived('') }
-    }
+    setSelectedInvoiceIds(prev => prev.filter(id => {
+      const inv = openInvoices.find(i => i.id === id)
+      return inv && inv.customer_id === c.id
+    }))
   }
 
   function clearCustomer() {
     setCustomerId('')
     setCustomerName('')
-    setInvoiceId('')
+    setSelectedInvoiceIds([])
     setAmountReceived('')
-  }
-
-  const customerInvoices = customerId
-    ? openInvoices.filter(inv => inv.customer_id === customerId)
-    : openInvoices
-
-  const selectedInvoice = invoiceId ? openInvoices.find(inv => inv.id === invoiceId) ?? null : null
-
-  const handleInvoiceChange = (newInvoiceId: string) => {
-    setInvoiceId(newInvoiceId)
-    if (newInvoiceId) {
-      const inv = openInvoices.find(i => i.id === newInvoiceId)
-      if (inv) {
-        setAmountReceived(String(inv.balance_due))
-        if (!customerId) setCustomerId(inv.customer_id)
-      }
-    }
   }
 
   const handleAdvanceToggle = (checked: boolean) => {
     setIsAdvance(checked)
-    if (checked) setInvoiceId('')
+    if (checked) { setSelectedInvoiceIds([]); setAmountReceived('') }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -144,29 +158,53 @@ export function NewPaymentForm({
     setError('')
     if (!customerId) { setError('Please select a customer'); return }
     if (!paymentDate) { setError('Payment date is required'); return }
-    const amount = parseFloat(amountReceived)
-    if (!amountReceived || isNaN(amount) || amount <= 0) { setError('Amount must be greater than zero'); return }
     if (!paymentMode) { setError('Payment mode is required'); return }
-    if (!isAdvance && !invoiceId) { setError('Please select an invoice or check "Advance Payment"'); return }
+    if (!isAdvance && selectedInvoiceIds.length === 0) { setError('Please select at least one invoice or check "Advance Payment"'); return }
 
     setLoading(true)
     try {
-      const res = await fetch('/api/payments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_id: customerId,
-          invoice_id: isAdvance ? null : (invoiceId || null),
-          payment_date: paymentDate,
-          amount_received: amount,
-          payment_mode: paymentMode,
-          reference_number: referenceNumber.trim() || null,
-          notes: notes.trim() || null,
-          is_advance: isAdvance,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Failed to record payment')
+      if (!isAdvance && selectedInvoiceIds.length > 1) {
+        // Multiple invoices: one payment record per invoice at its balance_due
+        for (const invId of selectedInvoiceIds) {
+          const inv = customerInvoices.find(i => i.id === invId)
+          if (!inv) continue
+          const res = await fetch('/api/payments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customer_id: customerId,
+              invoice_id: invId,
+              payment_date: paymentDate,
+              amount_received: inv.balance_due,
+              payment_mode: paymentMode,
+              reference_number: referenceNumber.trim() || null,
+              notes: notes.trim() || null,
+              is_advance: false,
+            }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error ?? 'Failed to record payment')
+        }
+      } else {
+        const amount = parseFloat(amountReceived)
+        if (!amountReceived || isNaN(amount) || amount <= 0) { setError('Amount must be greater than zero'); setLoading(false); return }
+        const res = await fetch('/api/payments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer_id: customerId,
+            invoice_id: isAdvance ? null : (selectedInvoiceIds[0] || null),
+            payment_date: paymentDate,
+            amount_received: amount,
+            payment_mode: paymentMode,
+            reference_number: referenceNumber.trim() || null,
+            notes: notes.trim() || null,
+            is_advance: isAdvance,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? 'Failed to record payment')
+      }
       window.location.href = returnTo ?? '/finance/payments'
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -243,28 +281,51 @@ export function NewPaymentForm({
             </label>
           </div>
 
-          {/* Invoice selection */}
+          {/* Invoice selection — checkbox list with Select All */}
           {!isAdvance && (
             <div className="md:col-span-2">
-              <label className={labelClass}>Invoice *</label>
+              <label className={labelClass}>Invoice{customerInvoices.length !== 1 ? 's' : ''} *</label>
               {customerInvoices.length === 0 ? (
                 <div className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-400 bg-slate-50">
                   {customerId ? 'No open invoices for this customer' : 'Select a customer to see their invoices'}
                 </div>
               ) : (
-                <select className={inputClass} value={invoiceId} onChange={e => handleInvoiceChange(e.target.value)} required={!isAdvance}>
-                  <option value="">Select invoice…</option>
+                <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-56 overflow-y-auto">
+                  {/* Select All header */}
+                  <label className="flex items-center justify-between gap-3 px-3 py-2 text-sm cursor-pointer bg-slate-50 hover:bg-slate-100 sticky top-0">
+                    <span className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={selectedInvoiceIds.length === customerInvoices.length && customerInvoices.length > 0}
+                        onChange={selectAllInvoices}
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Select All</span>
+                    </span>
+                    <span className="text-xs text-slate-400">{customerInvoices.length} invoice{customerInvoices.length !== 1 ? 's' : ''}</span>
+                  </label>
                   {customerInvoices.map(inv => (
-                    <option key={inv.id} value={inv.id}>
-                      {inv.invoice_number} — Balance: KWD {inv.balance_due.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / Total: KWD {inv.total_amount.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </option>
+                    <label key={inv.id} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm cursor-pointer hover:bg-slate-50">
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedInvoiceIds.includes(inv.id)}
+                          onChange={() => toggleInvoice(inv.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="min-w-0">
+                          <span className="font-medium text-slate-900">{inv.invoice_number}</span>
+                          <span className="block text-xs text-slate-400">Balance: {formatCurrency(inv.balance_due)} / Total: {formatCurrency(inv.total_amount)}</span>
+                        </span>
+                      </span>
+                      <span className="text-slate-700 font-semibold flex-shrink-0">{formatCurrency(inv.balance_due)}</span>
+                    </label>
                   ))}
-                </select>
+                </div>
               )}
-              {selectedInvoice && (
-                <p className="text-xs text-slate-500 mt-1.5">
-                  Status: <span className="font-semibold capitalize">{selectedInvoice.status}</span>
-                  {' '}· Balance due: <span className="font-semibold text-amber-600">KWD {selectedInvoice.balance_due.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              {selectedInvoiceIds.length > 1 && (
+                <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
+                  {selectedInvoiceIds.length} invoices selected · Total: <strong>{formatCurrency(totalSelected)}</strong> · Each will get a separate payment record
                 </p>
               )}
             </div>
@@ -279,8 +340,15 @@ export function NewPaymentForm({
           {/* Amount */}
           <div>
             <label className={labelClass}>Amount (KWD) *</label>
-            <input type="number" min="0.01" step="0.01" placeholder="0.00" className={inputClass}
-              value={amountReceived} onChange={e => setAmountReceived(e.target.value)} required />
+            <input type="number" min="0.001" step="0.001" placeholder="0.000" className={inputClass}
+              value={amountReceived}
+              onChange={e => setAmountReceived(e.target.value)}
+              readOnly={selectedInvoiceIds.length > 1}
+              required={isAdvance || selectedInvoiceIds.length <= 1}
+            />
+            {selectedInvoiceIds.length > 1 && (
+              <p className="text-xs text-slate-400 mt-1">Each invoice pays its own balance due</p>
+            )}
           </div>
 
           {/* Payment Mode */}
@@ -308,19 +376,21 @@ export function NewPaymentForm({
       </div>
 
       {/* Summary */}
-      {amountReceived && parseFloat(amountReceived) > 0 && (
+      {((selectedInvoiceIds.length > 0 && !isAdvance) || (isAdvance && amountReceived && parseFloat(amountReceived) > 0)) && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-green-800">Payment Summary</p>
               {isAdvance ? (
                 <p className="text-xs text-green-600 mt-0.5">Advance payment — no invoice linked</p>
-              ) : selectedInvoice ? (
-                <p className="text-xs text-green-600 mt-0.5">For invoice {selectedInvoice.invoice_number}</p>
+              ) : selectedInvoiceIds.length > 1 ? (
+                <p className="text-xs text-green-600 mt-0.5">{selectedInvoiceIds.length} invoices · {selectedInvoiceIds.length} payment records</p>
+              ) : selectedInvoices[0] ? (
+                <p className="text-xs text-green-600 mt-0.5">For invoice {selectedInvoices[0].invoice_number}</p>
               ) : null}
             </div>
             <p className="text-2xl font-bold text-green-700">
-              KWD {parseFloat(amountReceived || '0').toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {formatCurrency(selectedInvoiceIds.length > 1 ? totalSelected : parseFloat(amountReceived || '0'))}
             </p>
           </div>
         </div>
@@ -329,7 +399,7 @@ export function NewPaymentForm({
       <div className="flex items-center gap-3 pb-6">
         <button type="submit" disabled={loading}
           className="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed">
-          {loading ? 'Recording…' : 'Record Payment'}
+          {loading ? 'Recording…' : selectedInvoiceIds.length > 1 ? `Record Payment (${selectedInvoiceIds.length})` : 'Record Payment'}
         </button>
         <a href={returnTo ?? '/finance/payments'}
           className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">

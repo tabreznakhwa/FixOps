@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { TrendingDown, Plus } from 'lucide-react'
+import { TrendingDown, Plus, Pencil } from 'lucide-react'
 import Link from 'next/link'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
@@ -160,6 +160,7 @@ export default async function VendorPaymentsPage({
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Reference</th>
                     <th className="text-right text-xs font-semibold text-amber-600 uppercase tracking-wider px-4 py-3">Discount</th>
                     <th className="text-right text-xs font-semibold text-red-600 uppercase tracking-wider px-5 py-3">Amount Paid</th>
+                    <th className="px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -181,12 +182,17 @@ export default async function VendorPaymentsPage({
                         {p.discount_amount ? formatCurrency(p.discount_amount) : '—'}
                       </td>
                       <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(p.amount_paid)}</td>
+                      <td className="px-4 py-3 text-right print:hidden">
+                        <Link href={`/suppliers/vendor-payments/${p.id}/edit`} className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition">
+                          <Pencil className="w-3 h-3" /> Edit
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-50 border-t border-slate-200">
-                    <td colSpan={5} className="px-5 py-3 text-sm font-bold text-slate-700">Total</td>
+                    <td colSpan={6} className="px-5 py-3 text-sm font-bold text-slate-700">Total</td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-amber-600">{formatCurrency(totalDiscount)}</td>
                     <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(totalPaid)}</td>
                   </tr>
