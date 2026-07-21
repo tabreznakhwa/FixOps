@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, ClipboardList, Plus, Edit, CalendarClock } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
 import { ComplaintActions } from './ComplaintActions'
+import { InternalNotes } from './InternalNotes'
 
 export const metadata = { title: 'Complaint Detail' }
 
@@ -41,10 +42,11 @@ export default async function ComplaintDetailPage({ params }: { params: Promise<
     users: { id: string; full_name: string } | null
   }
 
-  const [usersRes, staffRes, workOrdersRes] = await Promise.all([
+  const [usersRes, staffRes, workOrdersRes, internalNotesRes] = await Promise.all([
     supabase.from('users').select('id, full_name, role').in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
     supabase.from('staff').select('id, full_name, designation').eq('employment_status', 'active'),
     supabase.from('work_orders').select('id, work_order_number, status').eq('complaint_id', id).order('created_at', { ascending: false }),
+    (supabase as any).from('complaint_internal_notes').select('id, note, author_name, created_at').eq('complaint_id', id).order('created_at', { ascending: false }),
   ])
   const systemUsers = (usersRes.data ?? []) as unknown as { id: string; full_name: string; role: string }[]
   const staffMembers = (staffRes.data ?? []) as unknown as { id: string; full_name: string; designation: string | null }[]
@@ -53,6 +55,7 @@ export default async function ComplaintDetailPage({ params }: { params: Promise<
     ...staffMembers.map(s => ({ id: s.id, full_name: s.full_name, type: 'staff' as const, role: s.designation ?? 'Technician' })),
   ]
   const linkedWorkOrders = (workOrdersRes.data ?? []) as unknown as { id: string; work_order_number: string; status: string }[]
+  const internalNotes = (internalNotesRes.data ?? []) as { id: string; note: string; author_name: string; created_at: string }[]
 
   const categories = Array.isArray(complaint.service_category)
     ? complaint.service_category
@@ -264,6 +267,9 @@ export default async function ComplaintDetailPage({ params }: { params: Promise<
             technicians={technicians}
             statusFlow={STATUS_FLOW}
           />
+
+          {/* Internal Notes — staff only, handover log */}
+          <InternalNotes complaintId={complaint.id} initialNotes={internalNotes} />
         </div>
       </div>
     </div>
