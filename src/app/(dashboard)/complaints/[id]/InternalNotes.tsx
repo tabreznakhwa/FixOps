@@ -67,7 +67,7 @@ export function InternalNotes({ complaintId, initialNotes }: Props) {
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
-          placeholder="Add a handover note — e.g. "Parts ordered from Al Ghanim, ETA 2 days" or "Customer wants call before visit"…"
+          placeholder="Add a handover note — e.g. Parts ordered from Al Ghanim ETA 2 days, or Customer wants call before visit…"
           rows={3}
           className="w-full border border-amber-200 bg-white rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
         />
