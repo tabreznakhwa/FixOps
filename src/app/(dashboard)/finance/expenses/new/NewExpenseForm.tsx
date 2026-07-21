@@ -34,7 +34,7 @@ export function NewExpenseForm() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
 
   const [form, setForm] = useState({
     expense_date: today,

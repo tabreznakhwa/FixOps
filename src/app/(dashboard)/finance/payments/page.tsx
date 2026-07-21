@@ -72,7 +72,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     modeBreakdown[p.payment_mode] = (modeBreakdown[p.payment_mode] ?? 0) + p.amount_received
   })
 
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
   const todayPayments = allPayments?.filter((p) => (p.payment_date ?? '').slice(0, 10) === todayStr) ?? []
   const totalToday = todayPayments.reduce((s, p) => s + p.amount_received, 0)
   const todayCash = todayPayments.filter(p => p.payment_mode === 'cash').reduce((s, p) => s + p.amount_received, 0)

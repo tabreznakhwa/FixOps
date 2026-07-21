@@ -59,7 +59,7 @@ export default async function ExpensesPage({
   const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
   const canEditDelete = ['owner', 'admin', 'hr', 'manager'].includes((profileRaw as { role: string } | null)?.role ?? '')
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
   const firstOfMonth = today.slice(0, 7) + '-01'
   const from = params.from ?? firstOfMonth
   const to = params.to ?? today

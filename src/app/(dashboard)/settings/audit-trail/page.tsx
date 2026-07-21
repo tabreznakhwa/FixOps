@@ -40,7 +40,7 @@ export default async function AuditTrailPage({
   if (!profile || !['owner', 'admin'].includes(profile.role)) redirect('/dashboard?error=unauthorized')
 
   const from = sp.from ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  const to = sp.to ?? new Date().toISOString().split('T')[0]
+  const to = sp.to ?? new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
 
   let query = (supabase as any)
     .from('audit_logs')

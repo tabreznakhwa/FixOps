@@ -52,7 +52,7 @@ export function VendorPaymentForm({ suppliers, openPOs, defaultPO, openInvoices,
   const [discount, setDiscount] = useState('')
   const [mode, setMode] = useState('bank_transfer')
   const [reference, setReference] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }))
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')

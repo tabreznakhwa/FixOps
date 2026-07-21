@@ -30,7 +30,7 @@ const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 export function NewSupplierAdvanceForm({ suppliers, defaultSupplierId }: Props) {
   const router = useRouter()
   const [supplierId, setSupplierId] = useState(defaultSupplierId ?? '')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }))
   const [amount, setAmount] = useState('')
   const [mode, setMode] = useState('bank_transfer')
   const [reference, setReference] = useState('')

@@ -4,24 +4,30 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { Calendar } from 'lucide-react'
 
-function toISODate(d: Date) {
-  return d.toISOString().split('T')[0]
+const TZ = 'Asia/Kuwait'
+
+function kwDate(d: Date = new Date()): string {
+  return d.toLocaleDateString('en-CA', { timeZone: TZ })
 }
 
-function startOfWeek(d: Date) {
-  const date = new Date(d)
-  const day = date.getDay() // 0 = Sunday
-  const diff = (day === 0 ? -6 : 1) - day // Monday as start of week
-  date.setDate(date.getDate() + diff)
-  return date
+function addDays(dateStr: string, n: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d + n))
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`
+}
+
+function startOfWeek(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+  return addDays(dateStr, dow === 0 ? -6 : 1 - dow)
 }
 
 const PRESETS: { label: string; range: () => { from: string; to: string } }[] = [
-  { label: 'Today', range: () => { const t = new Date(); return { from: toISODate(t), to: toISODate(t) } } },
-  { label: 'Yesterday', range: () => { const t = new Date(); t.setDate(t.getDate() - 1); return { from: toISODate(t), to: toISODate(t) } } },
-  { label: 'This Week', range: () => { const t = new Date(); return { from: toISODate(startOfWeek(t)), to: toISODate(t) } } },
-  { label: 'This Month', range: () => { const t = new Date(); return { from: toISODate(new Date(t.getFullYear(), t.getMonth(), 1)), to: toISODate(t) } } },
-  { label: 'This Year', range: () => { const t = new Date(); return { from: toISODate(new Date(t.getFullYear(), 0, 1)), to: toISODate(t) } } },
+  { label: 'Today', range: () => { const t = kwDate(); return { from: t, to: t } } },
+  { label: 'Yesterday', range: () => { const t = addDays(kwDate(), -1); return { from: t, to: t } } },
+  { label: 'This Week', range: () => { const t = kwDate(); return { from: startOfWeek(t), to: t } } },
+  { label: 'This Month', range: () => { const t = kwDate(); return { from: t.slice(0, 7) + '-01', to: t } } },
+  { label: 'This Year', range: () => { const t = kwDate(); return { from: t.slice(0, 4) + '-01-01', to: t } } },
 ]
 
 export function DateRangeFilter({

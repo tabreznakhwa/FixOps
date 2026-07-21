@@ -27,7 +27,7 @@ export default async function CashBookPage({
   const params = await searchParams
   const supabase = await createClient()
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
   const allTime = !params.from && !params.to
   const from = params.from ?? today
   const to = params.to ?? today

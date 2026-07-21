@@ -83,7 +83,7 @@ export function ReportExportButton({ range }: Props) {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `invoices-${range}-${new Date().toISOString().split('T')[0]}.csv`
+      link.download = `invoices-${range}-${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })}.csv`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)

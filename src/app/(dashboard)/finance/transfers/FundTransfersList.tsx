@@ -25,7 +25,7 @@ export function FundTransfersList({ transfers: initial }: Props) {
   const [error, setError] = useState('')
 
   const blank = () => ({
-    transfer_date: new Date().toISOString().split('T')[0],
+    transfer_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }),
     from_account: 'cash',
     amount: '',
     reference_number: '',

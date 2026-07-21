@@ -32,7 +32,7 @@ export default async function VendorPaymentsPage({
   const params = await searchParams
   const supabase = await createClient()
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
   const firstOfMonth = today.slice(0, 7) + '-01'
   const from = params.from ?? firstOfMonth
   const to = params.to ?? today

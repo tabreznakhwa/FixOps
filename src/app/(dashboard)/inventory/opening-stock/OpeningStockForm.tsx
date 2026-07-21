@@ -23,7 +23,7 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
   const [quantities, setQuantities] = useState<Record<string, string>>(
     Object.fromEntries(items.map(i => [i.id, String(i.current_stock || 0)]))
   )
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }))
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('')
 

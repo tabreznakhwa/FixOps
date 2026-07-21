@@ -35,7 +35,7 @@ export function WithdrawalsList({ withdrawals: initial }: Props) {
   const [error, setError] = useState('')
 
   const blank = () => ({
-    withdrawal_date: new Date().toISOString().split('T')[0],
+    withdrawal_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }),
     amount: '',
     payment_mode: 'cash',
     purpose: '',

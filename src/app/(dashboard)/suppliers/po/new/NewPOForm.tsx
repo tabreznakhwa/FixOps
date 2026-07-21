@@ -144,7 +144,7 @@ export function NewPOForm({ suppliers, defaultSupplierId }: Props) {
             type="date"
             name="purchase_date"
             required
-            defaultValue={new Date().toISOString().split('T')[0]}
+            defaultValue={new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })}
             className={inputClass}
           />
         </div>

@@ -46,7 +46,7 @@ export function AMCPayments({ contractId, contractAmount, payments: initialPayme
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState('')
 
-  const todayStr = () => new Date().toISOString().split('T')[0]
+  const todayStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
   const blankForm = () => ({
     payment_date: todayStr(),
     amount: '',

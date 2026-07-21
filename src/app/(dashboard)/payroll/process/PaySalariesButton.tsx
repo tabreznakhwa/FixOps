@@ -15,7 +15,7 @@ export function PaySalariesButton({ runId, pendingCount, totalNet }: {
 }) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState('bank_transfer')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()

@@ -21,7 +21,7 @@ interface LineItem {
 
 const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
 const labelCls = 'block text-sm font-medium text-slate-700 mb-1.5'
-const TODAY = new Date().toISOString().split('T')[0]
+const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
 
 function emptyLine(): LineItem {
   return { inventory_item_id: '', description: '', unit_of_measure: '', quantity: '1', unit_cost: '', isNonInventory: false }

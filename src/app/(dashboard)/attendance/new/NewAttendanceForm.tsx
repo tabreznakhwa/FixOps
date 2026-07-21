@@ -29,7 +29,7 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('present')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }))
   const [checkIn, setCheckIn] = useState(DUTY_START)
   const [checkOut, setCheckOut] = useState(DUTY_END)
   const [isPublicHoliday, setIsPublicHoliday] = useState(false)

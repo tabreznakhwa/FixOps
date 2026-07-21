@@ -42,7 +42,7 @@ export function MergeInvoiceForm({ customers }: { customers: Customer[] }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Form fields
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
   const [invoiceDate, setInvoiceDate] = useState(today)
   const [dueDate, setDueDate] = useState('')
   const [notes, setNotes] = useState('')

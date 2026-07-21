@@ -351,8 +351,6 @@ export function NewComplaintForm({ technicians }: Props) {
               <div className="flex items-center gap-2">
                 <a
                   href={`/customers/${selectedCustomer.id}/edit`}
-                  target="_blank"
-                  rel="noreferrer"
                   className="flex items-center gap-1 text-xs font-semibold text-slate-600 border border-slate-200 bg-white rounded-lg px-2.5 py-1.5 hover:bg-slate-50 transition-colors"
                 >
                   <Pencil className="w-3 h-3" /> Edit

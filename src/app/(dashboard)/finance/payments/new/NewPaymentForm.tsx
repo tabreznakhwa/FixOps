@@ -29,7 +29,7 @@ interface Props {
   returnTo?: string
 }
 
-const TODAY = new Date().toISOString().split('T')[0]
+const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
 
 const PAYMENT_MODES = [
   { value: 'cash', label: 'Cash' },

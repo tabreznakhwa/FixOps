@@ -31,7 +31,7 @@ export function StaffAdvancePanel({ staffId, currentBalance, advances }: Props) 
   const [form, setForm] = useState({
     type: 'advance',
     amount: '',
-    issued_date: new Date().toISOString().split('T')[0],
+    issued_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }),
     payment_method: 'cash',
     notes: '',
   })
@@ -54,7 +54,7 @@ export function StaffAdvancePanel({ staffId, currentBalance, advances }: Props) 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setShowForm(false)
-      setForm({ type: 'advance', amount: '', issued_date: new Date().toISOString().split('T')[0], payment_method: 'cash', notes: '' })
+      setForm({ type: 'advance', amount: '', issued_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }), payment_method: 'cash', notes: '' })
       router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to record advance')

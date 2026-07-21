@@ -121,7 +121,7 @@ const PRESET_SERVICES = [
 const ALL_SERVICES = PRESET_SERVICES.flatMap(g => g.items)
 const ALL_SERVICES_MAP = Object.fromEntries(ALL_SERVICES.map(s => [s.label, s.price]))
 
-const TODAY = new Date().toISOString().split('T')[0]
+const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
 
 const inputClass =
   'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white'

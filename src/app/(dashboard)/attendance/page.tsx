@@ -86,7 +86,7 @@ export default async function AttendancePage({
       .from('staff').select('id').eq('user_id', user!.id).maybeSingle()
     kioskStaffId = (kioskStaff as { id: string } | null)?.id ?? null
     if (kioskStaffId) {
-      const todayISO = new Date().toISOString().split('T')[0]
+      const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
       const { data: todayRec } = await (supabase as any)
         .from('attendance').select('id').eq('staff_id', kioskStaffId).eq('date', todayISO).maybeSingle()
       kioskTodayMarked = !!todayRec

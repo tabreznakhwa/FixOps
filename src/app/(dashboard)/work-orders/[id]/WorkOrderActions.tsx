@@ -32,7 +32,7 @@ export function WorkOrderActions({
   const [showPayForm, setShowPayForm] = useState(false)
   const [payAmount, setPayAmount] = useState('')
   const [payMode, setPayMode] = useState('cash')
-  const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0])
+  const [payDate, setPayDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }))
   const [payError, setPayError] = useState('')
   const [payingSaving, setPayingSaving] = useState(false)
 
