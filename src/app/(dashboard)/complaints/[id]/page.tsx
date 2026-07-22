@@ -1,4 +1,4 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -46,7 +46,7 @@ export default async function ComplaintDetailPage({ params }: { params: Promise<
     supabase.from('users').select('id, full_name, role').in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
     supabase.from('staff').select('id, full_name, designation').eq('employment_status', 'active'),
     supabase.from('work_orders').select('id, work_order_number, status').eq('complaint_id', id).order('created_at', { ascending: false }),
-    createAdminClient().from('complaint_internal_notes').select('id, note, author_name, created_at').eq('complaint_id', id).order('created_at', { ascending: false }),
+    supabase.from('complaint_internal_notes').select('id, note, author_name, created_at').eq('complaint_id', id).order('created_at', { ascending: false }),
   ])
   const systemUsers = (usersRes.data ?? []) as unknown as { id: string; full_name: string; role: string }[]
   const staffMembers = (staffRes.data ?? []) as unknown as { id: string; full_name: string; designation: string | null }[]

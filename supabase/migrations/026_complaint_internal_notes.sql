@@ -15,6 +15,10 @@ create index if not exists complaint_internal_notes_complaint_id_idx
 alter table complaint_internal_notes enable row level security;
 
 -- All authenticated users in the org can read and insert
+-- Drop first so this script can be safely rerun from Supabase SQL Editor.
+drop policy if exists "org members can read internal notes" on complaint_internal_notes;
+drop policy if exists "org members can insert internal notes" on complaint_internal_notes;
+
 create policy "org members can read internal notes"
   on complaint_internal_notes for select
   using (
@@ -31,5 +35,7 @@ create policy "org members can insert internal notes"
     )
   );
 
--- Grant to authenticated role
+-- Grant to authenticated users and the server-side service-role client.
+-- Supabase service_role bypasses RLS, but still needs table privileges for admin-client reads/inserts.
 grant select, insert on complaint_internal_notes to authenticated;
+grant select, insert on complaint_internal_notes to service_role;

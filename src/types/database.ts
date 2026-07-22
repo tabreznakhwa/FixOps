@@ -91,6 +91,7 @@ export interface Database {
           organization_id: string
           complaint_number: string
           customer_id: string
+          title: string | null
           complaint_source: string
           service_category: ServiceCategory
           priority: PriorityLevel
@@ -100,7 +101,11 @@ export interface Database {
           location: string | null
           status: ComplaintStatus
           assigned_to: string | null
+          assigned_staff_id: string | null
+          technician_name: string | null
+          visit_order: number | null
           work_order_id: string | null
+          notes: string | null
           resolution_notes: string | null
           closed_at: string | null
           created_by: string | null
@@ -109,6 +114,19 @@ export interface Database {
         }
         Insert: Omit<Database['public']['Tables']['complaints']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['complaints']['Insert']>
+      }
+      complaint_internal_notes: {
+        Row: {
+          id: string
+          organization_id: string
+          complaint_id: string
+          note: string
+          author_name: string
+          created_by: string | null
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['complaint_internal_notes']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['complaint_internal_notes']['Insert']>
       }
       work_orders: {
         Row: {

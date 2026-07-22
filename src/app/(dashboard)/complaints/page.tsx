@@ -17,7 +17,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
 
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profileRaw } = user
-    ? await (supabase as any).from('users').select('role').eq('id', user.id).single()
+    ? await supabase.from('users').select('role').eq('id', user.id).single()
     : { data: null }
   const role = (profileRaw as { role: string } | null)?.role ?? ''
   const isTechnician = role === 'technician'
@@ -27,9 +27,9 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     .select('id, complaint_number, description, priority, status, service_category, created_at, preferred_date, preferred_time, customer_id, visit_order, customers(full_name, mobile_number), users!complaints_assigned_to_fkey(full_name)')
 
   if (isTechnician) {
-    query = (query as any).order('visit_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false })
+    query = query.order('visit_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false })
   } else {
-    query = (query as any).order('complaint_number', { ascending: false })
+    query = query.order('complaint_number', { ascending: false })
   }
 
   if (params.status) query = query.eq('status', params.status)
