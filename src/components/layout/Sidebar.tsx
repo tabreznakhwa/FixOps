@@ -39,6 +39,7 @@ const navGroups: Array<{
     module: 'finance' as const,
     icon: Banknote,
     items: [
+      { href: '/finance/quotations', label: 'Quotations', icon: FileText, onlyRoles: ['owner', 'admin'] },
       { href: '/finance/invoices', label: 'Invoices', icon: FileText },
       { href: '/finance/payments', label: 'Payments', icon: CreditCard },
       { href: '/finance/receivables', label: 'Receivables', icon: DollarSign },

@@ -3,7 +3,7 @@ import { createAdminClient } from './supabase/server'
 export type AuditAction =
   | 'create' | 'update' | 'delete' | 'status_change'
   | 'login' | 'logout' | 'approve' | 'reject'
-  | 'export' | 'print' | 'process_payroll'
+  | 'export' | 'print' | 'process_payroll' | 'convert'
 
 export interface AuditParams {
   orgId: string
@@ -16,9 +16,15 @@ export interface AuditParams {
   changes?: Record<string, { before: unknown; after: unknown }>
 }
 
+type AuditLogInsertClient = {
+  from(table: 'audit_logs'): {
+    insert(values: Record<string, unknown>): Promise<unknown>
+  }
+}
+
 export async function logAudit(params: AuditParams): Promise<void> {
   try {
-    const admin = createAdminClient() as any
+    const admin = createAdminClient() as unknown as AuditLogInsertClient
     await admin.from('audit_logs').insert({
       organization_id: params.orgId,
       user_id: params.userId,

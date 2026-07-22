@@ -26,6 +26,7 @@ const LABEL_MAP: Record<string, string> = {
   '/complaints': 'Complaints',
   '/work-orders': 'Work Orders',
   '/customers': 'Customers',
+  '/finance/quotations': 'Quotations',
   '/finance/invoices': 'Invoices',
   '/finance/payments': 'Payments',
   '/finance/receivables': 'Receivables',
