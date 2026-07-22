@@ -2,10 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Suspense } from 'react'
-import { Plus, MessageSquare, UserPlus } from 'lucide-react'
-import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
+import { Plus, UserPlus } from 'lucide-react'
+import { getPriorityColor, formatStatus } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { ComplaintSearchBar } from './ComplaintSearchBar'
+import { ComplaintList, type ComplaintListItem } from './ComplaintList'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Complaints' }
@@ -21,6 +22,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     : { data: null }
   const role = (profileRaw as { role: string } | null)?.role ?? ''
   const isTechnician = role === 'technician'
+  const canReorder = ['owner', 'admin', 'manager'].includes(role)
 
   let query = supabase
     .from('complaints')
@@ -50,14 +52,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   }
 
   const { data: complaintsRaw } = await query.limit(params.from || params.to ? 1000 : 50)
-  let complaints = complaintsRaw as unknown as Array<{
-    id: string; complaint_number: string; description: string; priority: string; status: string;
-    service_category: string | string[]; created_at: string;
-    preferred_date: string | null; preferred_time: string | null;
-    customer_id: string | null; visit_order: number | null;
-    customers: { full_name: string; mobile_number: string } | null;
-    users: { full_name: string } | null
-  }>
+  let complaints = complaintsRaw as unknown as ComplaintListItem[]
 
   if (isTechnician && complaints) {
     complaints = [...complaints].sort((a, b) => {
@@ -85,12 +80,6 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     params.to ? `to=${params.to}` : '',
   ].filter(Boolean).join('&')
   const withDate = (qs: string) => [qs, dateQS].filter(Boolean).join('&')
-
-  const categoryIcons: Record<string, string> = {
-    ac_maintenance: '❄️', plumbing: '🔧', electrical: '⚡',
-    general: '🔨', emergency: '🚨', amc_visit: '📋',
-    installation: '🏗️', inspection: '🔍', quotation: '📝',
-  }
 
   return (
     <div className="animate-fade-in">
@@ -158,67 +147,12 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
         </div>
 
         {/* Complaints List */}
-        {!complaints?.length ? (
-          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-            <MessageSquare className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">No complaints found</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {complaints.map((c) => {
-              const customer = c.customers as { full_name: string; mobile_number: string } | null
-              const assignee = c.users as { full_name: string } | null
-              return (
-                <Link
-                  key={c.id}
-                  href={`/complaints/${c.id}`}
-                  className="flex items-start gap-4 bg-white rounded-xl border border-slate-200 p-4 hover:border-blue-300 hover:shadow-sm transition-all group"
-                >
-                  <div className="flex flex-col items-center gap-1 flex-shrink-0 mt-0.5">
-                    <div className="text-2xl">
-                      {categoryIcons[Array.isArray(c.service_category) ? c.service_category[0] : c.service_category ?? ''] ?? '🔧'}
-                    </div>
-                    {isTechnician && c.visit_order != null && (
-                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-[11px] font-bold">
-                        {c.visit_order}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-xs font-mono text-slate-400">{c.complaint_number}</span>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getPriorityColor(c.priority)}`}>
-                        {c.priority}
-                      </span>
-                      <span className="text-xs text-slate-400 capitalize">
-                        {(Array.isArray(c.service_category) ? c.service_category : [c.service_category ?? ''])
-                          .filter(Boolean).map((s: string) => s.replace(/_/g, ' ')).join(' · ')}
-                      </span>
-                    </div>
-                    <p className="text-sm font-semibold text-slate-800 group-hover:text-blue-700 transition-colors line-clamp-1">
-                      {c.description}
-                    </p>
-                    <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500 flex-wrap">
-                      <span>👤 {customer?.full_name}</span>
-                      {assignee && <span>🔧 {assignee.full_name}</span>}
-                      <span>🕒 {formatDateTime(c.created_at)}</span>
-                      {c.preferred_date && (
-                        <span className="flex items-center gap-1 bg-amber-100 text-amber-700 font-semibold px-2 py-0.5 rounded-full">
-                          📅 {formatDate(c.preferred_date)}{c.preferred_time ? ` ${c.preferred_time}` : ''}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${getStatusColor(c.status)}`}>
-                      {formatStatus(c.status)}
-                    </span>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-        )}
+        <ComplaintList
+          key={complaints.map(c => `${c.id}:${c.status}:${c.visit_order ?? ''}`).join('|')}
+          complaints={complaints ?? []}
+          isTechnician={isTechnician}
+          canReorder={canReorder}
+        />
       </div>
     </div>
   )

@@ -34,8 +34,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: profileRaw } = await (supabaseUser as any)
-      .from('users').select('organization_id').eq('id', user.id).single()
-    const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
+      .from('users').select('organization_id, role').eq('id', user.id).single()
+    const profile = profileRaw as { organization_id: string; role: string } | null
+    const orgId = profile?.organization_id
 
     const body = await request.json()
 
@@ -62,6 +63,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     for (const key of allowed) {
       if (key in body) {
         if (key === 'visit_order') {
+          if (!['owner', 'admin', 'manager'].includes(profile?.role ?? '')) {
+            return NextResponse.json({ error: 'Only admin, manager, or owner can change visit sequence' }, { status: 403 })
+          }
           updates[key] = body[key] != null ? parseInt(body[key]) || null : null
         } else {
           updates[key] = body[key] || null
