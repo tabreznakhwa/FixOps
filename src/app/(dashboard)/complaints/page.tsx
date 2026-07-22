@@ -50,7 +50,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   }
 
   const { data: complaintsRaw } = await query.limit(params.from || params.to ? 1000 : 50)
-  const complaints = complaintsRaw as unknown as Array<{
+  let complaints = complaintsRaw as unknown as Array<{
     id: string; complaint_number: string; description: string; priority: string; status: string;
     service_category: string | string[]; created_at: string;
     preferred_date: string | null; preferred_time: string | null;
@@ -58,6 +58,18 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     customers: { full_name: string; mobile_number: string } | null;
     users: { full_name: string } | null
   }>
+
+  if (isTechnician && complaints) {
+    complaints = [...complaints].sort((a, b) => {
+      const aCompleted = a.status === 'completed' ? 1 : 0
+      const bCompleted = b.status === 'completed' ? 1 : 0
+      if (aCompleted !== bCompleted) return aCompleted - bCompleted
+      if (a.visit_order == null && b.visit_order == null) return 0
+      if (a.visit_order == null) return 1
+      if (b.visit_order == null) return -1
+      return a.visit_order - b.visit_order
+    })
+  }
 
   const { data: countsRaw } = await supabase
     .from('complaints')
