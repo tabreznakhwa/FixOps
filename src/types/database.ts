@@ -128,6 +128,44 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['complaint_internal_notes']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['complaint_internal_notes']['Insert']>
       }
+      quotations: {
+        Row: {
+          id: string
+          organization_id: string
+          quotation_number: string
+          customer_id: string
+          work_order_id: string | null
+          quotation_date: string
+          valid_until: string | null
+          status: string
+          subtotal: number
+          discount_amount: number
+          tax_amount: number
+          total_amount: number
+          terms_and_conditions: string | null
+          notes: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['quotations']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['quotations']['Insert']>
+      }
+      quotation_items: {
+        Row: {
+          id: string
+          organization_id: string
+          quotation_id: string
+          description: string
+          quantity: number
+          unit_price: number
+          total_price: number
+          sort_order: number
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['quotation_items']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['quotation_items']['Insert']>
+      }
       work_orders: {
         Row: {
           id: string
