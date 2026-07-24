@@ -72,6 +72,11 @@ body {
 }
 .animate-slide-in { animation: slide-in 0.2s ease-out; }
 
+@page {
+  size: A4;
+  margin: 10mm 12mm;
+}
+
 @media print {
   /* Hide sidebar and topbar */
   aside, nav { display: none !important; }
