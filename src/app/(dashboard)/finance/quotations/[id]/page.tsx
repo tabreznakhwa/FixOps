@@ -2,7 +2,8 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
-import { ArrowLeft, Edit, FileText, User } from 'lucide-react'
+import { Edit, FileText, User } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { PrintActions } from '@/components/print/PrintActions'
 import { formatCurrency, formatDate, formatStatus, getStatusColor } from '@/lib/utils'
 import { QuotationActions } from './QuotationActions'
@@ -190,9 +191,7 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
                 </Link>
               )}
               <PrintActions label="Print Quotation" />
-              <Link href="/finance/quotations" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
-                <ArrowLeft className="w-4 h-4" /> Quotations
-              </Link>
+              <BackButton fallbackHref="/finance/quotations" label="Quotations" />
             </div>
           }
         />

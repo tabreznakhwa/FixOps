@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { Plus, ClipboardList } from 'lucide-react'
@@ -72,6 +73,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
         subtitle="Technician job records and billing"
         actions={
           <div className="flex items-center gap-2">
+            <RefreshButton />
             <Suspense fallback={<div className="w-60 h-9 bg-slate-100 rounded-lg animate-pulse" />}>
               <WorkOrderSearchBar />
             </Suspense>

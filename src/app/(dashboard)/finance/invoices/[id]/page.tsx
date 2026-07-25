@@ -2,7 +2,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, FileText, User, CreditCard, ClipboardList, Edit } from 'lucide-react'
+import { FileText, User, CreditCard, ClipboardList, Edit } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
 import { InvoiceActions } from './InvoiceActions'
 import { PrintActions } from '@/components/print/PrintActions'
@@ -283,12 +284,10 @@ export default async function InvoiceDetailPage({
               </Link>
             )}
             <PrintActions label="Print Invoice" />
-            <Link
-              href={complaint_id ? `/complaints/${complaint_id}` : work_order_id ? `/work-orders/${work_order_id}` : '/finance/invoices'}
-              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
-            >
-              <ArrowLeft className="w-4 h-4" /> {complaint_id ? 'Complaint' : work_order_id ? 'Work Order' : 'Invoices'}
-            </Link>
+            <BackButton
+              fallbackHref={complaint_id ? `/complaints/${complaint_id}` : work_order_id ? `/work-orders/${work_order_id}` : '/finance/invoices'}
+              label={complaint_id ? 'Complaint' : work_order_id ? 'Work Order' : 'Invoices'}
+            />
           </div>
         }
       />

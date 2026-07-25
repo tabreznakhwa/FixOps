@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
 import { Plus, Building2, FileText, DollarSign } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
@@ -40,6 +41,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
         subtitle="Manage suppliers and procurement"
         actions={
           <div className="flex items-center gap-2">
+            <RefreshButton />
             <Link href="/suppliers/new" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
               <Plus className="w-4 h-4" /> Add Supplier
             </Link>

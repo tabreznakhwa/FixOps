@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Edit, Plus, Building2, User, Printer } from 'lucide-react'
+import { Phone, MessageCircle, Mail, MapPin, Edit, Plus, Building2, User, Printer } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { formatDate, getStatusColor, getPriorityColor, formatStatus } from '@/lib/utils'
 import { DeleteCustomerButton } from './DeleteCustomerButton'
 
@@ -64,12 +65,10 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         subtitle={customer.customer_code}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <Link
-              href="/customers"
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" /> Back
-            </Link>
+            <BackButton
+              fallbackHref="/customers"
+              label="Back"
+            />
             <Link
               href={`/customers/${customer.id}/edit`}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"

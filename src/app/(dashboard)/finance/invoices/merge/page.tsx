@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { MergeInvoiceForm } from './MergeInvoiceForm'
 
 export const metadata = { title: 'Monthly Invoice' }
@@ -34,12 +34,7 @@ export default async function MergeInvoicePage() {
         title="Monthly Invoice"
         subtitle="Merge multiple invoices into one consolidated invoice"
         actions={
-          <Link
-            href="/finance/invoices"
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back to Invoices
-          </Link>
+          <BackButton fallbackHref="/finance/invoices" label="Back to Invoices" />
         }
       />
       <div className="p-6">

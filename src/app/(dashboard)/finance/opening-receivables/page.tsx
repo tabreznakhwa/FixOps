@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { OpeningReceivablesForm } from './OpeningReceivablesForm'
 
 export const metadata = { title: 'Opening Receivables' }
@@ -38,9 +38,7 @@ export default async function OpeningReceivablesPage() {
         title="Opening Receivables"
         subtitle="Customer bills outstanding before go-live"
         actions={
-          <Link href="/finance/outstanding" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back
-          </Link>
+          <BackButton fallbackHref="/finance/outstanding" label="Back" />
         }
       />
       <div className="p-6">

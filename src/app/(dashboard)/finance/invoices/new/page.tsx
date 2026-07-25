@@ -1,7 +1,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { NewInvoiceForm } from './NewInvoiceForm'
 
 export const metadata = { title: 'New Invoice' }
@@ -113,12 +113,7 @@ export default async function NewInvoicePage({
         title="New Invoice"
         subtitle="Create a new invoice"
         actions={
-          <Link
-            href={params.work_order_id ? `/work-orders/${params.work_order_id}` : '/finance/invoices'}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back
-          </Link>
+          <BackButton fallbackHref={params.work_order_id ? `/work-orders/${params.work_order_id}` : '/finance/invoices'} label="Back" />
         }
       />
 

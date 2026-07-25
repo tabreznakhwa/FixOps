@@ -2,7 +2,8 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Pencil } from 'lucide-react'
+import { Pencil } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { PrintActions } from '@/components/print/PrintActions'
 import { CancelPurchaseInvoiceButton } from '../CancelPurchaseInvoiceButton'
@@ -190,10 +191,7 @@ export default async function PurchaseInvoiceDetailPage({ params }: { params: Pr
                 <CancelPurchaseInvoiceButton id={invoice.id} redirect />
               </>
             )}
-            <Link href="/inventory/purchase-invoices"
-              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
-              <ArrowLeft className="w-4 h-4" /> Back
-            </Link>
+            <BackButton fallbackHref="/inventory/purchase-invoices" label="Back" />
           </div>
         }
       />

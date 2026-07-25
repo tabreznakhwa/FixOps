@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
 import { Plus, Phone, MapPin, Building2, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 import { CustomerSearch } from './CustomerSearch'
@@ -61,13 +62,16 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
         title="Customers"
         subtitle={`${totalCount.toLocaleString()} customers total`}
         actions={
-          <Link
-            href="/customers/new"
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Add Customer
-          </Link>
+          <div className="flex items-center gap-2">
+            <RefreshButton />
+            <Link
+              href="/customers/new"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add Customer
+            </Link>
+          </div>
         }
       />
 

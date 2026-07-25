@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils'
 import { PrintButton } from './PrintButton'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December']
@@ -47,10 +47,7 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
     return (
       <div className="animate-fade-in p-6">
         <div className="print:hidden mb-4">
-          <Link href="/payroll/process"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back to Payslips
-          </Link>
+          <BackButton fallbackHref="/payroll/process" label="Back to Payslips" />
         </div>
         <div className="max-w-md bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
           <p className="text-base font-semibold text-amber-800 mb-2">Payslip not found</p>
@@ -106,10 +103,7 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
   return (
     <div className="animate-fade-in">
       <div className="print:hidden p-6 flex items-center gap-3">
-        <Link href={`/payroll/process`}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Back to Payslips
-        </Link>
+        <BackButton fallbackHref="/payroll/process" label="Back to Payslips" />
         <PrintButton />
       </div>
 

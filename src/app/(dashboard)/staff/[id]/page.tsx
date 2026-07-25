@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { ArrowLeft, Phone, Mail, CreditCard, Calendar, Briefcase, DollarSign, AlertTriangle } from 'lucide-react'
+import { Phone, Mail, CreditCard, Calendar, Briefcase, DollarSign, AlertTriangle } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency, formatDate, daysUntil } from '@/lib/utils'
 import { StaffEditForm } from './StaffEditForm'
 import { StaffAdvancePanel } from './StaffAdvancePanel'
@@ -88,9 +89,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
         title={s.full_name}
         subtitle={`${s.designation ?? ''} ${s.department ? '· ' + s.department : ''} · ${s.staff_code}`}
         actions={
-          <Link href="/staff" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back to Staff
-          </Link>
+          <BackButton fallbackHref="/staff" label="Back to Staff" />
         }
       />
 

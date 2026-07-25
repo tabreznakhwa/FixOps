@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
 import { Plus, Package, AlertTriangle } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
@@ -60,14 +61,17 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
         title="Inventory"
         subtitle="Parts and materials management"
         actions={
-          !isTechnician && (
-            <Link
-              href="/inventory/new"
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> Add Item
-            </Link>
-          )
+          <div className="flex items-center gap-2">
+            <RefreshButton />
+            {!isTechnician && (
+              <Link
+                href="/inventory/new"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Add Item
+              </Link>
+            )}
+          </div>
         }
       />
 

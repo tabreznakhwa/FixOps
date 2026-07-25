@@ -2,7 +2,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
-import { ArrowLeft, Printer } from 'lucide-react'
+import { Printer } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { PayrollEntryForm } from './PayrollEntryForm'
 import { PaySalariesButton } from './PaySalariesButton'
 import { ResetRunButton } from './ResetRunButton'
@@ -170,9 +171,7 @@ export default async function PayrollProcessPage({
                   <ResetRunButton runId={run.id} />
                 )}
                 <PrintActions label="Print Summary" />
-                <Link href="/payroll" className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
-                  <ArrowLeft className="w-4 h-4" /> Payroll
-                </Link>
+                <BackButton fallbackHref="/payroll" label="Payroll" />
               </div>
             }
           />

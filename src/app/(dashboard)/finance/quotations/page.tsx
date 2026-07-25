@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
@@ -72,6 +73,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
         subtitle="Customer estimates and approvals"
         actions={
           <div className="flex items-center gap-2">
+            <RefreshButton />
             <Suspense fallback={<div className="w-60 h-9 bg-slate-100 rounded-lg animate-pulse" />}>
               <SearchBar basePath="/finance/quotations" placeholder="Search quotation, customer…" />
             </Suspense>

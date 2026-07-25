@@ -2,7 +2,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Edit } from 'lucide-react'
+import { Edit } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { getPriorityColor, getStatusColor, formatStatus, formatDate, formatCurrency } from '@/lib/utils'
 import { WorkOrderActions } from './WorkOrderActions'
 import { WorkOrderParts } from './WorkOrderParts'
@@ -101,9 +102,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
             >
               <Edit className="w-4 h-4" /> Edit
             </Link>
-            <Link href="/work-orders" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
-              <ArrowLeft className="w-4 h-4" /> All Work Orders
-            </Link>
+            <BackButton fallbackHref="/work-orders" label="All Work Orders" />
           </div>
         }
       />

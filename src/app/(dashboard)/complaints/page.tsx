@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { Plus, UserPlus } from 'lucide-react'
@@ -88,6 +89,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
         subtitle="Service requests & job tracking"
         actions={
           <div className="flex items-center gap-2">
+            <RefreshButton />
             <Suspense fallback={<div className="w-60 h-9 bg-slate-100 rounded-lg animate-pulse" />}>
               <ComplaintSearchBar />
             </Suspense>

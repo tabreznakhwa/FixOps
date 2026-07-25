@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { QuotationForm } from '../QuotationForm'
 
 export const metadata = { title: 'New Quotation' }
@@ -36,9 +36,7 @@ export default async function NewQuotationPage() {
         title="New Quotation"
         subtitle="Prepare an estimate for customer approval"
         actions={
-          <Link href="/finance/quotations" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
-            <ArrowLeft className="w-4 h-4" /> Quotations
-          </Link>
+          <BackButton fallbackHref="/finance/quotations" label="Quotations" />
         }
       />
       <div className="p-6">

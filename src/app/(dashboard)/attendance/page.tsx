@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
 import { Plus, CalendarCheck, UserCheck, XCircle, Clock, Pencil } from 'lucide-react'
 import { DeleteAttendanceButton } from './DeleteAttendanceButton'
@@ -200,18 +201,21 @@ export default async function AttendancePage({
         title="Attendance"
         subtitle="Track daily staff attendance"
         actions={
-          isKiosk && kioskTodayMarked ? (
-            <span className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 text-sm font-semibold rounded-lg">
-              <CalendarCheck className="w-4 h-4" /> Today Already Marked
-            </span>
-          ) : (
-            <Link
-              href={isKiosk && kioskStaffId ? `/attendance/new?locked_staff_id=${kioskStaffId}` : '/attendance/new'}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> Mark Attendance
-            </Link>
-          )
+          <div className="flex items-center gap-2">
+            <RefreshButton />
+            {isKiosk && kioskTodayMarked ? (
+              <span className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 text-sm font-semibold rounded-lg">
+                <CalendarCheck className="w-4 h-4" /> Today Already Marked
+              </span>
+            ) : (
+              <Link
+                href={isKiosk && kioskStaffId ? `/attendance/new?locked_staff_id=${kioskStaffId}` : '/attendance/new'}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Mark Attendance
+              </Link>
+            )}
+          </div>
         }
       />
 

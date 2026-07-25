@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { EditInvoiceForm } from './EditInvoiceForm'
 
 export const metadata = { title: 'Edit Invoice' }
@@ -62,12 +62,7 @@ export default async function EditInvoicePage({ params, searchParams }: { params
         title={`Edit ${invoiceRaw.invoice_number}`}
         subtitle="Update invoice details and line items"
         actions={
-          <Link
-            href={complaint_id ? `/complaints/${complaint_id}` : invoiceRaw.work_order_id ? `/work-orders/${invoiceRaw.work_order_id}` : `/finance/invoices/${id}`}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
-          >
-            <ArrowLeft className="w-4 h-4" /> Cancel
-          </Link>
+          <BackButton fallbackHref={complaint_id ? `/complaints/${complaint_id}` : invoiceRaw.work_order_id ? `/work-orders/${invoiceRaw.work_order_id}` : `/finance/invoices/${id}`} label="Cancel" />
         }
       />
       <div className="p-6">

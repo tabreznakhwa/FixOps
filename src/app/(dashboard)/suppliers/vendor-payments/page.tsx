@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { TrendingDown, Plus, Pencil } from 'lucide-react'
 import Link from 'next/link'
@@ -89,6 +90,7 @@ export default async function VendorPaymentsPage({
       <Header title="Vendor Payment Register" subtitle="All payments made to suppliers"
         actions={
           <div className="flex items-center gap-2 print:hidden">
+            <RefreshButton />
             <Link href="/suppliers/vendor-payments/new" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
               <Plus className="w-4 h-4" /> Record Payment
             </Link>

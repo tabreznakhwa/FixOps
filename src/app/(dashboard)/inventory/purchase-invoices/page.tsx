@@ -1,5 +1,6 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
 import { Plus, Package, Pencil, Eye } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
@@ -60,10 +61,13 @@ export default async function PurchaseInvoicesPage({
         title="Purchase Invoices"
         subtitle="Record purchases and update inventory"
         actions={
-          <Link href="/inventory/purchase-invoices/new"
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition">
-            <Plus className="w-4 h-4" /> New Purchase Invoice
-          </Link>
+          <div className="flex items-center gap-2">
+            <RefreshButton />
+            <Link href="/inventory/purchase-invoices/new"
+              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition">
+              <Plus className="w-4 h-4" /> New Purchase Invoice
+            </Link>
+          </div>
         }
       />
 

@@ -1,5 +1,6 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Banknote, Plus } from 'lucide-react'
 import Link from 'next/link'
@@ -53,12 +54,15 @@ export default async function SupplierAdvancesPage() {
         title="Supplier Advances"
         subtitle="Advance payments made to suppliers before goods are received"
         actions={
-          <Link
-            href="/suppliers/advances/new"
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> New Advance
-          </Link>
+          <div className="flex items-center gap-2">
+            <RefreshButton />
+            <Link
+              href="/suppliers/advances/new"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> New Advance
+            </Link>
+          </div>
         }
       />
 

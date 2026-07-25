@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Package, AlertTriangle, TrendingUp } from 'lucide-react'
+import { Package, AlertTriangle, TrendingUp } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency } from '@/lib/utils'
 import { InventoryActions } from './InventoryActions'
 
@@ -58,12 +59,7 @@ export default async function InventoryItemPage({
         title={item.item_name}
         subtitle={item.item_code}
         actions={
-          <Link
-            href="/inventory"
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back
-          </Link>
+          <BackButton fallbackHref="/inventory" label="Back" />
         }
       />
 

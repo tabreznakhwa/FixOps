@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { EditSupplierForm } from './EditSupplierForm'
 
 export const metadata = { title: 'Edit Supplier' }
@@ -25,12 +25,7 @@ export default async function EditSupplierPage({ params }: { params: Promise<{ i
         title="Edit Supplier"
         subtitle="Update supplier information"
         actions={
-          <Link
-            href={`/suppliers/${id}`}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" /> Cancel
-          </Link>
+          <BackButton fallbackHref={`/suppliers/${id}`} label="Cancel" />
         }
       />
       <div className="p-6 max-w-2xl">

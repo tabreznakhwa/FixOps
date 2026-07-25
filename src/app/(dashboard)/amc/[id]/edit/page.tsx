@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { EditAMCForm } from './EditAMCForm'
 
 export const metadata = { title: 'Edit AMC Contract' }
@@ -45,10 +45,7 @@ export default async function EditAMCPage({ params }: { params: Promise<{ id: st
         title={`Edit ${contract.contract_number}`}
         subtitle="Update AMC contract details"
         actions={
-          <Link href={`/amc/${id}`}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
-            <ArrowLeft className="w-4 h-4" /> Back
-          </Link>
+          <BackButton fallbackHref={`/amc/${id}`} label="Back" />
         }
       />
       <div className="p-6">

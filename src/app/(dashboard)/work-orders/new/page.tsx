@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { NewWorkOrderForm } from './NewWorkOrderForm'
 
 export const metadata = { title: 'New Work Order' }
@@ -111,12 +111,7 @@ export default async function NewWorkOrderPage({
         title="New Work Order"
         subtitle={prefill ? `Linked to complaint ${prefill.complaint_number}` : 'Create a new service job'}
         actions={
-          <Link
-            href={prefill ? `/complaints/${prefill.complaint_id}` : '/work-orders'}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back
-          </Link>
+          <BackButton fallbackHref={prefill ? `/complaints/${prefill.complaint_id}` : '/work-orders'} label="Back" />
         }
       />
       <div className="p-6 max-w-2xl">

@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { EditExpenseForm } from './EditExpenseForm'
 import { notFound } from 'next/navigation'
 
@@ -34,9 +34,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
         title="Edit Expense"
         subtitle={expense.expense_number}
         actions={
-          <Link href="/finance/expenses" className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back to Expenses
-          </Link>
+          <BackButton fallbackHref="/finance/expenses" label="Back to Expenses" />
         }
       />
       <div className="p-6">

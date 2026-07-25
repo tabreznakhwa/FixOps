@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle, CreditCard, XCircle, ArrowLeft, AlertCircle, Loader2, Banknote } from 'lucide-react'
+import { CheckCircle, CreditCard, XCircle, AlertCircle, Loader2, Banknote } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import Link from 'next/link'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
@@ -192,12 +193,10 @@ export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerI
         </div>
       )}
 
-      <Link
-        href={complaintId ? `/complaints/${complaintId}` : workOrderId ? `/work-orders/${workOrderId}` : '/finance/invoices'}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
-      >
-        <ArrowLeft className="w-4 h-4" /> {complaintId ? 'Back to Complaint' : workOrderId ? 'Back to Work Order' : 'Back to Invoices'}
-      </Link>
+      <BackButton
+        fallbackHref={complaintId ? `/complaints/${complaintId}` : workOrderId ? `/work-orders/${workOrderId}` : '/finance/invoices'}
+        label={complaintId ? 'Back to Complaint' : workOrderId ? 'Back to Work Order' : 'Back to Invoices'}
+      />
     </div>
   )
 }

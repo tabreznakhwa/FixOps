@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Building2, FileText, Plus, Edit } from 'lucide-react'
+import { Building2, FileText, Plus, Edit } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
 
 export const metadata = { title: 'Supplier' }
@@ -76,12 +77,7 @@ export default async function SupplierDetailPage({
             >
               <Edit className="w-4 h-4" /> Edit
             </Link>
-            <Link
-              href="/suppliers"
-              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
-            >
-              <ArrowLeft className="w-4 h-4" /> Back
-            </Link>
+            <BackButton fallbackHref="/suppliers" label="Back" />
           </div>
         }
       />

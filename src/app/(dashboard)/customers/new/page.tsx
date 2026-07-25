@@ -4,7 +4,8 @@ import { useActionState, useState } from 'react'
 import { createCustomer } from '../actions'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react'
+import { Loader2, AlertCircle } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 
 const CUSTOMER_TYPES = [
   { value: 'individual', label: 'Individual' },
@@ -27,12 +28,7 @@ export default function NewCustomerPage() {
         title="Add Customer"
         subtitle="Create a new customer record"
         actions={
-          <Link
-            href="/customers"
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back
-          </Link>
+          <BackButton fallbackHref="/customers" label="Back" />
         }
       />
 

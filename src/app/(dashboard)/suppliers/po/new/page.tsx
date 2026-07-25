@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { NewPOForm } from './NewPOForm'
 
 export const metadata = { title: 'New Purchase Order' }
@@ -31,12 +31,7 @@ export default async function NewPOPage({
         title="New Purchase Order"
         subtitle="Create a purchase order for a supplier"
         actions={
-          <Link
-            href="/suppliers?tab=po"
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back
-          </Link>
+          <BackButton fallbackHref="/suppliers?tab=po" label="Back" />
         }
       />
       <div className="p-6">

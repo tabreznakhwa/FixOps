@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, AlertCircle, Loader2, Save } from 'lucide-react'
+import { AlertCircle, Loader2, Save } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 
 const PAYMENT_MODES = [
   { value: 'cash', label: 'Cash' },
@@ -159,12 +160,7 @@ export default function PaymentDetailPage() {
             {payment.is_advance ? 'Advance Payment' : 'Payment'} · {fmtDate(payment.payment_date)}
           </p>
         </div>
-        <Link
-          href="/finance/payments"
-          className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
-        >
-          <ArrowLeft className="w-4 h-4" /> Payments
-        </Link>
+        <BackButton fallbackHref="/finance/payments" label="Payments" />
       </div>
 
       <div className="p-6 max-w-2xl space-y-5">

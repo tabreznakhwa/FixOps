@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { ArrowLeft, Building2, Calendar, FileText, DollarSign } from 'lucide-react'
+import { Building2, Calendar, FileText, DollarSign } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
 import { POActions } from './POActions'
 import { PrintActions } from '@/components/print/PrintActions'
@@ -86,12 +87,7 @@ export default async function PODetailPage({ params }: { params: Promise<{ id: s
         subtitle={`Purchase Order · ${formatDate(po.purchase_date)}`}
         actions={
           <div className="flex items-center gap-2 print:hidden">
-            <Link
-              href="/suppliers?tab=po"
-              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" /> Back
-            </Link>
+            <BackButton fallbackHref="/suppliers?tab=po" label="Back" />
             <PrintActions />
           </div>
         }

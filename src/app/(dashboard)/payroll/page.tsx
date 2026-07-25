@@ -1,5 +1,6 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import { formatCurrency } from '@/lib/utils'
 import { BarChart3, Users, Clock, BookOpen } from 'lucide-react'
 import { WPSExportButton } from './WPSExportButton'
@@ -60,6 +61,7 @@ export default async function PayrollPage() {
         subtitle="Salary management & payroll processing"
         actions={
           <div className="flex items-center gap-2">
+            <RefreshButton />
             <Link href="/payroll/guide"
               className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
               <BookOpen className="w-4 h-4" /> User Guide

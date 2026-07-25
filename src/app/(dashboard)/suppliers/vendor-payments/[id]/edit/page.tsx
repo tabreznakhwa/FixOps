@@ -1,6 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { EditVendorPaymentForm } from './EditVendorPaymentForm'
@@ -39,9 +39,7 @@ export default async function EditVendorPaymentPage({ params }: { params: Promis
         title="Edit Vendor Payment"
         subtitle={payment.suppliers?.supplier_name ?? ''}
         actions={
-          <Link href="/suppliers/vendor-payments" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back
-          </Link>
+          <BackButton fallbackHref="/suppliers/vendor-payments" label="Back" />
         }
       />
       <div className="p-6 max-w-xl">

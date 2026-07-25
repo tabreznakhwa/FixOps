@@ -2,7 +2,7 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { EditPurchaseInvoiceForm } from './EditPurchaseInvoiceForm'
 
 export const metadata = { title: 'Edit Purchase Invoice' }
@@ -50,10 +50,7 @@ export default async function EditPurchaseInvoicePage({ params }: { params: Prom
         title={`Edit ${invoice.invoice_number}`}
         subtitle={`Supplier: ${supplierDisplay}`}
         actions={
-          <Link href={`/inventory/purchase-invoices/${id}`}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
-            <ArrowLeft className="w-4 h-4" /> Cancel
-          </Link>
+          <BackButton fallbackHref={`/inventory/purchase-invoices/${id}`} label="Cancel" />
         }
       />
       <div className="p-6 max-w-xl">

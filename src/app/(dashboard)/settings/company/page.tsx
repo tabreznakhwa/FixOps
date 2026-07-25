@@ -1,7 +1,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { CompanySettingsForm } from './CompanySettingsForm'
 
 export const metadata = { title: 'Company Settings' }
@@ -35,9 +35,7 @@ export default async function CompanySettingsPage() {
         title="Company Settings"
         subtitle="Logo, contact details, bank account, and tax settings"
         actions={
-          <Link href="/settings" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back to Settings
-          </Link>
+          <BackButton fallbackHref="/settings" label="Back to Settings" />
         }
       />
       <div className="p-6 max-w-3xl">

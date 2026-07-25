@@ -1,6 +1,7 @@
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { ArrowLeft, BookOpen, Users, Clock, Banknote, FileText, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react'
+import { BookOpen, Users, Clock, Banknote, FileText, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 
 export const metadata = { title: 'Payroll User Guide' }
 
@@ -69,10 +70,7 @@ export default function PayrollGuidePage() {
         title="Payroll User Guide"
         subtitle="Step-by-step guide for HR and Admin"
         actions={
-          <Link href="/payroll"
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
-            <ArrowLeft className="w-4 h-4" /> Back to Payroll
-          </Link>
+          <BackButton fallbackHref="/payroll" label="Back to Payroll" />
         }
       />
 

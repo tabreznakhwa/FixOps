@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, ShieldCheck, CheckCircle, Package, Pencil } from 'lucide-react'
+import { ShieldCheck, CheckCircle, Package, Pencil } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
 import { AMCActions } from './AMCActions'
 import { AMCPayments } from './AMCPayments'
@@ -81,12 +82,7 @@ export default async function AMCDetailPage({
             >
               <Pencil className="w-4 h-4" /> Edit
             </Link>
-            <Link
-              href="/amc"
-              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
-            >
-              <ArrowLeft className="w-4 h-4" /> Back
-            </Link>
+            <BackButton fallbackHref="/amc" label="Back" />
           </div>
         }
       />

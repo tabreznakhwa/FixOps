@@ -2,10 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, ClipboardList, Plus, Edit, CalendarClock } from 'lucide-react'
+import { ClipboardList, Plus, Edit, CalendarClock } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
 import { ComplaintActions } from './ComplaintActions'
 import { InternalNotes } from './InternalNotes'
+import { BackButton } from '@/components/ui/BackButton'
 
 export const metadata = { title: 'Complaint Detail' }
 
@@ -76,9 +77,7 @@ export default async function ComplaintDetailPage({ params }: { params: Promise<
             >
               <Edit className="w-4 h-4" /> Edit
             </Link>
-            <Link href="/complaints" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
-              <ArrowLeft className="w-4 h-4" /> All Complaints
-            </Link>
+            <BackButton fallbackHref="/complaints" label="All Complaints" />
           </div>
         }
       />

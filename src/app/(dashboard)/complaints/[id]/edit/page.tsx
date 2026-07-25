@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { BackButton } from '@/components/ui/BackButton'
 import { EditComplaintForm } from './EditComplaintForm'
 
 interface Complaint {
@@ -57,12 +58,7 @@ export default function EditComplaintPage() {
             <h1 className="text-xl font-bold text-slate-900">Edit {complaint.complaint_number}</h1>
             <p className="text-sm text-slate-500 mt-0.5">Update complaint details</p>
           </div>
-          <Link
-            href={`/complaints/${id}`}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" /> Cancel
-          </Link>
+          <BackButton fallbackHref={`/complaints/${id}`} label="Cancel" />
         </div>
       </header>
       <div className="p-6 max-w-2xl">

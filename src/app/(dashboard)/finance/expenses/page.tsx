@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus, Receipt, TrendingDown, Banknote, Landmark, Pencil } from 'lucide-react'
@@ -92,12 +93,15 @@ export default async function ExpensesPage({
         title="Expenses"
         subtitle="Daily operational expenses"
         actions={
-          <Link
-            href="/finance/expenses/new"
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Add Expense
-          </Link>
+          <div className="flex items-center gap-2">
+            <RefreshButton />
+            <Link
+              href="/finance/expenses/new"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Add Expense
+            </Link>
+          </div>
         }
       />
 
