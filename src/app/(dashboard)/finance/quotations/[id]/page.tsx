@@ -114,7 +114,7 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
             {customer && (
               <div className="text-xs text-slate-600 mt-0.5 space-y-0.5">
                 {customer.address && <p>{customer.address}</p>}
-                {(customer.block || customer.street || customer.avenue || customer.house_number) && <p>{[customer.house_number && `House ${customer.house_number}`, customer.block && `Block ${customer.block}`, customer.street && `Street ${customer.street}`, customer.avenue && `Ave ${customer.avenue}`].filter(Boolean).join(', ')}</p>}
+                {(customer.block || customer.street || customer.avenue || customer.house_number) && <p>{[customer.block && `Block ${customer.block}`, customer.street && `Street ${customer.street}`, customer.avenue && `Ave ${customer.avenue}`, customer.house_number && `House ${customer.house_number}`].filter(Boolean).join(', ')}</p>}
                 {(customer.area || customer.city) && <p>{[customer.area, customer.city].filter(Boolean).join(', ')}</p>}
               </div>
             )}
