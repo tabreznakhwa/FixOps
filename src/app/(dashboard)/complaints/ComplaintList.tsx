@@ -21,6 +21,8 @@ export interface ComplaintListItem {
   customers: { full_name: string; mobile_number: string } | null
   users: { full_name: string } | null
   internalNotesCount?: number
+  latestInternalNote?: string | null
+  latestInternalNoteAuthor?: string | null
   workOrdersStatuses?: string[]
 }
 
@@ -268,6 +270,30 @@ export function ComplaintList({ complaints, isTechnician, canReorder }: Props) {
                   </span>
                 )}
               </div>
+
+              {/* Show latest internal note inline for actionable statuses */}
+              {(c.status === 'waiting_parts' || c.status === 'waiting_approval') && c.latestInternalNote && (
+                <div className="mt-2 flex items-start gap-2 bg-white/70 border border-slate-200 rounded-lg px-3 py-2">
+                  <span className="text-slate-400 text-xs mt-0.5 flex-shrink-0">💬</span>
+                  <div className="min-w-0">
+                    <p className="text-xs text-slate-700 leading-snug line-clamp-2">{c.latestInternalNote}</p>
+                    {c.latestInternalNoteAuthor && (
+                      <p className="text-xs text-slate-400 mt-0.5">— {c.latestInternalNoteAuthor}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Show work order statuses inline */}
+              {(c.workOrdersStatuses?.length ?? 0) > 0 && (
+                <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                  {c.workOrdersStatuses!.map((s, i) => (
+                    <span key={i} className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getStatusColor(s)}`}>
+                      WO: {formatStatus(s)}
+                    </span>
+                  ))}
+                </div>
+              )}
             </Link>
           </div>
         )

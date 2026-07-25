@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import { DashboardStats } from '@/components/dashboard/DashboardStats'
 import { RevenueChart } from '@/components/dashboard/RevenueChart'
 import { ComplaintStatusChart } from '@/components/dashboard/ComplaintStatusChart'
@@ -94,6 +95,7 @@ export default async function DashboardPage() {
       <Header
         title="Dashboard"
         subtitle={`Today, ${formatDate(new Date().toISOString())}`}
+        actions={<RefreshButton />}
       />
 
       <div className="p-6 space-y-6">

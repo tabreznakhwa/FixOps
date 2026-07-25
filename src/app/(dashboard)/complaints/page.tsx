@@ -61,21 +61,24 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     const [notesRes, woRes] = await Promise.all([
       supabase
         .from('complaint_internal_notes')
-        .select('complaint_id', { count: 'exact', head: true })
-        .in('complaint_id', complaintIds),
+        .select('complaint_id, note, author_name, created_at')
+        .in('complaint_id', complaintIds)
+        .order('created_at', { ascending: false }),
       supabase
         .from('work_orders')
         .select('id, complaint_id, status', { head: false })
         .in('complaint_id', complaintIds),
     ])
 
-    const notesCounts: Record<string, number> = {}
+    const notesMap: Record<string, { count: number; latestNote: string | null; latestAuthor: string | null }> = {}
     const workOrdersMap: Record<string, string[]> = {}
 
     if (notesRes.data) {
-      complaintIds.forEach(id => {
-        const count = (notesRes.data as any[])?.filter((n: any) => n.complaint_id === id).length ?? 0
-        notesCounts[id] = count
+      (notesRes.data as any[]).forEach((n: any) => {
+        if (!notesMap[n.complaint_id]) {
+          notesMap[n.complaint_id] = { count: 0, latestNote: n.note, latestAuthor: n.author_name }
+        }
+        notesMap[n.complaint_id].count++
       })
     }
 
@@ -88,7 +91,9 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
 
     complaints = complaints.map(c => ({
       ...c,
-      internalNotesCount: notesCounts[c.id] ?? 0,
+      internalNotesCount: notesMap[c.id]?.count ?? 0,
+      latestInternalNote: notesMap[c.id]?.latestNote ?? null,
+      latestInternalNoteAuthor: notesMap[c.id]?.latestAuthor ?? null,
       workOrdersStatuses: workOrdersMap[c.id] ?? [],
     }))
   }
