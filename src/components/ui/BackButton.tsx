@@ -20,7 +20,20 @@ export function BackButton({
       new URL(document.referrer).origin === window.location.origin
 
     if (cameFromSameOrigin) {
+      const pathBeforeBack = window.location.pathname + window.location.search
       router.back()
+
+      // Safety net: this app renders module tabs inside iframes with a patched
+      // history API (see TabModeGuard), where history.back() can occasionally
+      // land nowhere. If the URL hasn't actually changed shortly after calling
+      // back(), force-navigate to the known-good fallback instead of leaving
+      // the user stuck.
+      window.setTimeout(() => {
+        const pathNow = window.location.pathname + window.location.search
+        if (pathNow === pathBeforeBack) {
+          router.push(fallbackHref)
+        }
+      }, 350)
     } else {
       router.push(fallbackHref)
     }

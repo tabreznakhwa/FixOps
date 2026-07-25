@@ -17,10 +17,10 @@ export default async function InvoiceDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ work_order_id?: string; complaint_id?: string }>
+  searchParams: Promise<{ work_order_id?: string; complaint_id?: string; return_to?: string }>
 }) {
   const { id } = await params
-  const { work_order_id, complaint_id } = await searchParams
+  const { work_order_id, complaint_id, return_to } = await searchParams
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -285,8 +285,8 @@ export default async function InvoiceDetailPage({
             )}
             <PrintActions label="Print Invoice" />
             <BackButton
-              fallbackHref={complaint_id ? `/complaints/${complaint_id}` : work_order_id ? `/work-orders/${work_order_id}` : '/finance/invoices'}
-              label={complaint_id ? 'Complaint' : work_order_id ? 'Work Order' : 'Invoices'}
+              fallbackHref={return_to ?? (complaint_id ? `/complaints/${complaint_id}` : work_order_id ? `/work-orders/${work_order_id}` : '/finance/invoices')}
+              label={return_to === '/finance/receivables' ? 'Receivables' : complaint_id ? 'Complaint' : work_order_id ? 'Work Order' : 'Invoices'}
             />
           </div>
         }

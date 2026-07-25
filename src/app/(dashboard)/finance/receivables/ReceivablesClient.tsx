@@ -117,7 +117,7 @@ export function ReceivablesClient({ customers }: { customers: Customer[] }) {
                         <div key={inv.id ?? i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-slate-100">
                           <div className="flex items-center gap-3">
                             {inv.id ? (
-                              <Link href={`/finance/invoices/${inv.id}`}
+                              <Link href={`/finance/invoices/${inv.id}?return_to=/finance/receivables`}
                                 className="text-xs font-mono font-semibold text-blue-600 hover:underline"
                                 onClick={e => e.stopPropagation()}>
                                 {inv.invoice_number}
