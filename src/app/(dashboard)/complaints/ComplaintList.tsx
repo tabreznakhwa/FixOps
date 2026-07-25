@@ -20,6 +20,8 @@ export interface ComplaintListItem {
   visit_order: number | null
   customers: { full_name: string; mobile_number: string } | null
   users: { full_name: string } | null
+  internalNotesCount?: number
+  workOrdersStatuses?: string[]
 }
 
 interface Props {
@@ -238,6 +240,16 @@ export function ComplaintList({ complaints, isTechnician, canReorder }: Props) {
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getStatusColor(c.status)}`}>
                   {formatStatus(c.status)}
                 </span>
+                {(c.internalNotesCount ?? 0) > 0 && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+                    💬 {c.internalNotesCount} note{c.internalNotesCount !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {(c.workOrdersStatuses?.length ?? 0) > 0 && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                    ✓ {c.workOrdersStatuses?.length} WO
+                  </span>
+                )}
                 <span className="text-xs text-slate-500 capitalize">
                   {(Array.isArray(c.service_category) ? c.service_category : [c.service_category ?? ''])
                     .filter(Boolean).map((s: string) => s.replace(/_/g, ' ')).join(' · ')}

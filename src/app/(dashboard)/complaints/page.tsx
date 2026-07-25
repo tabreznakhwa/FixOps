@@ -55,6 +55,44 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   const { data: complaintsRaw } = await query.limit(params.from || params.to ? 1000 : 50)
   let complaints = complaintsRaw as unknown as ComplaintListItem[]
 
+  // Fetch internal notes count and work orders count for each complaint
+  if (complaints && complaints.length > 0) {
+    const complaintIds = complaints.map(c => c.id)
+    const [notesRes, woRes] = await Promise.all([
+      supabase
+        .from('complaint_internal_notes')
+        .select('complaint_id', { count: 'exact', head: true })
+        .in('complaint_id', complaintIds),
+      supabase
+        .from('work_orders')
+        .select('id, complaint_id, status', { head: false })
+        .in('complaint_id', complaintIds),
+    ])
+
+    const notesCounts: Record<string, number> = {}
+    const workOrdersMap: Record<string, string[]> = {}
+
+    if (notesRes.data) {
+      complaintIds.forEach(id => {
+        const count = (notesRes.data as any[])?.filter((n: any) => n.complaint_id === id).length ?? 0
+        notesCounts[id] = count
+      })
+    }
+
+    if (woRes.data) {
+      (woRes.data as any[]).forEach(wo => {
+        if (!workOrdersMap[wo.complaint_id]) workOrdersMap[wo.complaint_id] = []
+        workOrdersMap[wo.complaint_id].push(wo.status)
+      })
+    }
+
+    complaints = complaints.map(c => ({
+      ...c,
+      internalNotesCount: notesCounts[c.id] ?? 0,
+      workOrdersStatuses: workOrdersMap[c.id] ?? [],
+    }))
+  }
+
   if (isTechnician && complaints) {
     complaints = [...complaints].sort((a, b) => {
       const aCompleted = a.status === 'completed' ? 1 : 0
