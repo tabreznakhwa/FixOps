@@ -159,6 +159,62 @@ export default async function ComplaintDetailPage({ params }: { params: Promise<
               )}
             </dl>
           </div>
+
+          {/* Waiting for Approval Alert */}
+          {complaint.status === 'waiting_approval' && (
+            <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-5">
+              <h2 className="font-bold text-orange-900 text-base mb-2">⏳ Waiting for Approval</h2>
+              <p className="text-sm text-orange-800">This complaint is awaiting customer approval before proceeding. Contact the customer to confirm acceptance of the quotation or proposed solution.</p>
+            </div>
+          )}
+
+          {/* Work Orders Section - moved here for visibility */}
+          {linkedWorkOrders.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-slate-500" /> Linked Work Orders
+                </h2>
+              </div>
+              <div className="p-5 space-y-2">
+                {linkedWorkOrders.map(wo => (
+                  <Link
+                    key={wo.id}
+                    href={`/work-orders/${wo.id}?complaint_id=${complaint.id}`}
+                    className="flex items-center justify-between p-3 bg-slate-50 hover:bg-blue-50 rounded-lg transition group border border-slate-200"
+                  >
+                    <div>
+                      <p className="text-sm font-mono font-semibold text-slate-700 group-hover:text-blue-700">{wo.work_order_number}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Work Order</p>
+                    </div>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusColor(wo.status)}`}>
+                      {formatStatus(wo.status)}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Internal Notes - moved to main area for visibility */}
+          {internalNotes.length > 0 && (
+            <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-200">
+                <h2 className="font-semibold text-slate-900">Internal Notes ({internalNotes.length})</h2>
+              </div>
+              <div className="p-5 space-y-3 max-h-64 overflow-y-auto">
+                {internalNotes.map(note => (
+                  <div key={note.id} className="bg-white p-3 rounded-lg border border-slate-100">
+                    <div className="flex items-start justify-between mb-1">
+                      <p className="text-xs font-semibold text-slate-600">{note.author_name}</p>
+                      <p className="text-xs text-slate-400">{formatDateTime(note.created_at)}</p>
+                    </div>
+                    <p className="text-sm text-slate-700 leading-relaxed">{note.note}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right column - customer + actions */}
