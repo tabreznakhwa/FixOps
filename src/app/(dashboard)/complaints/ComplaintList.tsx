@@ -61,6 +61,12 @@ function sortForTechnicianSequence(items: ComplaintListItem[]) {
     const aCompleted = isCompleted(a) ? 1 : 0
     const bCompleted = isCompleted(b) ? 1 : 0
     if (aCompleted !== bCompleted) return aCompleted - bCompleted
+    if (aCompleted && bCompleted) {
+      const aDate = a.preferred_date ?? a.created_at.split('T')[0]
+      const bDate = b.preferred_date ?? b.created_at.split('T')[0]
+      if (bDate !== aDate) return bDate.localeCompare(aDate)
+      return b.created_at.localeCompare(a.created_at)
+    }
     if (a.visit_order == null && b.visit_order == null) return b.created_at.localeCompare(a.created_at)
     if (a.visit_order == null) return 1
     if (b.visit_order == null) return -1
@@ -84,6 +90,28 @@ export function ComplaintList({ complaints, isTechnician, canReorder }: Props) {
     [complaints, useSequenceView]
   )
   const [rows, setRows] = useState(initialRows)
+
+  // Per-technician display sequence: global visit_order maps to per-technician rank
+  const displaySequence = useMemo(() => {
+    const map = new Map<string, number>()
+    const techCounter = new Map<string, number>()
+    const active = rows
+      .filter(c => !isCompleted(c))
+      .sort((a, b) => {
+        if (a.visit_order == null && b.visit_order == null) return 0
+        if (a.visit_order == null) return 1
+        if (b.visit_order == null) return -1
+        return a.visit_order - b.visit_order
+      })
+    for (const c of active) {
+      const techKey = c.users?.full_name ?? '__unassigned__'
+      const n = (techCounter.get(techKey) ?? 0) + 1
+      techCounter.set(techKey, n)
+      map.set(c.id, n)
+    }
+    return map
+  }, [rows])
+
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -218,9 +246,9 @@ export function ComplaintList({ complaints, isTechnician, canReorder }: Props) {
                 <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-green-600 text-white shadow-sm">
                   <CheckCircle className="w-5 h-5" />
                 </span>
-              ) : c.visit_order != null ? (
+              ) : displaySequence.has(c.id) ? (
                 <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-blue-600 text-white text-base font-bold shadow-sm">
-                  {c.visit_order}
+                  {displaySequence.get(c.id)}
                 </span>
               ) : (
                 <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 text-slate-400 text-sm font-bold">
@@ -228,7 +256,7 @@ export function ComplaintList({ complaints, isTechnician, canReorder }: Props) {
                 </span>
               )}
               {canReorder && !completed && (
-                <span className="text-[10px] font-bold text-slate-400">#{c.visit_order ?? '—'}</span>
+                <span className="text-[10px] font-bold text-slate-400">#{displaySequence.get(c.id) ?? '—'}</span>
               )}
               <div className="text-xl leading-none">{categoryIcons[firstCategory] ?? '🔧'}</div>
             </div>

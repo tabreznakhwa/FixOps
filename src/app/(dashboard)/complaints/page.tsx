@@ -103,6 +103,12 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
       const aCompleted = a.status === 'completed' ? 1 : 0
       const bCompleted = b.status === 'completed' ? 1 : 0
       if (aCompleted !== bCompleted) return aCompleted - bCompleted
+      if (aCompleted && bCompleted) {
+        const aDate = a.preferred_date ?? a.created_at.split('T')[0]
+        const bDate = b.preferred_date ?? b.created_at.split('T')[0]
+        if (bDate !== aDate) return bDate.localeCompare(aDate)
+        return b.created_at.localeCompare(a.created_at)
+      }
       if (a.visit_order == null && b.visit_order == null) return 0
       if (a.visit_order == null) return 1
       if (b.visit_order == null) return -1
