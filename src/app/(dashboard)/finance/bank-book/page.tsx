@@ -4,6 +4,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { Landmark, TrendingUp, TrendingDown } from 'lucide-react'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { Suspense } from 'react'
 
@@ -239,7 +240,7 @@ export default async function BankBookPage({
       <div className="hidden print:block px-8 pt-8">
         <OrgLetterhead title="Bank Book" subtitle={allTime ? 'All Time' : `${formatDate(from)} to ${formatDate(to)}`} />
       </div>
-      <Header title="Bank Book" subtitle="All bank receipts and payments" actions={<PrintActions />} />
+      <Header title="Bank Book" subtitle="All bank receipts and payments" actions={<div className="flex items-center gap-2"><RefreshButton /><PrintActions /></div>} />
 
       <div className="p-6 space-y-5">
         <div className="print:hidden">
