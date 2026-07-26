@@ -78,15 +78,19 @@ export async function PATCH(
         cancelled_at: new Date().toISOString(),
       }).eq('id', id)
 
-      // Restore invoice balance
+      // Restore invoice balance and sync work order
       if (payment.invoice_id) {
         const { data: inv } = await supabase
-          .from('invoices').select('total_amount, amount_paid').eq('id', payment.invoice_id).single()
+          .from('invoices').select('total_amount, amount_paid, work_order_id').eq('id', payment.invoice_id).single()
         if (inv) {
           const newPaid = Math.max(0, Number(inv.amount_paid) - Number(payment.amount_received))
           const newBalance = Math.max(0, Number(inv.total_amount) - newPaid)
-          const newStatus = newPaid <= 0 ? 'issued' : newPaid < inv.total_amount ? 'partial' : 'paid'
+          const newStatus = newPaid <= 0 ? 'issued' : newPaid < Number(inv.total_amount) ? 'partial' : 'paid'
           await supabase.from('invoices').update({ amount_paid: newPaid, balance_due: newBalance, status: newStatus, updated_at: new Date().toISOString() }).eq('id', payment.invoice_id)
+          // Revert work order: if no longer fully paid, move back to invoiced
+          if (inv.work_order_id && newStatus !== 'paid') {
+            await supabase.from('work_orders').update({ status: 'invoiced', payment_status: newStatus === 'partial' ? 'partial' : 'unpaid' }).eq('id', inv.work_order_id)
+          }
         }
       }
 

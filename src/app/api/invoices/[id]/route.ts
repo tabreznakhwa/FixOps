@@ -215,28 +215,31 @@ export async function PATCH(
 
     const supabase = createAdminClient() as any
 
-    // If cancelling, fetch the invoice number to restore any merged source invoices
-    if (updatePayload.status === 'cancelled') {
-      const { data: cancelledInv } = await supabase
-        .from('invoices').select('invoice_number, organization_id').eq('id', id).single()
-      if (cancelledInv && cancelledInv.organization_id === profile.organization_id) {
-        const mergeReason = `Merged into ${cancelledInv.invoice_number}`
-        const { data: sourceInvs } = await supabase
-          .from('invoices')
-          .select('id, amount_paid, total_amount, due_date')
-          .eq('cancelled_reason', mergeReason)
-          .eq('organization_id', profile.organization_id)
-        if (sourceInvs && sourceInvs.length > 0) {
-          const today = new Date().toISOString().split('T')[0]
-          for (const src of sourceInvs as { id: string; amount_paid: number; total_amount: number; due_date: string | null }[]) {
-            const paid = Number(src.amount_paid)
-            const total = Number(src.total_amount)
-            let restoredStatus = 'issued'
-            if (paid >= total && total > 0) restoredStatus = 'paid'
-            else if (paid > 0) restoredStatus = 'partial'
-            else if (src.due_date && src.due_date < today) restoredStatus = 'overdue'
-            await supabase.from('invoices').update({ status: restoredStatus, cancelled_reason: null, updated_at: new Date().toISOString() }).eq('id', src.id)
-          }
+    // Fetch current invoice to get work_order_id for status sync
+    const { data: currentInv } = await supabase
+      .from('invoices')
+      .select('invoice_number, organization_id, work_order_id, status')
+      .eq('id', id)
+      .single()
+
+    // If cancelling, restore any merged source invoices
+    if (updatePayload.status === 'cancelled' && currentInv && currentInv.organization_id === profile.organization_id) {
+      const mergeReason = `Merged into ${currentInv.invoice_number}`
+      const { data: sourceInvs } = await supabase
+        .from('invoices')
+        .select('id, amount_paid, total_amount, due_date')
+        .eq('cancelled_reason', mergeReason)
+        .eq('organization_id', profile.organization_id)
+      if (sourceInvs && sourceInvs.length > 0) {
+        const today = new Date().toISOString().split('T')[0]
+        for (const src of sourceInvs as { id: string; amount_paid: number; total_amount: number; due_date: string | null }[]) {
+          const paid = Number(src.amount_paid)
+          const total = Number(src.total_amount)
+          let restoredStatus = 'issued'
+          if (paid >= total && total > 0) restoredStatus = 'paid'
+          else if (paid > 0) restoredStatus = 'partial'
+          else if (src.due_date && src.due_date < today) restoredStatus = 'overdue'
+          await supabase.from('invoices').update({ status: restoredStatus, cancelled_reason: null, updated_at: new Date().toISOString() }).eq('id', src.id)
         }
       }
     }
@@ -250,6 +253,20 @@ export async function PATCH(
       .single()
 
     if (error) throw error
+
+    // Sync linked work order status when invoice status changes
+    if (updatePayload.status && currentInv?.work_order_id) {
+      const woId = currentInv.work_order_id as string
+      if (updatePayload.status === 'issued') {
+        await supabase.from('work_orders').update({ status: 'invoiced' }).eq('id', woId)
+      } else if (updatePayload.status === 'cancelled') {
+        // Revert WO to completed only if it was in invoiced state (not already paid)
+        const { data: wo } = await supabase.from('work_orders').select('status').eq('id', woId).single()
+        if (wo?.status === 'invoiced') {
+          await supabase.from('work_orders').update({ status: 'completed' }).eq('id', woId)
+        }
+      }
+    }
 
     return NextResponse.json({ success: true, invoice: updated })
   } catch (err: unknown) {

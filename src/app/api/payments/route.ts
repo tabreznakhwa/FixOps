@@ -108,16 +108,14 @@ export async function POST(request: NextRequest) {
           .reduce((sum, p) => sum + p.amount_received, 0)
 
         if (totalPaid >= invoiceData.total_amount) {
-          await (supabase as any)
-            .from('invoices')
-            .update({ status: 'paid' })
-            .eq('id', invoice_id)
-
+          await (supabase as any).from('invoices').update({ status: 'paid' }).eq('id', invoice_id)
           if (invoiceData.work_order_id) {
-            await (supabase as any)
-              .from('work_orders')
-              .update({ payment_status: 'paid', status: 'paid' })
-              .eq('id', invoiceData.work_order_id)
+            await (supabase as any).from('work_orders').update({ payment_status: 'paid', status: 'paid' }).eq('id', invoiceData.work_order_id)
+          }
+        } else if (totalPaid > 0 && invoiceData.status !== 'partial') {
+          await (supabase as any).from('invoices').update({ status: 'partial' }).eq('id', invoice_id)
+          if (invoiceData.work_order_id) {
+            await (supabase as any).from('work_orders').update({ payment_status: 'partial' }).eq('id', invoiceData.work_order_id)
           }
         }
       }
