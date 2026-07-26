@@ -577,8 +577,10 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to create invoice')
 
+      // Always land on the invoice detail so the user can issue and record payment.
+      // Carry work_order_id so the invoice page can show "Back to Work Order".
       window.location.href = initialWorkOrderId
-        ? `/work-orders/${initialWorkOrderId}`
+        ? `/finance/invoices/${data.id}?work_order_id=${initialWorkOrderId}`
         : `/finance/invoices/${data.id}`
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')

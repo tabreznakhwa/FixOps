@@ -140,6 +140,9 @@ export default async function InvoiceDetailPage({
   const workOrder = invoice.work_orders
   const createdBy = invoice.users
 
+  // Prefer URL param (set when navigating from complaint/WO), fall back to the FK on the invoice itself
+  const resolvedWorkOrderId: string | undefined = work_order_id ?? (invoiceRaw as any).work_order_id ?? undefined
+
   return (
     <div className="animate-fade-in">
 
@@ -285,8 +288,8 @@ export default async function InvoiceDetailPage({
             )}
             <PrintActions label="Print Invoice" />
             <BackButton
-              fallbackHref={return_to ?? (complaint_id ? `/complaints/${complaint_id}` : work_order_id ? `/work-orders/${work_order_id}` : '/finance/invoices')}
-              label={return_to === '/finance/receivables' ? 'Receivables' : complaint_id ? 'Complaint' : work_order_id ? 'Work Order' : 'Invoices'}
+              fallbackHref={return_to ?? (complaint_id ? `/complaints/${complaint_id}` : resolvedWorkOrderId ? `/work-orders/${resolvedWorkOrderId}` : '/finance/invoices')}
+              label={return_to === '/finance/receivables' ? 'Receivables' : complaint_id ? 'Complaint' : resolvedWorkOrderId ? 'Work Order' : 'Invoices'}
             />
           </div>
         }
@@ -567,7 +570,7 @@ export default async function InvoiceDetailPage({
               balanceDue={invoice.balance_due}
               customerId={customer ? (invoiceRaw as any).customer_id : ''}
               advances={customerAdvances}
-              workOrderId={work_order_id}
+              workOrderId={resolvedWorkOrderId}
               complaintId={complaint_id}
             />
           </div>
