@@ -143,6 +143,15 @@ export default async function InvoiceDetailPage({
   // Prefer URL param (set when navigating from complaint/WO), fall back to the FK on the invoice itself
   const resolvedWorkOrderId: string | undefined = work_order_id ?? (invoiceRaw as any).work_order_id ?? undefined
 
+  // Where the payment form should send the user back AFTER recording payment.
+  // Only use WO/complaint if the user explicitly navigated here from those pages
+  // (URL param set), not just because the invoice happens to have a linked WO.
+  const paymentReturnTo = complaint_id
+    ? `/complaints/${complaint_id}`
+    : work_order_id
+    ? `/work-orders/${work_order_id}`
+    : `/finance/invoices/${id}`
+
   return (
     <div className="animate-fade-in">
 
@@ -572,6 +581,7 @@ export default async function InvoiceDetailPage({
               advances={customerAdvances}
               workOrderId={resolvedWorkOrderId}
               complaintId={complaint_id}
+              paymentReturnTo={paymentReturnTo}
             />
           </div>
         </div>

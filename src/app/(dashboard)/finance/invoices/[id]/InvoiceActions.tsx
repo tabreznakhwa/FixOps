@@ -22,9 +22,10 @@ interface Props {
   advances?: Advance[]
   workOrderId?: string
   complaintId?: string
+  paymentReturnTo?: string
 }
 
-export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerId, advances = [], workOrderId, complaintId }: Props) {
+export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerId, advances = [], workOrderId, complaintId, paymentReturnTo }: Props) {
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [showCancelDialog, setShowCancelDialog] = useState(false)
@@ -140,7 +141,7 @@ export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerI
 
       {canRecordPayment && (
         <Link
-          href={`/finance/payments/new?invoice_id=${invoiceId}&customer_id=${customerId}&return_to=${complaintId ? `/complaints/${complaintId}` : workOrderId ? `/work-orders/${workOrderId}` : `/finance/invoices/${invoiceId}`}`}
+          href={`/finance/payments/new?invoice_id=${invoiceId}&customer_id=${customerId}&return_to=${encodeURIComponent(paymentReturnTo ?? `/finance/invoices/${invoiceId}`)}`}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition"
         >
           <CreditCard className="w-4 h-4" />
