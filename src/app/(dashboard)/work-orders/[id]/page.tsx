@@ -10,9 +10,9 @@ import { WorkOrderParts } from './WorkOrderParts'
 
 export const metadata = { title: 'Work Order' }
 
-export default async function WorkOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ complaint_id?: string }> }) {
+export default async function WorkOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ complaint_id?: string; return_to?: string }> }) {
   const { id } = await params
-  const { complaint_id } = await searchParams
+  const { complaint_id, return_to } = await searchParams
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -102,7 +102,10 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
             >
               <Edit className="w-4 h-4" /> Edit
             </Link>
-            <BackButton fallbackHref="/work-orders" label="All Work Orders" />
+            <BackButton
+              fallbackHref={return_to ?? (complaint_id ? `/complaints/${complaint_id}` : '/work-orders')}
+              label={return_to?.startsWith('/finance/invoices') ? 'Invoices' : (return_to?.startsWith('/complaints') || complaint_id) ? 'Complaint' : 'Back'}
+            />
           </div>
         }
       />
