@@ -87,7 +87,7 @@ export function WorkOrderActions({
       if (!res.ok) throw new Error(data.error ?? 'Failed to record payment')
       setShowPayForm(false)
       setPayAmount('')
-      router.refresh()
+      window.location.replace('/finance/invoices')
     } catch (err: unknown) {
       setPayError(err instanceof Error ? err.message : 'Failed to record payment')
     } finally {
@@ -167,7 +167,15 @@ export function WorkOrderActions({
       {/* Collect Payment */}
       {!isCancelled && !isPaid && customerId && (
         <div className="border-t border-slate-100 pt-4">
-          {!showPayForm ? (
+          {existingInvoiceId ? (
+            <Link
+              href={`/finance/invoices/${existingInvoiceId}?work_order_id=${workOrderId}${complaintId ? `&complaint_id=${complaintId}` : ''}`}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
+            >
+              <Banknote className="w-4 h-4" />
+              Collect Payment
+            </Link>
+          ) : !showPayForm ? (
             <button
               onClick={() => {
                 setPayAmount(finalAmount > 0 ? finalAmount.toFixed(3) : '')
