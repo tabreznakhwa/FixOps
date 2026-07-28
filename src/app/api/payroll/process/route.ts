@@ -70,7 +70,8 @@ export async function POST(request: Request) {
     const normalOtPaidHours = s.overtime_eligible ? (entry?.normal_ot_paid_hours ?? 0) : 0
     const hourlyRate = basic / 30 / 8
     const normalOT = hourlyRate * normalOtPaidHours
-    const fridayOT = s.overtime_eligible ? (entry?.friday_ot_amount ?? 0) : 0
+    // All staff get Friday/holiday OT; only overtime_eligible staff get daily normal OT
+    const fridayOT = entry?.friday_ot_amount ?? 0
     const hasWorkedFridayOrHoliday = fridayOT > 0
     const fixedOT = s.overtime_eligible && hasWorkedFridayOrHoliday ? (s.fixed_overtime_monthly ?? 0) : 0
 

@@ -25,6 +25,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!status) return NextResponse.json({ error: 'Status is required' }, { status: 400 })
 
     const admin = createAdminClient() as any
+
+    // Look up the staff member to check overtime eligibility
+    const { data: attRec } = await admin
+      .from('attendance').select('staff_id').eq('id', id).single()
+    let isOtEligible = true
+    if (attRec?.staff_id) {
+      const { data: staffData } = await admin
+        .from('staff').select('overtime_eligible').eq('id', attRec.staff_id).single()
+      isOtEligible = (staffData as { overtime_eligible: boolean } | null)?.overtime_eligible ?? true
+    }
+
     const { error } = await admin
       .from('attendance')
       .update({
@@ -32,7 +43,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         check_in: check_in || null,
         check_out: check_out || null,
         hours_worked: Number(hours_worked ?? 0),
-        overtime_hours: Number(overtime_hours ?? 0),
+        overtime_hours: isOtEligible ? Number(overtime_hours ?? 0) : 0,
         status,
         notes: notes?.trim() || null,
         is_public_holiday: Boolean(is_public_holiday ?? false),

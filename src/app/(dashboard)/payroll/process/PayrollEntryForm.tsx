@@ -19,6 +19,7 @@ interface StaffRow {
   allowance_name: string | null
   fixed_overtime_monthly: number | null
   advance_balance: number | null
+  overtime_eligible: boolean
 }
 
 interface Props {
@@ -175,9 +176,9 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
                 const allowance = (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + (s.other_allowance ?? 0)
                 const food = s.food_allowance ?? 0
                 const normalOtPaidHours = normalOtPaidHoursMap[s.id] ?? 0
-                const normalOT = calcNormalOT(s.basic_salary ?? 0, normalOtPaidHours)
+                const normalOT = s.overtime_eligible ? calcNormalOT(s.basic_salary ?? 0, normalOtPaidHours) : 0
                 const fridayOT = fridayOtAmountMap[s.id] ?? 0
-                const fixedOT = fridayOT > 0 ? (s.fixed_overtime_monthly ?? 0) : 0
+                const fixedOT = s.overtime_eligible && fridayOT > 0 ? (s.fixed_overtime_monthly ?? 0) : 0
 
                 const absentDays = absentDaysMap[s.id] ?? 0
                 const absentDeduct = calcAbsentDeduction(s, absentDays, fixedOT)
