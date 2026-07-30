@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { updateWorkOrder } from '../../actions'
 import Link from 'next/link'
 import { Loader2, AlertCircle, ChevronDown } from 'lucide-react'
@@ -38,14 +39,15 @@ interface Props {
 }
 
 export function EditWorkOrderForm({ wo, technicians, currentAssigneeKey }: Props) {
+  const router = useRouter()
   const [state, action, pending] = useActionState(updateWorkOrder, null)
   const [assignedKey, setAssignedKey] = useState(currentAssigneeKey)
 
   useEffect(() => {
     if ((state as any)?.success && (state as any)?.workOrderId) {
-      window.location.replace(`/work-orders/${(state as any).workOrderId}`)
+      router.replace(`/work-orders/${(state as any).workOrderId}`)
     }
-  }, [state])
+  }, [state, router])
 
   const selectedTech = technicians.find(t => `${t.type}:${t.id}` === assignedKey)
 
