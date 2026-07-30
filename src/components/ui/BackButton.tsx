@@ -6,13 +6,25 @@ import { ArrowLeft } from 'lucide-react'
 export function BackButton({
   fallbackHref,
   label = 'Back',
+  direct = false,
 }: {
   fallbackHref: string
   label?: string
+  /**
+   * Skip history entirely and always navigate to fallbackHref. Use this where
+   * the destination is unambiguous, so Back can never land on an intermediate
+   * page (e.g. an edit form) that happens to sit in the history stack.
+   */
+  direct?: boolean
 }) {
   const router = useRouter()
 
   function handleClick() {
+    if (direct) {
+      router.push(fallbackHref)
+      return
+    }
+
     const cameFromSameOrigin =
       typeof window !== 'undefined' &&
       window.history.length > 1 &&
