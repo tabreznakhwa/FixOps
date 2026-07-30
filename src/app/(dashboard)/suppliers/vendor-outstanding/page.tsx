@@ -9,15 +9,18 @@ import { SupplierFilter } from './SupplierFilter'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
+import { buildVendorLedger } from './vendorLedger'
+import { VendorLedgerTable } from './VendorLedgerTable'
 
 export const metadata = { title: 'Vendor Bill-wise Outstanding' }
 
 export default async function VendorOutstandingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ supplier?: string; from?: string; to?: string; q?: string }>
+  searchParams: Promise<{ supplier?: string; from?: string; to?: string; q?: string; view?: string }>
 }) {
   const params = await searchParams
+  const view = params.view === 'ledger' ? 'ledger' : 'bills'
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profileRaw } = await (supabase as any).from('users').select('organization_id').eq('id', user!.id).single()
@@ -145,12 +148,43 @@ export default async function VendorOutstandingPage({
     paid: 'bg-green-100 text-green-700',
   }
 
+  // Dr/Cr running-balance ledger (Cash Book pattern). Built only for that view;
+  // the bill-wise view above is untouched.
+  const ledger = view === 'ledger'
+    ? await buildVendorLedger(admin, orgId, {
+        supplierId: params.supplier,
+        from: params.from,
+        to: params.to,
+      })
+    : null
+
+  const selectedSupplierName = params.supplier
+    ? allSuppliers.find((s) => s.id === params.supplier)?.supplier_name
+    : undefined
+
+  // Preserve every active filter when switching views.
+  const viewHref = (v: 'bills' | 'ledger') => {
+    const sp = new URLSearchParams()
+    if (params.supplier) sp.set('supplier', params.supplier)
+    if (params.from) sp.set('from', params.from)
+    if (params.to) sp.set('to', params.to)
+    if (params.q) sp.set('q', params.q)
+    if (v === 'ledger') sp.set('view', 'ledger')
+    const qs = sp.toString()
+    return `/suppliers/vendor-outstanding${qs ? `?${qs}` : ''}`
+  }
+
   return (
     <div className="animate-fade-in">
       <div className="hidden print:block px-8 pt-8">
-        <OrgLetterhead title="Vendor Bill-wise Outstanding" subtitle={`As of ${new Date().toLocaleDateString('en-GB')}`} />
+        <OrgLetterhead
+          title={view === 'ledger' ? 'Vendor Ledger' : 'Vendor Bill-wise Outstanding'}
+          subtitle={`As of ${new Date().toLocaleDateString('en-GB')}`}
+        />
       </div>
-      <Header title="Vendor Bill-wise Outstanding" subtitle="Supplier bills with pending balances"
+      <Header
+        title={view === 'ledger' ? 'Vendor Ledger' : 'Vendor Bill-wise Outstanding'}
+        subtitle={view === 'ledger' ? 'Debit / credit running balance per vendor' : 'Supplier bills with pending balances'}
         actions={
           <div className="flex items-center gap-2 print:hidden">
             <SupplierFilter suppliers={allSuppliers} selectedId={params.supplier} />
@@ -164,14 +198,43 @@ export default async function VendorOutstandingPage({
 
       <div className="p-6 space-y-5">
         <div className="flex flex-wrap items-center gap-3 print:hidden">
+          <div className="flex gap-1.5">
+            {([
+              { label: 'Bill-wise', value: 'bills' as const },
+              { label: 'Ledger (Dr/Cr)', value: 'ledger' as const },
+            ]).map(({ label, value }) => (
+              <Link
+                key={value}
+                href={viewHref(value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  view === value
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
           <Suspense>
-            <DateRangeFilter basePath="/suppliers/vendor-outstanding" from={params.from} to={params.to} label="Bill Date" />
+            <DateRangeFilter basePath="/suppliers/vendor-outstanding" from={params.from} to={params.to} label={view === 'ledger' ? 'Date' : 'Bill Date'} />
           </Suspense>
-          <Suspense>
-            <SearchBar basePath="/suppliers/vendor-outstanding" placeholder="Search bill, PO, supplier…" />
-          </Suspense>
+          {view === 'bills' && (
+            <Suspense>
+              <SearchBar basePath="/suppliers/vendor-outstanding" placeholder="Search bill, PO, supplier…" />
+            </Suspense>
+          )}
         </div>
 
+        {ledger && (
+          <VendorLedgerTable
+            ledger={ledger}
+            showSupplier={!params.supplier}
+            supplierName={selectedSupplierName}
+          />
+        )}
+
+        {view === 'bills' && (<>
         {/* Ageing summary */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
@@ -322,6 +385,7 @@ export default async function VendorOutstandingPage({
             </div>
           )}
         </div>
+        </>)}
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
 import { Search, ChevronDown, X } from 'lucide-react'
 
@@ -8,6 +8,7 @@ interface Supplier { id: string; supplier_name: string; supplier_code: string }
 
 export function SupplierFilter({ suppliers, selectedId }: { suppliers: Supplier[]; selectedId?: string }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -30,7 +31,11 @@ export function SupplierFilter({ suppliers, selectedId }: { suppliers: Supplier[
   }, [])
 
   function navigate(id: string) {
-    router.push(id ? `/suppliers/vendor-outstanding?supplier=${id}` : '/suppliers/vendor-outstanding')
+    // Keep the other active filters (view, date range, search) intact.
+    const sp = new URLSearchParams(searchParams.toString())
+    if (id) sp.set('supplier', id); else sp.delete('supplier')
+    const qs = sp.toString()
+    router.push(`/suppliers/vendor-outstanding${qs ? `?${qs}` : ''}`)
     setOpen(false)
     setQuery('')
   }
