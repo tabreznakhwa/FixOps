@@ -98,6 +98,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
             </span>
             <Link
               href={`/work-orders/${wo.id}/edit`}
+              replace
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
             >
               <Edit className="w-4 h-4" /> Edit
