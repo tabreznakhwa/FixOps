@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState, useState, useEffect } from 'react'
 import { updateWorkOrder } from '../../actions'
 import Link from 'next/link'
 import { Loader2, AlertCircle, ChevronDown } from 'lucide-react'
@@ -40,6 +40,12 @@ interface Props {
 export function EditWorkOrderForm({ wo, technicians, currentAssigneeKey }: Props) {
   const [state, action, pending] = useActionState(updateWorkOrder, null)
   const [assignedKey, setAssignedKey] = useState(currentAssigneeKey)
+
+  useEffect(() => {
+    if ((state as any)?.success && (state as any)?.workOrderId) {
+      window.location.replace(`/work-orders/${(state as any).workOrderId}`)
+    }
+  }, [state])
 
   const selectedTech = technicians.find(t => `${t.type}:${t.id}` === assignedKey)
 

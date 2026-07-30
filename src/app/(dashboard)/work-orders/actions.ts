@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { logAudit } from '@/lib/audit'
 
 export async function updateWorkOrder(
@@ -67,5 +66,5 @@ export async function updateWorkOrder(
 
   revalidatePath(`/work-orders/${id}`)
   revalidatePath('/work-orders')
-  redirect(`/work-orders/${id}`)
+  return { success: true, workOrderId: id }
 }
