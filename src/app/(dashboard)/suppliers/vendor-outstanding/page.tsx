@@ -11,16 +11,22 @@ import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
 import { buildVendorLedger } from './vendorLedger'
 import { VendorLedgerTable } from './VendorLedgerTable'
+import { buildVendorWiseOutstanding } from './vendorWiseOutstanding'
+import { VendorWiseOutstandingTable } from './VendorWiseOutstandingTable'
+import { AsOnFilter } from './AsOnFilter'
 
 export const metadata = { title: 'Vendor Bill-wise Outstanding' }
+
+type View = 'bills' | 'vendorwise' | 'ledger'
 
 export default async function VendorOutstandingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ supplier?: string; from?: string; to?: string; q?: string; view?: string }>
+  searchParams: Promise<{ supplier?: string; from?: string; to?: string; q?: string; view?: string; as_on?: string }>
 }) {
   const params = await searchParams
-  const view = params.view === 'ledger' ? 'ledger' : 'bills'
+  const view: View =
+    params.view === 'ledger' ? 'ledger' : params.view === 'vendorwise' ? 'vendorwise' : 'bills'
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profileRaw } = await (supabase as any).from('users').select('organization_id').eq('id', user!.id).single()
@@ -162,14 +168,22 @@ export default async function VendorOutstandingPage({
     ? allSuppliers.find((s) => s.id === params.supplier)?.supplier_name
     : undefined
 
+  // Vendor-wise bill-wise outstanding, grouped per vendor with a running balance.
+  const todayKw = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
+  const asOn = params.as_on && params.as_on <= todayKw ? params.as_on : todayKw
+  const vendorWise = view === 'vendorwise'
+    ? await buildVendorWiseOutstanding(admin, orgId, { supplierId: params.supplier, asOn, q: params.q })
+    : null
+
   // Preserve every active filter when switching views.
-  const viewHref = (v: 'bills' | 'ledger') => {
+  const viewHref = (v: View) => {
     const sp = new URLSearchParams()
     if (params.supplier) sp.set('supplier', params.supplier)
     if (params.from) sp.set('from', params.from)
     if (params.to) sp.set('to', params.to)
     if (params.q) sp.set('q', params.q)
-    if (v === 'ledger') sp.set('view', 'ledger')
+    if (params.as_on) sp.set('as_on', params.as_on)
+    if (v !== 'bills') sp.set('view', v)
     const qs = sp.toString()
     return `/suppliers/vendor-outstanding${qs ? `?${qs}` : ''}`
   }
@@ -178,13 +192,25 @@ export default async function VendorOutstandingPage({
     <div className="animate-fade-in">
       <div className="hidden print:block px-8 pt-8">
         <OrgLetterhead
-          title={view === 'ledger' ? 'Vendor Ledger' : 'Vendor Bill-wise Outstanding'}
-          subtitle={`As of ${new Date().toLocaleDateString('en-GB')}`}
+          title={
+            view === 'ledger' ? 'Vendor Ledger'
+            : view === 'vendorwise' ? 'Bill-wise Outstanding Vendor'
+            : 'Vendor Bill-wise Outstanding'
+          }
+          subtitle={view === 'vendorwise' ? `As On ${formatDate(asOn)}` : `As of ${new Date().toLocaleDateString('en-GB')}`}
         />
       </div>
       <Header
-        title={view === 'ledger' ? 'Vendor Ledger' : 'Vendor Bill-wise Outstanding'}
-        subtitle={view === 'ledger' ? 'Debit / credit running balance per vendor' : 'Supplier bills with pending balances'}
+        title={
+          view === 'ledger' ? 'Vendor Ledger'
+          : view === 'vendorwise' ? 'Bill-wise Outstanding Vendor'
+          : 'Vendor Bill-wise Outstanding'
+        }
+        subtitle={
+          view === 'ledger' ? 'Debit / credit running balance per vendor'
+          : view === 'vendorwise' ? 'Outstanding bills grouped by vendor with running balance'
+          : 'Supplier bills with pending balances'
+        }
         actions={
           <div className="flex items-center gap-2 print:hidden">
             <SupplierFilter suppliers={allSuppliers} selectedId={params.supplier} />
@@ -201,6 +227,7 @@ export default async function VendorOutstandingPage({
           <div className="flex gap-1.5">
             {([
               { label: 'Bill-wise', value: 'bills' as const },
+              { label: 'Vendor-wise', value: 'vendorwise' as const },
               { label: 'Ledger (Dr/Cr)', value: 'ledger' as const },
             ]).map(({ label, value }) => (
               <Link
@@ -216,15 +243,23 @@ export default async function VendorOutstandingPage({
               </Link>
             ))}
           </div>
-          <Suspense>
-            <DateRangeFilter basePath="/suppliers/vendor-outstanding" from={params.from} to={params.to} label={view === 'ledger' ? 'Date' : 'Bill Date'} />
-          </Suspense>
-          {view === 'bills' && (
+          {view === 'vendorwise' ? (
+            <Suspense>
+              <AsOnFilter asOn={asOn} today={todayKw} />
+            </Suspense>
+          ) : (
+            <Suspense>
+              <DateRangeFilter basePath="/suppliers/vendor-outstanding" from={params.from} to={params.to} label={view === 'ledger' ? 'Date' : 'Bill Date'} />
+            </Suspense>
+          )}
+          {view !== 'ledger' && (
             <Suspense>
               <SearchBar basePath="/suppliers/vendor-outstanding" placeholder="Search bill, PO, supplier…" />
             </Suspense>
           )}
         </div>
+
+        {vendorWise && <VendorWiseOutstandingTable report={vendorWise} />}
 
         {ledger && (
           <VendorLedgerTable
