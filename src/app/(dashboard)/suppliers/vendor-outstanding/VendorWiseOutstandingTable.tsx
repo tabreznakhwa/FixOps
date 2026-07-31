@@ -1,7 +1,20 @@
 import Link from 'next/link'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, AlertTriangle } from 'lucide-react'
 import type { VendorWiseOutstanding } from './vendorWiseOutstanding'
+
+function IncompleteWarning({ sources }: { sources: string[] }) {
+  if (sources.length === 0) return null
+  return (
+    <div className="flex gap-2.5 bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3 text-sm mb-5">
+      <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+      <span>
+        <strong>These figures are incomplete.</strong> Could not load: {sources.join(', ')}.
+        The outstanding totals below are not reliable until this is resolved.
+      </span>
+    </div>
+  )
+}
 
 const KIND_BADGE: Record<string, string> = {
   opening: 'bg-amber-100 text-amber-700',
@@ -24,19 +37,24 @@ function intDaysClass(d: number): string {
 }
 
 export function VendorWiseOutstandingTable({ report }: { report: VendorWiseOutstanding }) {
-  const { groups, grandTotal, billCount, asOn, restated } = report
+  const { groups, grandTotal, billCount, asOn, restated, failedSources } = report
 
   if (groups.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 p-10 text-center">
-        <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-        <p className="text-sm text-slate-400">No outstanding vendor bills as on {formatDate(asOn)}</p>
+      <div>
+        <IncompleteWarning sources={failedSources} />
+        <div className="bg-white rounded-xl border border-slate-200 p-10 text-center">
+          <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+          <p className="text-sm text-slate-400">No outstanding vendor bills as on {formatDate(asOn)}</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div>
+      <IncompleteWarning sources={failedSources} />
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
         <h3 className="font-semibold text-slate-900">
           Bill-wise Outstanding Vendor
@@ -131,6 +149,7 @@ export function VendorWiseOutstandingTable({ report }: { report: VendorWiseOutst
           (or bill date when none is set) to the as-on date, inclusive.
           {restated && ' Outstanding figures are restated to the as-on date by adding back later settlements.'}
         </p>
+      </div>
       </div>
     </div>
   )

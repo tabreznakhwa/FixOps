@@ -2,6 +2,8 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { BookOpen, Users, Clock, Banknote, FileText, CheckCircle, AlertCircle, ChevronRight, Calculator, RotateCcw } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
+import { OrgLetterhead } from '@/components/print/OrgLetterhead'
+import { PrintActions } from '@/components/print/PrintActions'
 
 export const metadata = { title: 'Payroll User Guide' }
 
@@ -90,17 +92,25 @@ const TOC = [
 export default function PayrollGuidePage() {
   return (
     <div className="animate-fade-in">
+      <div className="hidden print:block px-8 pt-8">
+        <OrgLetterhead title="Payroll User Guide" subtitle="Step-by-step salary processing" />
+      </div>
       <Header
         title="Payroll User Guide"
         subtitle="Step-by-step guide for HR and Admin"
-        actions={<BackButton fallbackHref="/payroll" label="Back to Payroll" />}
+        actions={
+          <div className="flex items-center gap-2">
+            <PrintActions />
+            <BackButton fallbackHref="/payroll" label="Back to Payroll" />
+          </div>
+        }
       />
 
       <div className="p-6 max-w-5xl">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-          {/* Table of Contents */}
-          <div className="lg:col-span-1">
+          {/* Table of Contents — screen only; it is navigation, not content */}
+          <div className="lg:col-span-1 print:hidden">
             <div className="bg-white rounded-xl border border-slate-200 p-4 sticky top-6">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">On This Page</p>
               <nav className="space-y-1">
@@ -121,8 +131,8 @@ export default function PayrollGuidePage() {
             </div>
           </div>
 
-          {/* Main Content */}
-          <div className="lg:col-span-3 space-y-6">
+          {/* Main Content — spans the full width once the TOC is hidden for print */}
+          <div className="lg:col-span-3 print:col-span-4 space-y-6">
 
             {/* Overview */}
             <Section id="overview" icon={BookOpen} title="Overview">

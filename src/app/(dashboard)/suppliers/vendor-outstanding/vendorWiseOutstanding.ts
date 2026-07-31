@@ -44,6 +44,8 @@ export type VendorWiseOutstanding = {
   billCount: number
   /** True when figures were restated to a past date rather than read live. */
   restated: boolean
+  /** Sources that failed to load. Non-empty means the figures are incomplete. */
+  failedSources: string[]
 }
 
 /** Whole days between two ISO dates (b − a). */
@@ -53,11 +55,21 @@ function daysBetween(a: string, b: string): number {
   return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000)
 }
 
-async function safeRows<T>(q: PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+/**
+ * Degrade to no rows rather than taking the page down, but record the failure —
+ * silently dropping a source would show a confidently wrong outstanding total.
+ */
+async function safeRows<T>(
+  q: PromiseLike<{ data: T[] | null; error: unknown }>,
+  failures: string[],
+  source: string
+): Promise<T[]> {
   try {
-    const { data } = await q
+    const { data, error } = await q
+    if (error) { failures.push(source); return [] }
     return data ?? []
   } catch {
+    failures.push(source)
     return []
   }
 }
@@ -103,6 +115,8 @@ export async function buildVendorWiseOutstanding(
     payment_date: string; amount_paid: number; discount_amount: number | null
   }
 
+  const failures: string[] = []
+
   const [openingRows, piRows, poRows, laterPayments] = await Promise.all([
     safeRows<OpeningRow>(
       scope(
@@ -110,7 +124,8 @@ export async function buildVendorWiseOutstanding(
           .from('opening_payables')
           .select('id, bill_ref, bill_date, due_date, amount, balance_due, supplier_id, suppliers(id, supplier_name, supplier_code)')
           .lte('bill_date', asOn)
-      )
+      ),
+      failures, 'opening payables'
     ),
     safeRows<PiRow>(
       scope(
@@ -120,7 +135,8 @@ export async function buildVendorWiseOutstanding(
           .eq('payment_type', 'credit')
           .neq('status', 'cancelled')
           .lte('invoice_date', asOn)
-      )
+      ),
+      failures, 'purchase invoices'
     ),
     safeRows<PoRow>(
       scope(
@@ -129,7 +145,8 @@ export async function buildVendorWiseOutstanding(
           .select('id, po_number, purchase_date, due_date, total_amount, balance_due, status, supplier_invoice_number, supplier_id, suppliers(id, supplier_name, supplier_code)')
           .not('status', 'in', '(cancelled)')
           .lte('purchase_date', asOn)
-      )
+      ),
+      failures, 'purchase orders'
     ),
     // Settlements recorded after the as-on date, added back to restate balances.
     // Empty for the default (as-on = today), so the common case stays exact.
@@ -139,7 +156,8 @@ export async function buildVendorWiseOutstanding(
           .from('supplier_payments')
           .select('purchase_invoice_id, purchase_order_id, reference_number, supplier_id, payment_date, amount_paid, discount_amount')
           .gt('payment_date', asOn)
-      )
+      ),
+      failures, 'later settlements'
     ),
   ])
 
@@ -279,5 +297,6 @@ export async function buildVendorWiseOutstanding(
     grandTotal: groups.reduce((s, g) => s + g.total, 0),
     billCount: groups.reduce((s, g) => s + g.bills.length, 0),
     restated,
+    failedSources: failures,
   }
 }

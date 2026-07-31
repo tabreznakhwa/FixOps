@@ -1,5 +1,5 @@
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { BookOpen, TrendingDown, TrendingUp } from 'lucide-react'
+import { AlertTriangle, BookOpen, TrendingDown, TrendingUp } from 'lucide-react'
 import type { VendorLedger } from './vendorLedger'
 
 /**
@@ -18,7 +18,7 @@ export function VendorLedgerTable({
 }) {
   const {
     entries, periodOpeningBalance, periodOpeningDate,
-    periodDebit, periodCredit, closingBalance, allTime,
+    periodDebit, periodCredit, closingBalance, allTime, failedSources,
   } = ledger
 
   const periodLabel = allTime ? 'All time' : 'Selected period'
@@ -26,6 +26,15 @@ export function VendorLedgerTable({
 
   return (
     <div className="space-y-5">
+      {failedSources.length > 0 && (
+        <div className="flex gap-2.5 bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3 text-sm">
+          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span>
+            <strong>These figures are incomplete.</strong> Could not load: {failedSources.join(', ')}.
+            The balance below understates or overstates the real position — do not rely on it until this is resolved.
+          </span>
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="flex items-center gap-2 mb-1">

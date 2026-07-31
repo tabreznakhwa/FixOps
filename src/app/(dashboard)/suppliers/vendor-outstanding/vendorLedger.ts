@@ -48,6 +48,8 @@ export type VendorLedger = {
   totalDebit: number
   totalCredit: number
   allTime: boolean
+  /** Sources that failed to load. Non-empty means the figures are incomplete. */
+  failedSources: string[]
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -71,14 +73,21 @@ function dayBefore(dateStr: string): string {
 }
 
 /**
- * A report must never take the page down. Any failing query degrades to no rows
- * rather than throwing, so the bill-wise view on the same page keeps working.
+ * A report must never take the page down, so a failing query degrades to no rows
+ * rather than throwing. But silently dropping a source would show a confidently
+ * wrong balance, so failures are counted and surfaced to the reader instead.
  */
-async function safeRows<T>(q: PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+async function safeRows<T>(
+  q: PromiseLike<{ data: T[] | null; error: unknown }>,
+  failures: string[],
+  source: string
+): Promise<T[]> {
   try {
-    const { data } = await q
+    const { data, error } = await q
+    if (error) { failures.push(source); return [] }
     return data ?? []
   } catch {
+    failures.push(source)
     return []
   }
 }
@@ -122,9 +131,12 @@ export async function buildVendorLedger(
     suppliers: { supplier_name: string } | null
   }
 
+  const failures: string[] = []
+
   const [openingRows, poRows, piRows, payRows, advRows] = await Promise.all([
     safeRows<OpeningRow>(
-      scope(admin.from('opening_payables').select('bill_ref, bill_date, amount, suppliers(supplier_name)'))
+      scope(admin.from('opening_payables').select('bill_ref, bill_date, amount, suppliers(supplier_name)')),
+      failures, 'opening payables'
     ),
     safeRows<PoRow>(
       scope(
@@ -132,7 +144,8 @@ export async function buildVendorLedger(
           .from('purchase_orders')
           .select('po_number, purchase_date, total_amount, suppliers(supplier_name)')
           .not('status', 'in', '(cancelled)')
-      )
+      ),
+      failures, 'purchase orders'
     ),
     safeRows<PiRow>(
       scope(
@@ -140,7 +153,8 @@ export async function buildVendorLedger(
           .from('purchase_invoices')
           .select('invoice_number, invoice_date, total_amount, payment_type, supplier_name, suppliers(supplier_name)')
           .neq('status', 'cancelled')
-      )
+      ),
+      failures, 'purchase invoices'
     ),
     safeRows<PayRow>(
       scope(
@@ -149,7 +163,8 @@ export async function buildVendorLedger(
           .select('payment_date, amount_paid, discount_amount, payment_mode, reference_number, notes, suppliers(supplier_name)')
           // Exclude advance utilisations — the advance itself is already a debit.
           .is('supplier_advance_id', null)
-      )
+      ),
+      failures, 'payments'
     ),
     safeRows<AdvRow>(
       scope(
@@ -157,7 +172,8 @@ export async function buildVendorLedger(
           .from('supplier_advances')
           .select('advance_number, advance_date, amount, payment_mode, reference_number, suppliers(supplier_name)')
           .eq('is_cancelled', false)
-      )
+      ),
+      failures, 'advances'
     ),
   ])
 
@@ -235,5 +251,6 @@ export async function buildVendorLedger(
     totalDebit,
     totalCredit,
     allTime,
+    failedSources: failures,
   }
 }
