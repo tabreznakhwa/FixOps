@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     const { data: existing } = await admin
       .from('attendance')
-      .select('id, check_in, check_out')
+      .select('id, check_in, check_out, is_public_holiday')
       .eq('staff_id', staff.id)
       .eq('date', today)
       .maybeSingle()
@@ -87,11 +87,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ record: existing }) // already clocked out — idempotent
     }
 
-    const isTodayFriday = isFriday(today)
-    const breakdown = calcAttendanceBreakdown(existing.check_in, nowTime, isTodayFriday)
+    // A day already flagged as a public holiday follows the same rules as Friday.
+    const isHolidayToday = isFriday(today) || Boolean(existing.is_public_holiday)
+    const breakdown = calcAttendanceBreakdown(existing.check_in, nowTime, isHolidayToday)
 
+    // Friday / public-holiday OT is paid to EVERY employee, whether or not they are
+    // overtime-eligible — but only on a day they actually worked. On such a day
+    // fixedOtHrs is min(hours, 8), so > 0 means the shift was genuinely worked.
+    // Only daily (normal) overtime below depends on overtime_eligible.
     let fridayOtAmount = 0
-    if (staff.overtime_eligible && isTodayFriday && (breakdown?.fixedOtHrs ?? 0) > 0) {
+    if (isHolidayToday && (breakdown?.fixedOtHrs ?? 0) > 0) {
       fridayOtAmount = Number(staff.friday_ot_amount ?? 0)
     }
 

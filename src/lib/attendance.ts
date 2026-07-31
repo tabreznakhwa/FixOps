@@ -38,7 +38,10 @@ export function calcAttendanceBreakdown(
 
   const inM = toMins(checkIn)
   let outM = toMins(checkOut)
-  if (outM <= inM) outM += 24 * 60 // overnight
+  // Overnight shift. Strictly less-than: an identical clock-in and clock-out is a
+  // zero-length shift (usually a mis-click), not a 24-hour one — treating it as
+  // 24 hours paid a full day of overtime for no work.
+  if (outM < inM) outM += 24 * 60
 
   // Lunch deduction: 1 hour if shift spans 1-2 PM
   let lunchDeduct = 0
