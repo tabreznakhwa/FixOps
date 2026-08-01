@@ -153,9 +153,9 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                       <td className="px-4 py-3.5 text-right">
                         <Link
                           href={`/work-orders/${wo.id}`}
-                          className="text-xs text-blue-600 hover:text-blue-700 font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-blue-600 hover:text-white transition-colors whitespace-nowrap"
                         >
-                          View →
+                          View
                         </Link>
                       </td>
                     </tr>

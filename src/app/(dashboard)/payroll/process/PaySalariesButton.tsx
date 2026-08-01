@@ -75,7 +75,7 @@ export function PaySalariesButton({ runId, pendingCount, totalNet }: {
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Payment Mode</label>
                 <select value={mode} onChange={e => setMode(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {PAYMENT_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
               </div>
