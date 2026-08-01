@@ -67,7 +67,9 @@ export async function POST(request: Request) {
     const food = s.food_allowance ?? 0
     const allowanceName = s.allowance_name ?? 'Allowance'
 
-    const normalOtPaidHours = s.overtime_eligible ? (entry?.normal_ot_paid_hours ?? 0) : 0
+    // Already filtered per day when the hours were aggregated: ordinary daily OT
+    // only for eligible staff, Friday/holiday hours beyond the first 8 for everyone.
+    const normalOtPaidHours = entry?.normal_ot_paid_hours ?? 0
     const hourlyRate = basic / 30 / 8
     const normalOT = hourlyRate * normalOtPaidHours
     // All staff get Friday/holiday OT; only overtime_eligible staff get daily normal OT

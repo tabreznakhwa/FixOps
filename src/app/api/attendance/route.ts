@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { isFriday, payableOvertimeHours } from '@/lib/attendance'
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,13 +43,15 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient()
 
-    // Check staff overtime eligibility — non-eligible staff only get Friday/holiday OT, not daily OT
+    // Non-eligible staff get no daily OT, but they do get Friday/holiday OT —
+    // including the additional hours beyond the first 8 on such a day.
     const { data: staffData } = await (supabase as any)
       .from('staff')
       .select('overtime_eligible')
       .eq('id', staff_id)
       .single()
     const isOtEligible = (staffData as { overtime_eligible: boolean } | null)?.overtime_eligible ?? true
+    const isHoliday = isFriday(date) || Boolean(is_public_holiday)
 
     // Check for existing record (technician may have already self-clocked in)
     const { data: existing } = await (supabase as any)
@@ -63,7 +66,10 @@ export async function POST(request: NextRequest) {
       check_in: check_in || null,
       check_out: check_out || null,
       hours_worked: Number(hours_worked ?? 0),
-      overtime_hours: isOtEligible ? Number(overtime_hours ?? 0) : 0,
+      overtime_hours: payableOvertimeHours(Number(overtime_hours ?? 0), {
+        overtimeEligible: isOtEligible,
+        isFridayOrHoliday: isHoliday,
+      }),
       status,
       notes: notes?.trim() || null,
       is_public_holiday: Boolean(is_public_holiday ?? false),

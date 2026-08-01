@@ -93,6 +93,23 @@ export function calcAttendanceBreakdown(
   }
 }
 
+/**
+ * How many overtime hours an employee is actually paid for on a given day.
+ *
+ * Daily overtime on an ordinary working day is only for overtime-eligible staff.
+ * Friday and public-holiday overtime is paid to EVERYONE — and that includes the
+ * hours beyond the first 8 on such a day, which are overtime for the holiday, not
+ * ordinary daily overtime. On a holiday the first 8 hours are covered separately
+ * by the flat Friday OT amount; these are the additional hours on top.
+ */
+export function payableOvertimeHours(
+  hours: number,
+  opts: { overtimeEligible: boolean; isFridayOrHoliday: boolean }
+): number {
+  if (opts.isFridayOrHoliday) return Number(hours) || 0
+  return opts.overtimeEligible ? Number(hours) || 0 : 0
+}
+
 export function nowInKuwait(): Date {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuwait' }))
 }

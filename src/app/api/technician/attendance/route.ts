@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
-import { calcAttendanceBreakdown, isFriday, kuwaitISODate, kuwaitTimeHHMM } from '@/lib/attendance'
+import { calcAttendanceBreakdown, isFriday, kuwaitISODate, kuwaitTimeHHMM, payableOvertimeHours } from '@/lib/attendance'
 
 async function resolveStaff(userId: string) {
   const admin = createAdminClient() as any
@@ -105,7 +105,10 @@ export async function POST(request: NextRequest) {
       .update({
         check_out: nowTime,
         hours_worked: breakdown?.hoursWorked ?? 0,
-        overtime_hours: staff.overtime_eligible ? (breakdown?.normalOtPaidHrs ?? 0) : 0,
+        overtime_hours: payableOvertimeHours(breakdown?.normalOtPaidHrs ?? 0, {
+          overtimeEligible: staff.overtime_eligible,
+          isFridayOrHoliday: isHolidayToday,
+        }),
         friday_ot_amount: fridayOtAmount,
         ...(hasCoords ? { check_out_lat: lat, check_out_lng: lng } : {}),
       })

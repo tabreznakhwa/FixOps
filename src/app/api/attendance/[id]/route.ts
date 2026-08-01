@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { isFriday, payableOvertimeHours } from '@/lib/attendance'
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -26,7 +27,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const admin = createAdminClient() as any
 
-    // Look up the staff member to check overtime eligibility
+    // Non-eligible staff get no daily OT, but they do get Friday/holiday OT —
+    // including the additional hours beyond the first 8 on such a day.
     const { data: attRec } = await admin
       .from('attendance').select('staff_id').eq('id', id).single()
     let isOtEligible = true
@@ -35,6 +37,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .from('staff').select('overtime_eligible').eq('id', attRec.staff_id).single()
       isOtEligible = (staffData as { overtime_eligible: boolean } | null)?.overtime_eligible ?? true
     }
+    const isHoliday = isFriday(date) || Boolean(is_public_holiday)
 
     const { error } = await admin
       .from('attendance')
@@ -43,7 +46,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         check_in: check_in || null,
         check_out: check_out || null,
         hours_worked: Number(hours_worked ?? 0),
-        overtime_hours: isOtEligible ? Number(overtime_hours ?? 0) : 0,
+        overtime_hours: payableOvertimeHours(Number(overtime_hours ?? 0), {
+          overtimeEligible: isOtEligible,
+          isFridayOrHoliday: isHoliday,
+        }),
         status,
         notes: notes?.trim() || null,
         is_public_holiday: Boolean(is_public_holiday ?? false),

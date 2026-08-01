@@ -88,6 +88,7 @@ export default async function PayrollProcessPage({
   const fridayOtAmountMap: Record<string, number> = {}
 
   const staffRateMap = Object.fromEntries(staff.map(s => [s.id, (s as any).friday_ot_amount ?? 0]))
+  const eligibleMap = Object.fromEntries(staff.map(s => [s.id, s.overtime_eligible]))
 
   for (const rec of (attendanceRaw ?? []) as Array<{
     staff_id: string; status: string; overtime_hours: number
@@ -98,13 +99,16 @@ export default async function PayrollProcessPage({
     } else if (rec.status === 'half_day') {
       absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 0.5
     }
-    if ((rec.overtime_hours ?? 0) > 0) {
+    const [y, m, d] = rec.date.split('-').map(Number)
+    const isFridayOrHol = new Date(y, m - 1, d).getDay() === 5 || rec.is_public_holiday
+
+    // Ordinary daily OT is only for overtime-eligible staff, but the hours beyond
+    // the first 8 on a Friday/holiday are holiday overtime and are paid to everyone.
+    if ((rec.overtime_hours ?? 0) > 0 && (isFridayOrHol || eligibleMap[rec.staff_id])) {
       normalOtPaidHoursMap[rec.staff_id] = (normalOtPaidHoursMap[rec.staff_id] ?? 0) + (rec.overtime_hours ?? 0)
     }
     // For Friday/holiday records: use stored amount if > 0, otherwise fall back to
     // the staff profile rate (handles records created before the rate was set)
-    const [y, m, d] = rec.date.split('-').map(Number)
-    const isFridayOrHol = new Date(y, m - 1, d).getDay() === 5 || rec.is_public_holiday
     if (isFridayOrHol && (rec.status === 'present' || rec.status === 'half_day')) {
       const amount = (rec.friday_ot_amount ?? 0) > 0
         ? rec.friday_ot_amount
