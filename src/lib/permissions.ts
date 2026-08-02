@@ -27,6 +27,7 @@ export const CONFIGURABLE_ROLES = ['manager', 'call_center', 'technician', 'acco
 export const ROUTE_MODULE: [string, ModuleKey][] = [
   ['/settings', 'settings'],
   ['/reports', 'reports'],
+  ['/insights', 'reports'],
   ['/finance/quotations', 'finance'],
   ['/finance', 'finance'],
   ['/amc', 'finance'],

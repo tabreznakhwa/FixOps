@@ -8,7 +8,7 @@ import {
   Wrench, ChevronDown, LogOut, Menu, X, FileBarChart, ShieldCheck,
   Building2, Hammer, CalendarCheck, Banknote, Landmark, AlertCircle,
   ShoppingCart, TrendingDown, Layers, Printer, BookOpen, Receipt, MapPin,
-  ArrowLeftRight, Wallet, Clock, Trophy
+  ArrowLeftRight, Wallet, Clock, Trophy, Sparkles
 } from 'lucide-react'
 import { useState, useRef, type ElementType } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -94,6 +94,7 @@ const navGroups: Array<{
     icon: BarChart3,
     items: [
       { href: '/reports', label: 'Reports', icon: Hammer },
+      { href: '/insights', label: 'Business Insights', icon: Sparkles, onlyRoles: ['owner', 'admin'] },
     ],
   },
   {
