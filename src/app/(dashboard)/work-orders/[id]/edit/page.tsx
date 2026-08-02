@@ -50,7 +50,7 @@ export default async function EditWorkOrderPage({ params }: { params: Promise<{ 
         title={`Edit ${wo.work_order_number}`}
         subtitle="Update work order details"
         actions={
-          <BackButton direct fallbackHref={`/work-orders/${id}`} label="Cancel" />
+          <BackButton fallbackHref={`/work-orders/${id}`} label="Cancel" />
         }
       />
       <div className="p-6 max-w-2xl">

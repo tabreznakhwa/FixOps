@@ -103,7 +103,6 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
               <Edit className="w-4 h-4" /> Edit
             </Link>
             <BackButton
-              direct
               fallbackHref={return_to ?? (complaint_id ? `/complaints/${complaint_id}` : '/work-orders')}
               label={return_to?.startsWith('/finance/invoices') ? 'Invoices' : (return_to?.startsWith('/complaints') || complaint_id) ? 'Complaint' : 'Back'}
             />

@@ -6,55 +6,25 @@ import { ArrowLeft } from 'lucide-react'
 export function BackButton({
   fallbackHref,
   label = 'Back',
-  direct = false,
 }: {
+  /** The destination. Always used — Back never consults browser history. */
   fallbackHref: string
   label?: string
-  /**
-   * Skip history entirely and always navigate to fallbackHref. Use this where
-   * the destination is unambiguous, so Back can never land on an intermediate
-   * page (e.g. an edit form) that happens to sit in the history stack.
-   */
-  direct?: boolean
 }) {
   const router = useRouter()
 
-  function handleClick() {
-    if (direct) {
-      router.push(fallbackHref)
-      return
-    }
-
-    const cameFromSameOrigin =
-      typeof window !== 'undefined' &&
-      window.history.length > 1 &&
-      document.referrer &&
-      new URL(document.referrer).origin === window.location.origin
-
-    if (cameFromSameOrigin) {
-      const pathBeforeBack = window.location.pathname + window.location.search
-      router.back()
-
-      // Safety net: this app renders module tabs inside iframes with a patched
-      // history API (see TabModeGuard), where history.back() can occasionally
-      // land nowhere. If the URL hasn't actually changed shortly after calling
-      // back(), force-navigate to the known-good fallback instead of leaving
-      // the user stuck.
-      window.setTimeout(() => {
-        const pathNow = window.location.pathname + window.location.search
-        if (pathNow === pathBeforeBack) {
-          router.push(fallbackHref)
-        }
-      }, 350)
-    } else {
-      router.push(fallbackHref)
-    }
-  }
-
+  // This app renders every module inside an iframe with a patched history API
+  // (see TabModeGuard / IFRAME_GUARD in the dashboard layout), so the history
+  // stack holds edit forms, "new" forms and duplicate entries left behind by
+  // post-save router.replace() calls. history.back() therefore lands somewhere
+  // arbitrary — most visibly on the edit page the user just saved.
+  //
+  // Every call site already passes the destination it wants, so navigate there
+  // directly and deterministically instead of guessing from history.
   return (
     <button
       type="button"
-      onClick={handleClick}
+      onClick={() => router.push(fallbackHref)}
       className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
     >
       <ArrowLeft className="w-4 h-4" /> {label}
