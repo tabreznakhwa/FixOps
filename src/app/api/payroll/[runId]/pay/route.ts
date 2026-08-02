@@ -18,10 +18,14 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { payment_mode, payment_date } = await request.json()
-  if (!payment_mode || !payment_date) {
-    return NextResponse.json({ error: 'Payment mode and date are required' }, { status: 400 })
+  const body = await request.json()
+  const { payment_date, entries } = body as {
+    payment_date: string
+    entries: Array<{ slip_id: string; payment_mode: string }>
   }
+
+  if (!payment_date) return NextResponse.json({ error: 'Payment date is required' }, { status: 400 })
+  if (!entries?.length) return NextResponse.json({ error: 'No entries provided' }, { status: 400 })
 
   const admin = createAdminClient() as any
 
@@ -31,13 +35,16 @@ export async function POST(
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  const { error } = await admin.from('salary_slips').update({
-    payment_status: 'paid',
-    payment_mode,
-    payment_date,
-  }).eq('salary_run_id', runId).eq('payment_status', 'pending')
+  // Update each slip with its own payment mode
+  for (const entry of entries) {
+    const { error } = await admin.from('salary_slips').update({
+      payment_status: 'paid',
+      payment_mode: entry.payment_mode,
+      payment_date,
+    }).eq('id', entry.slip_id).eq('salary_run_id', runId)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   await admin.from('salary_runs').update({ status: 'paid' }).eq('id', runId)
 

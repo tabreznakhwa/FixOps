@@ -135,6 +135,19 @@ export default async function PayrollProcessPage({
     slips = slipsRaw ?? []
   }
 
+  // Build per-employee pending slip details for the Pay modal
+  const pendingSlips = slips
+    .filter(sl => sl.payment_status === 'pending')
+    .map(sl => {
+      const s = staff.find(s => s.id === sl.staff_id)
+      return {
+        slipId: sl.id,
+        staffName: s?.full_name ?? 'Unknown',
+        netSalary: sl.net_salary,
+        hasIban: Boolean(s?.iban),
+      }
+    })
+
   // Build preview rows
   const rows = staff.map((s) => {
     const slip = slips.find((sl) => sl.staff_id === s.id)
@@ -169,7 +182,7 @@ export default async function PayrollProcessPage({
             actions={
               <div className="flex items-center gap-2">
                 {run && pendingCount > 0 && (
-                  <PaySalariesButton runId={run.id} pendingCount={pendingCount} totalNet={totalNet} />
+                  <PaySalariesButton runId={run.id} pendingCount={pendingCount} totalNet={totalNet} pendingSlips={pendingSlips} />
                 )}
                 {run && run.status !== 'paid' && canResetRun && (
                   <ResetRunButton runId={run.id} />
