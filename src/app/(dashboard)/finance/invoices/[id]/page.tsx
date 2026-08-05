@@ -140,7 +140,9 @@ export default async function InvoiceDetailPage({
   const workOrder = invoice.work_orders
   const createdBy = invoice.users
 
-  // Prefer URL param (set when navigating from complaint/WO), fall back to the FK on the invoice itself
+  // For DISPLAY and contextual links only (the "Linked Work Order" panel and the
+  // "Back to Work Order" action). Falls back to the FK on the invoice, so it says
+  // nothing about where the user came from — never use it to pick a Back destination.
   const resolvedWorkOrderId: string | undefined = work_order_id ?? (invoiceRaw as any).work_order_id ?? undefined
 
   // Where the payment form should send the user back AFTER recording payment.
@@ -297,8 +299,13 @@ export default async function InvoiceDetailPage({
             )}
             <PrintActions label="Print Invoice" />
             <BackButton
-              fallbackHref={return_to ?? (complaint_id ? `/complaints/${complaint_id}` : resolvedWorkOrderId ? `/work-orders/${resolvedWorkOrderId}` : '/finance/invoices')}
-              label={return_to === '/finance/receivables' ? 'Receivables' : complaint_id ? 'Complaint' : resolvedWorkOrderId ? 'Work Order' : 'Invoices'}
+              // Back follows the route the user actually took — return_to, then the
+              // work_order_id/complaint_id set by the page that linked here. It must
+              // NOT use resolvedWorkOrderId: that falls back to the invoice's own FK,
+              // which sent users arriving from the invoice list to a work order they
+              // never visited.
+              fallbackHref={return_to ?? (complaint_id ? `/complaints/${complaint_id}` : work_order_id ? `/work-orders/${work_order_id}` : '/finance/invoices')}
+              label={return_to === '/finance/receivables' ? 'Receivables' : complaint_id ? 'Complaint' : work_order_id ? 'Work Order' : 'Invoices'}
             />
           </div>
         }

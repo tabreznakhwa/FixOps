@@ -7,9 +7,9 @@ import { EditInvoiceForm } from './EditInvoiceForm'
 
 export const metadata = { title: 'Edit Invoice' }
 
-export default async function EditInvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ complaint_id?: string }> }) {
+export default async function EditInvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ complaint_id?: string; work_order_id?: string }> }) {
   const { id } = await params
-  const { complaint_id } = await searchParams
+  const { complaint_id, work_order_id } = await searchParams
   const supabase = await createClient()
 
   // Role guard — only admin/owner/manager
@@ -56,13 +56,23 @@ export default async function EditInvoicePage({ params, searchParams }: { params
     .order('item_name')
     .limit(2000)
 
+  // Preserve how the user reached this invoice so Cancel hands the context back
+  // to the detail page rather than dropping it.
+  const originParams = new URLSearchParams()
+  if (work_order_id) originParams.set('work_order_id', work_order_id)
+  if (complaint_id) originParams.set('complaint_id', complaint_id)
+  const cancelQuery = originParams.toString() ? `?${originParams.toString()}` : ''
+
   return (
     <div className="animate-fade-in">
       <Header
         title={`Edit ${invoiceRaw.invoice_number}`}
         subtitle="Update invoice details and line items"
         actions={
-          <BackButton fallbackHref={complaint_id ? `/complaints/${complaint_id}` : invoiceRaw.work_order_id ? `/work-orders/${invoiceRaw.work_order_id}` : `/finance/invoices/${id}`} label="Cancel" />
+          /* Cancel returns to the invoice being edited — never to a linked work
+             order the user may never have visited. The origin params are carried
+             through so the invoice's own Back still lands where they came from. */
+          <BackButton fallbackHref={`/finance/invoices/${id}${cancelQuery}`} label="Cancel" />
         }
       />
       <div className="p-6">
