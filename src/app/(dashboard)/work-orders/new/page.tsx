@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { NewWorkOrderForm } from './NewWorkOrderForm'
+import { fetchAllCustomers } from '@/lib/customers'
 
 export const metadata = { title: 'New Work Order' }
 
@@ -14,13 +15,8 @@ export default async function NewWorkOrderPage({
   const params = await searchParams
   const supabase = await createClient()
 
-  const [customersRes, usersRes, staffRes, complaintsRes] = await Promise.all([
-    supabase
-      .from('customers')
-      .select('id, full_name, mobile_number, company_name')
-      .eq('status', 'active')
-      .order('full_name')
-      .limit(5000),
+  const [customerRows, usersRes, staffRes, complaintsRes] = await Promise.all([
+    fetchAllCustomers(supabase, 'id, full_name, mobile_number, company_name'),
     supabase
       .from('users')
       .select('id, full_name, role')
@@ -40,7 +36,7 @@ export default async function NewWorkOrderPage({
       .limit(100),
   ])
 
-  const customers = (customersRes.data ?? []) as unknown as Array<{
+  const customers = (customerRows ?? []) as unknown as Array<{
     id: string; full_name: string; mobile_number: string | null; company_name: string | null
   }>
 

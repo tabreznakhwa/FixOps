@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { OpeningReceivablesForm } from './OpeningReceivablesForm'
+import { fetchAllCustomers } from '@/lib/customers'
 
 export const metadata = { title: 'Opening Receivables' }
 
@@ -17,14 +18,12 @@ export default async function OpeningReceivablesPage() {
 
   const admin = createAdminClient() as any
 
-  const [customersRes, entriesRes] = await Promise.all([
-    admin
-      .from('customers')
-      .select('id, full_name, customer_code, mobile_number')
-      .eq('organization_id', profile?.organization_id)
-      .eq('status', 'active')
-      .order('full_name')
-      .limit(5000),
+  const [customerRows, entriesRes] = await Promise.all([
+    fetchAllCustomers<{ id: string; full_name: string; customer_code: string; mobile_number?: string }>(
+      admin,
+      'id, full_name, customer_code, mobile_number',
+      { organizationId: profile?.organization_id },
+    ),
     admin
       .from('opening_receivables')
       .select('*, customers(full_name, customer_code)')
@@ -46,7 +45,7 @@ export default async function OpeningReceivablesPage() {
           Enter invoices or bills that customers owed you <strong>before your go-live date</strong>. These will appear as outstanding in Receivables and Bill-wise Outstanding.
         </div>
         <OpeningReceivablesForm
-          customers={customersRes.data ?? []}
+          customers={customerRows ?? []}
           entries={entriesRes.data ?? []}
         />
       </div>

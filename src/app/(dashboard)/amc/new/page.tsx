@@ -3,18 +3,14 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { NewAMCForm } from './NewAMCForm'
+import { fetchAllCustomers } from '@/lib/customers'
 
 export const metadata = { title: 'New AMC Contract' }
 
 export default async function NewAMCPage() {
   const supabase = await createClient()
 
-  const { data: customersRaw } = await supabase
-    .from('customers')
-    .select('id, full_name, company_name, mobile_number')
-    .eq('status', 'active')
-    .order('full_name')
-    .limit(5000)
+  const customersRaw = await fetchAllCustomers(supabase, 'id, full_name, company_name, mobile_number')
 
   const customers = (customersRaw ?? []) as unknown as Array<{
     id: string

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, Loader2, Search, ChevronDown, X, Package } from 'lucide-react'
+import { Plus, Trash2, Loader2, Search, ChevronDown, X, Package, Pencil, Check } from 'lucide-react'
 
 const PRESET_SERVICES = [
   {
@@ -369,6 +369,58 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
   const [removing, setRemoving] = useState<string | null>(null)
   const [error, setError] = useState('')
 
+  // Inline edit of an existing line item — previously a line could only be
+  // deleted and re-added, which lost it from the record and (for parts) churned
+  // stock unnecessarily.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDesc, setEditDesc] = useState('')
+  const [editQty, setEditQty] = useState('')
+  const [editPrice, setEditPrice] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+
+  function startEdit(item: LineItem) {
+    setEditingId(item.id)
+    setEditDesc(item.description)
+    setEditQty(String(item.quantity))
+    setEditPrice(Number(item.unit_price).toFixed(3))
+    setEditError('')
+  }
+
+  async function handleSaveEdit(itemId: string) {
+    const qty = parseFloat(editQty)
+    const price = parseFloat(editPrice)
+    if (!editDesc.trim()) { setEditError('Description is required'); return }
+    if (!(qty > 0)) { setEditError('Quantity must be greater than zero'); return }
+    if (!(price >= 0)) { setEditError('Unit price cannot be negative'); return }
+
+    setEditSaving(true)
+    setEditError('')
+    try {
+      const res = await fetch(`/api/work-orders/${workOrderId}/line-items`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          line_item_id: itemId,
+          description: editDesc.trim(),
+          quantity: qty,
+          unit_price: price,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setEditError(data.error ?? 'Failed to update line item'); return }
+      setItems(prev => prev.map(i =>
+        i.id === itemId ? { ...i, description: editDesc.trim(), quantity: qty, unit_price: price } : i
+      ))
+      setEditingId(null)
+      router.refresh()
+    } catch {
+      setEditError('Network error. Please try again.')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   const selectedInvItem = inventoryItems.find(i => i.id === inventoryItemId) ?? null
 
   function resetForm() {
@@ -507,24 +559,89 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
       {items.length > 0 && (
         <div className="mb-4 divide-y divide-slate-50 border border-slate-100 rounded-lg overflow-hidden">
           {items.map(item => (
-            <div key={item.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">{TYPE_ICON[item.item_type]}</span>
-                  <p className="text-sm font-medium text-slate-800 truncate">{item.description}</p>
+            <div key={item.id} className="px-4 py-2.5 hover:bg-slate-50">
+              {editingId === item.id ? (
+                <div className="space-y-2 py-1">
+                  <input
+                    value={editDesc}
+                    onChange={e => setEditDesc(e.target.value)}
+                    placeholder="Description"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="text-xs text-slate-500 w-full sm:w-auto">Qty</label>
+                    <input
+                      type="number" min="0" step="0.01"
+                      value={editQty}
+                      onChange={e => setEditQty(e.target.value)}
+                      className="w-24 px-2.5 py-2 rounded-lg border border-slate-200 text-sm text-right text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <label className="text-xs text-slate-500">Unit price</label>
+                    <input
+                      type="number" min="0" step="0.001"
+                      value={editPrice}
+                      onChange={e => setEditPrice(e.target.value)}
+                      className="w-28 px-2.5 py-2 rounded-lg border border-slate-200 text-sm text-right text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-xs font-semibold text-slate-600 ml-auto">
+                      = KWD {((parseFloat(editQty) || 0) * (parseFloat(editPrice) || 0)).toFixed(3)}
+                    </span>
+                  </div>
+                  {item.item_type === 'part' && item.inventory_item_id && (
+                    <p className="text-xs text-slate-400">
+                      Changing the quantity adjusts stock by the difference.
+                    </p>
+                  )}
+                  {editError && <p className="text-xs text-red-600">{editError}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleSaveEdit(item.id)}
+                      disabled={editSaving}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg disabled:opacity-60 transition"
+                    >
+                      {editSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      Save
+                    </button>
+                    <button
+                      onClick={() => { setEditingId(null); setEditError('') }}
+                      disabled={editSaving}
+                      className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-50 transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {item.quantity} × KWD {Number(item.unit_price).toFixed(3)} = KWD {(item.quantity * item.unit_price).toFixed(3)}
-                </p>
-              </div>
-              {!isCompleted && (
-                <button
-                  onClick={() => handleRemove(item.id)}
-                  disabled={removing === item.id}
-                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition flex-shrink-0"
-                >
-                  {removing === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                </button>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400">{TYPE_ICON[item.item_type]}</span>
+                      <p className="text-sm font-medium text-slate-800 truncate">{item.description}</p>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {item.quantity} × KWD {Number(item.unit_price).toFixed(3)} = KWD {(item.quantity * item.unit_price).toFixed(3)}
+                    </p>
+                  </div>
+                  {!isCompleted && (
+                    <>
+                      <button
+                        onClick={() => startEdit(item)}
+                        title="Edit line item"
+                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition flex-shrink-0"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleRemove(item.id)}
+                        disabled={removing === item.id}
+                        title="Remove line item"
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition flex-shrink-0"
+                      >
+                        {removing === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      </button>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           ))}

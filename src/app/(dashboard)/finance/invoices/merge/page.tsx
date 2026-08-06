@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { MergeInvoiceForm } from './MergeInvoiceForm'
+import { fetchAllCustomers } from '@/lib/customers'
 
 export const metadata = { title: 'Monthly Invoice' }
 
@@ -17,12 +18,7 @@ export default async function MergeInvoicePage() {
   const userRole = (profileRaw as { role: string } | null)?.role ?? ''
   if (!['owner', 'admin', 'manager'].includes(userRole)) redirect('/finance/invoices')
 
-  const { data: customersRaw } = await supabase
-    .from('customers')
-    .select('id, full_name, mobile_number, company_name')
-    .eq('status', 'active')
-    .order('full_name')
-    .limit(5000)
+  const customersRaw = await fetchAllCustomers(supabase, 'id, full_name, mobile_number, company_name')
 
   const customers = (customersRaw ?? []) as Array<{
     id: string; full_name: string; mobile_number: string | null; company_name: string | null

@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { NewInvoiceForm } from './NewInvoiceForm'
+import { fetchAllCustomers } from '@/lib/customers'
 
 export const metadata = { title: 'New Invoice' }
 
@@ -19,12 +20,7 @@ export default async function NewInvoicePage({
   const { data: profileRaw } = await admin.from('users').select('organization_id').eq('id', user!.id).single()
   const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
 
-  const { data: customersRaw } = await supabase
-    .from('customers')
-    .select('id, full_name, mobile_number, company_name')
-    .eq('status', 'active')
-    .order('full_name')
-    .limit(5000)
+  const customersRaw = await fetchAllCustomers(supabase, 'id, full_name, mobile_number, company_name')
 
   const customers = (customersRaw ?? []) as unknown as Array<{
     id: string

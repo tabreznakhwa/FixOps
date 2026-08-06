@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { QuotationForm } from '../QuotationForm'
+import { fetchAllCustomers } from '@/lib/customers'
 
 export const metadata = { title: 'New Quotation' }
 
@@ -16,12 +17,7 @@ export default async function NewQuotationPage() {
   const role = (profileRaw as { role: string } | null)?.role ?? ''
   if (!['owner', 'admin'].includes(role)) redirect('/dashboard?error=unauthorized')
 
-  const { data: customersRaw } = await supabase
-    .from('customers')
-    .select('id, full_name, mobile_number, company_name')
-    .eq('status', 'active')
-    .order('full_name')
-    .limit(5000)
+  const customersRaw = await fetchAllCustomers(supabase, 'id, full_name, mobile_number, company_name')
 
   const customers = (customersRaw ?? []) as Array<{
     id: string

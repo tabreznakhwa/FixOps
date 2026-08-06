@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { EditAMCForm } from './EditAMCForm'
+import { fetchAllCustomers } from '@/lib/customers'
 
 export const metadata = { title: 'Edit AMC Contract' }
 
@@ -11,17 +12,13 @@ export default async function EditAMCPage({ params }: { params: Promise<{ id: st
   const { id } = await params
   const supabase = await createClient()
 
-  const [{ data: contractRaw }, { data: customersRaw }] = await Promise.all([
+  const [{ data: contractRaw }, customersRaw] = await Promise.all([
     supabase
       .from('amc_contracts')
       .select('id, contract_number, contract_type, start_date, end_date, contract_amount, billing_frequency, services_included, visits_included, parts_included, payment_terms, status, renewal_reminder_date, notes, customer_id')
       .eq('id', id)
       .single(),
-    supabase
-      .from('customers')
-      .select('id, full_name, company_name, mobile_number')
-      .eq('status', 'active')
-      .order('full_name'),
+    fetchAllCustomers(supabase, 'id, full_name, company_name, mobile_number'),
   ])
 
   if (!contractRaw) notFound()

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { QuotationForm } from '../../QuotationForm'
+import { fetchAllCustomers } from '@/lib/customers'
 
 export const metadata = { title: 'Edit Quotation' }
 
@@ -42,8 +43,8 @@ export default async function EditQuotationPage({ params }: { params: Promise<{ 
 
   if (quotation.status === 'converted') redirect(`/finance/quotations/${id}`)
 
-  const [{ data: customersRaw }, { data: itemsRaw }] = await Promise.all([
-    supabase.from('customers').select('id, full_name, mobile_number, company_name').eq('status', 'active').order('full_name').limit(5000),
+  const [customersRaw, { data: itemsRaw }] = await Promise.all([
+    fetchAllCustomers(supabase, 'id, full_name, mobile_number, company_name'),
     admin.from('quotation_items').select('description, quantity, unit_price').eq('quotation_id', id).order('sort_order'),
   ])
 

@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { EditInvoiceForm } from './EditInvoiceForm'
+import { fetchAllCustomers } from '@/lib/customers'
 
 export const metadata = { title: 'Edit Invoice' }
 
@@ -35,12 +36,7 @@ export default async function EditInvoicePage({ params, searchParams }: { params
     .eq('invoice_id', id)
     .order('sort_order')
 
-  const { data: customersRaw } = await supabase
-    .from('customers')
-    .select('id, full_name, mobile_number, company_name')
-    .eq('status', 'active')
-    .order('full_name')
-    .limit(5000)
+  const customersRaw = await fetchAllCustomers(supabase, 'id, full_name, mobile_number, company_name')
 
   const { data: workOrdersRaw } = await supabase
     .from('work_orders')

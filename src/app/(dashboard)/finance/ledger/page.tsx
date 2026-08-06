@@ -5,6 +5,7 @@ import { FileBarChart } from 'lucide-react'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
 import { LedgerCustomerSelector } from './LedgerCustomerSelector'
+import { fetchAllCustomers } from '@/lib/customers'
 
 export const metadata = { title: 'Customer Ledger' }
 
@@ -20,11 +21,7 @@ export default async function LedgerPage({
   const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
   const admin = createAdminClient() as any
 
-  const { data: customersRaw } = await supabase
-    .from('customers')
-    .select('id, full_name, mobile_number, company_name')
-    .eq('status', 'active')
-    .order('full_name')
+  const customersRaw = await fetchAllCustomers(supabase, 'id, full_name, mobile_number, company_name')
   const customers = (customersRaw ?? []) as unknown as Array<{
     id: string; full_name: string; mobile_number: string; company_name: string | null
   }>
