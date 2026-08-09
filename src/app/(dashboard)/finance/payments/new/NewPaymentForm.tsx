@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { AlertCircle, Search, X } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
@@ -53,6 +54,7 @@ export function NewPaymentForm({
   prefilledAmount,
   returnTo,
 }: Props) {
+  const router = useRouter()
   const [customerId, setCustomerId] = useState(prefilledCustomerId)
   const [customerName, setCustomerName] = useState(prefilledCustomerName)
   const [searchQuery, setSearchQuery] = useState('')
@@ -205,7 +207,12 @@ export function NewPaymentForm({
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'Failed to record payment')
       }
-      window.location.href = returnTo ?? '/finance/payments'
+      // replace(), not push()/location.href: the payment is recorded, so this
+      // form must not stay in the history stack — otherwise Back lands the user
+      // right back on the completed form. refresh() re-fetches the destination
+      // so invoice balances reflect the payment just taken.
+      router.replace(returnTo ?? '/finance/payments')
+      router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setLoading(false)
