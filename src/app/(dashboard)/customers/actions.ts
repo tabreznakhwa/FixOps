@@ -110,6 +110,14 @@ export async function createCustomer(
   })
 
   revalidatePath('/customers')
+  // Return to wherever the user started — e.g. adding a customer part-way
+  // through logging a complaint should land back on Complaints, not the
+  // customer list. Only same-site paths are honoured.
+  const returnTo = formData.get('return_to') as string | null
+  if (returnTo?.startsWith('/') && !returnTo.startsWith('//')) {
+    revalidatePath(returnTo)
+    redirect(returnTo)
+  }
   redirect('/customers')
 }
 

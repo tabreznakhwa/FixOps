@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createCustomer } from '../actions'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
@@ -16,8 +17,24 @@ const CUSTOMER_TYPES = [
 ]
 
 export default function NewCustomerPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewCustomerPageInner />
+    </Suspense>
+  )
+}
+
+function NewCustomerPageInner() {
   const [state, action, pending] = useActionState(createCustomer, null)
   const [customerType, setCustomerType] = useState('individual')
+
+  // Where the user came from — adding a customer part-way through logging a
+  // complaint should return to Complaints, not the customer list.
+  const searchParams = useSearchParams()
+  const rawReturnTo = searchParams.get('return_to')
+  const returnTo = rawReturnTo?.startsWith('/') && !rawReturnTo.startsWith('//') ? rawReturnTo : null
+  const backHref = returnTo ?? '/customers'
+  const backLabel = returnTo?.startsWith('/complaints') ? 'Complaints' : 'Back'
 
   const isCompanyType = customerType === 'company' || customerType === 'amc'
   const isCreditType = customerType === 'credit'
@@ -28,7 +45,7 @@ export default function NewCustomerPage() {
         title="Add Customer"
         subtitle="Create a new customer record"
         actions={
-          <BackButton fallbackHref="/customers" label="Back" />
+          <BackButton fallbackHref={backHref} label={backLabel} />
         }
       />
 
@@ -41,6 +58,8 @@ export default function NewCustomerPage() {
         )}
 
         <form action={action} className="space-y-6">
+          {/* Carried through the save so the action returns to the same place Back does */}
+          {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
           {/* Customer Type */}
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <h2 className="text-sm font-semibold text-slate-700 mb-4">Customer Type</h2>

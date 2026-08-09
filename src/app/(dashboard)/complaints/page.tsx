@@ -143,7 +143,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
               <ComplaintSearchBar />
             </Suspense>
             <Link
-              href="/customers/new"
+              href="/customers/new?return_to=%2Fcomplaints"
               className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
             >
               <UserPlus className="w-4 h-4" /> New Customer
