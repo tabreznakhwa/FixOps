@@ -56,7 +56,10 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function AttendancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; staff_id?: string; period?: string }>
+  searchParams: Promise<{
+    month?: string; staff_id?: string; period?: string
+    from?: string; to?: string; page?: string
+  }>
 }) {
   const params = await searchParams
   const today = new Date()
@@ -68,6 +71,9 @@ export default async function AttendancePage({
 
   const period = params.period ?? ''
   const selectedStaffId = params.staff_id ?? ''
+  const customFrom = params.from ?? ''
+  const customTo = params.to ?? ''
+  const pageNum = Math.max(1, Number(params.page) || 1)
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -108,9 +114,22 @@ export default async function AttendancePage({
   let endDate: string
   let periodLabel: string | null = null
 
-  if (period === 'today') {
+  // An explicit from/to wins over every preset.
+  if (customFrom || customTo) {
+    startDate = customFrom || customTo
+    endDate = customTo || customFrom
+    // Tolerate a range entered backwards rather than silently returning nothing.
+    if (startDate > endDate) [startDate, endDate] = [endDate, startDate]
+    periodLabel = startDate === endDate ? formatDate(startDate) : `${formatDate(startDate)} – ${formatDate(endDate)}`
+  } else if (period === 'today') {
     startDate = endDate = todayStr
     periodLabel = 'Today'
+  } else if (period === 'last_month') {
+    const lm = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+    const lmMonth = `${lm.getFullYear()}-${pad(lm.getMonth() + 1)}`
+    startDate = `${lmMonth}-01`
+    endDate = `${lmMonth}-${pad(new Date(lm.getFullYear(), lm.getMonth() + 1, 0).getDate())}`
+    periodLabel = 'Last Month'
   } else if (period === 'yesterday') {
     const yest = new Date(today)
     yest.setDate(yest.getDate() - 1)
@@ -135,12 +154,22 @@ export default async function AttendancePage({
     endDate = `${currentMonth}-${String(lastDay).padStart(2, '0')}`
   }
 
+  // Paged, with an exact count. Previously this was a flat .limit(200) on a
+  // date-descending list, so a month of 14 staff (~430 rows) silently showed
+  // only the newest 200 — picking July returned 31 July back to ~15 July with
+  // no way to reach the earlier days.
+  const PAGE_SIZE = 200
+
   let query = (supabase as any)
     .from('attendance')
-    .select('id, staff_id, date, check_in, check_out, hours_worked, overtime_hours, status, notes, is_public_holiday, friday_ot_amount, staff(full_name)')
+    .select(
+      'id, staff_id, date, check_in, check_out, hours_worked, overtime_hours, status, notes, is_public_holiday, friday_ot_amount, staff(full_name)',
+      { count: 'exact' }
+    )
     .gte('date', startDate)
     .lte('date', endDate)
     .order('date', { ascending: false })
+    .order('staff_id', { ascending: true })
 
   // Kiosk: always force-filter to their own staff_id (ignore URL param)
   // If staff not yet linked, use an impossible UUID so zero records show
@@ -150,7 +179,11 @@ export default async function AttendancePage({
     query = query.eq('staff_id', selectedStaffId)
   }
 
-  const { data: recordsRaw } = await query.limit(200)
+  const rangeFrom = (pageNum - 1) * PAGE_SIZE
+  const { data: recordsRaw, count: totalCount } = await query.range(rangeFrom, rangeFrom + PAGE_SIZE - 1)
+
+  const totalRecords = totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE))
 
   const records = (recordsRaw ?? []) as Array<{
     id: string
@@ -167,14 +200,35 @@ export default async function AttendancePage({
     staff: { full_name: string } | null
   }>
 
+  // Summary must cover the whole period, not just the page on screen — pull the
+  // three fields it needs across every row in range.
+  type SummaryRow = { staff_id: string; status: string; overtime_hours: number | null; friday_ot_amount: number | null }
+  const summaryRows: SummaryRow[] = []
+  for (let offset = 0; offset < 20_000; offset += 1000) {
+    let sq = (supabase as any)
+      .from('attendance')
+      .select('staff_id, status, overtime_hours, friday_ot_amount')
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: false })
+    if (isKiosk) sq = sq.eq('staff_id', kioskStaffId ?? '00000000-0000-0000-0000-000000000000')
+    else if (selectedStaffId) sq = sq.eq('staff_id', selectedStaffId)
+
+    const { data: chunk, error: chunkError } = await sq.range(offset, offset + 999)
+    if (chunkError) break
+    const rows = (chunk ?? []) as SummaryRow[]
+    summaryRows.push(...rows)
+    if (rows.length < 1000) break
+  }
+
   // Summary
   const summary = {
-    present: records.filter((r) => r.status === 'present').length,
-    absent: records.filter((r) => r.status === 'absent').length,
-    half_day: records.filter((r) => r.status === 'half_day').length,
-    leave: records.filter((r) => r.status === 'leave').length,
-    overtime: records.reduce((s, r) => s + (r.overtime_hours ?? 0), 0),
-    fridayOt: records.reduce((s, r) => s + (r.friday_ot_amount ?? 0), 0),
+    present: summaryRows.filter((r) => r.status === 'present').length,
+    absent: summaryRows.filter((r) => r.status === 'absent').length,
+    half_day: summaryRows.filter((r) => r.status === 'half_day').length,
+    leave: summaryRows.filter((r) => r.status === 'leave').length,
+    overtime: summaryRows.reduce((s, r) => s + (r.overtime_hours ?? 0), 0),
+    fridayOt: summaryRows.reduce((s, r) => s + (r.friday_ot_amount ?? 0), 0),
   }
 
   // Staff with no record at all for a single-day view.
@@ -185,7 +239,8 @@ export default async function AttendancePage({
   // instead of at month end.
   const canMarkAbsent = canEdit
   const isSingleDay = startDate === endDate
-  const markedStaffIds = new Set(records.map((r) => r.staff_id))
+  // Uses the whole-period rows, not the page, so this stays correct on page 2+.
+  const markedStaffIds = new Set(summaryRows.map((r) => r.staff_id))
   const unmarkedStaff = isSingleDay
     ? staffList.filter((s) => !markedStaffIds.has(s.id) && (!selectedStaffId || s.id === selectedStaffId))
     : []
@@ -201,6 +256,7 @@ export default async function AttendancePage({
     return `/attendance?${qs.toString()}`
   }
 
+  // Presets clear any custom range (and vice versa) so the two can't disagree.
   const buildPeriodHref = (p: string) => {
     const qs = new URLSearchParams()
     qs.set('month', currentMonth)
@@ -208,6 +264,22 @@ export default async function AttendancePage({
     if (p !== period) qs.set('period', p)
     return `/attendance?${qs.toString()}`
   }
+
+  // Page links keep every active filter — otherwise page 2 would silently
+  // reset to a different period than page 1.
+  const buildPageHref = (p: number) => {
+    const qs = new URLSearchParams()
+    qs.set('month', currentMonth)
+    if (selectedStaffId) qs.set('staff_id', selectedStaffId)
+    if (period) qs.set('period', period)
+    if (customFrom) qs.set('from', customFrom)
+    if (customTo) qs.set('to', customTo)
+    if (p > 1) qs.set('page', String(p))
+    return `/attendance?${qs.toString()}`
+  }
+
+  const showingFrom = totalRecords === 0 ? 0 : rangeFrom + 1
+  const showingTo = Math.min(rangeFrom + PAGE_SIZE, totalRecords)
 
   return (
     <div className="animate-fade-in">
@@ -241,12 +313,13 @@ export default async function AttendancePage({
             { label: 'Yesterday', value: 'yesterday' },
             { label: 'This Week', value: 'this_week' },
             { label: 'This Month', value: 'this_month' },
+            { label: 'Last Month', value: 'last_month' },
           ].map(({ label, value }) => (
             <Link
               key={value}
               href={buildPeriodHref(value)}
               className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                period === value
+                period === value && !customFrom && !customTo
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
               }`}
@@ -255,6 +328,40 @@ export default async function AttendancePage({
             </Link>
           ))}
         </div>
+
+        {/* Custom date range */}
+        <form method="get" className="flex flex-wrap items-end gap-2 bg-white border border-slate-200 rounded-xl p-3">
+          <input type="hidden" name="month" value={currentMonth} />
+          {selectedStaffId && <input type="hidden" name="staff_id" value={selectedStaffId} />}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
+            <input
+              type="date" name="from" defaultValue={customFrom}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">To</label>
+            <input
+              type="date" name="to" defaultValue={customTo}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg transition-colors"
+          >
+            Apply
+          </button>
+          {(customFrom || customTo) && (
+            <Link
+              href={`/attendance?month=${currentMonth}${selectedStaffId ? `&staff_id=${selectedStaffId}` : ''}`}
+              className="px-4 py-2 border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Clear
+            </Link>
+          )}
+        </form>
 
         {/* Month Navigator + Staff Filter */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -424,6 +531,44 @@ export default async function AttendancePage({
                 ))}
               </tbody>
             </table>
+
+            {/* Page navigation — without this a long period showed only its
+                newest 200 rows and the earlier days were unreachable. */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 bg-slate-50">
+              <p className="text-xs text-slate-500">
+                Showing <strong className="text-slate-700">{showingFrom}–{showingTo}</strong> of{' '}
+                <strong className="text-slate-700">{totalRecords}</strong> records
+                {totalPages > 1 && <> · page {pageNum} of {totalPages}</>}
+              </p>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  {pageNum > 1 ? (
+                    <Link
+                      href={buildPageHref(pageNum - 1)}
+                      className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+                    >
+                      ← Previous
+                    </Link>
+                  ) : (
+                    <span className="px-3 py-1.5 text-xs font-semibold text-slate-300 bg-white border border-slate-100 rounded-lg">
+                      ← Previous
+                    </span>
+                  )}
+                  {pageNum < totalPages ? (
+                    <Link
+                      href={buildPageHref(pageNum + 1)}
+                      className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+                    >
+                      Next →
+                    </Link>
+                  ) : (
+                    <span className="px-3 py-1.5 text-xs font-semibold text-slate-300 bg-white border border-slate-100 rounded-lg">
+                      Next →
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

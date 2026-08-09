@@ -53,6 +53,44 @@ export async function POST(req: Request) {
   return NextResponse.json(data, { status: 201 })
 }
 
+export async function PATCH(req: Request) {
+  const supabase = await createClient()
+  const profile = await getProfile(supabase as any)
+  if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!['owner', 'admin'].includes(profile.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const body = await req.json()
+  const { id, withdrawal_date, amount, payment_mode, purpose, notes } = body
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  if (!withdrawal_date || !payment_mode) {
+    return NextResponse.json({ error: 'withdrawal_date and payment_mode are required' }, { status: 400 })
+  }
+  const amt = Number(amount)
+  if (!amt || amt <= 0) {
+    return NextResponse.json({ error: 'Enter a valid amount' }, { status: 400 })
+  }
+
+  const { data, error } = await (supabase as any)
+    .from('owner_withdrawals')
+    .update({
+      withdrawal_date,
+      amount: amt,
+      payment_mode,
+      purpose: purpose || null,
+      notes: notes || null,
+    })
+    .eq('id', id)
+    .eq('organization_id', profile.organization_id)
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!data) return NextResponse.json({ error: 'Withdrawal not found' }, { status: 404 })
+  return NextResponse.json(data)
+}
+
 export async function DELETE(req: Request) {
   const supabase = await createClient()
   const profile = await getProfile(supabase as any)

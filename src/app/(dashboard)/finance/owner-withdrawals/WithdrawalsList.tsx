@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Wallet, PlusCircle, Trash2, AlertCircle } from 'lucide-react'
+import { Wallet, PlusCircle, Trash2, AlertCircle, Pencil, Check, X, Loader2 } from 'lucide-react'
 
 const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
 
@@ -33,6 +33,51 @@ export function WithdrawalsList({ withdrawals: initial }: Props) {
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState('')
+
+  // Inline edit of an existing withdrawal — previously a wrong amount or date
+  // could only be deleted and re-entered, which lost the original record.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({
+    withdrawal_date: '', amount: '', payment_mode: 'cash', purpose: '', notes: '',
+  })
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+
+  function startEdit(w: Withdrawal) {
+    setEditingId(w.id)
+    setEditError('')
+    setEditForm({
+      withdrawal_date: w.withdrawal_date,
+      amount: String(w.amount),
+      payment_mode: w.payment_mode,
+      purpose: w.purpose ?? '',
+      notes: w.notes ?? '',
+    })
+  }
+
+  async function handleUpdate(id: string) {
+    const amt = Number(editForm.amount)
+    if (!editForm.withdrawal_date) { setEditError('Date is required'); return }
+    if (!amt || amt <= 0) { setEditError('Enter a valid amount'); return }
+    setEditSaving(true)
+    setEditError('')
+    try {
+      const res = await fetch('/api/owner-withdrawals', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...editForm, amount: amt }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setEditError(data.error ?? 'Failed to update'); return }
+      setWithdrawals(prev => prev.map(w => (w.id === id ? { ...w, ...data } : w)))
+      setEditingId(null)
+      router.refresh()
+    } catch {
+      setEditError('Network error. Please try again.')
+    } finally {
+      setEditSaving(false)
+    }
+  }
 
   const blank = () => ({
     withdrawal_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }),
@@ -201,30 +246,89 @@ export function WithdrawalsList({ withdrawals: initial }: Props) {
           </thead>
           <tbody className="divide-y divide-slate-50">
             {withdrawals.map(w => (
-              <tr key={w.id} className="hover:bg-slate-50 transition-colors group">
-                <td className="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{formatDate(w.withdrawal_date)}</td>
-                <td className="px-4 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(w.amount)}</td>
-                <td className="px-4 py-3">
-                  <span className="text-xs font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
-                    {MODE_LABELS[w.payment_mode] ?? w.payment_mode}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-sm text-slate-600">
-                  {w.purpose && <span className="font-medium">{w.purpose}</span>}
-                  {w.purpose && w.notes && <span className="text-slate-400 mx-1">·</span>}
-                  {w.notes && <span className="text-slate-400 text-xs">{w.notes}</span>}
-                  {!w.purpose && !w.notes && <span className="text-slate-400">—</span>}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleDelete(w.id)}
-                    disabled={deletingId === w.id}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-300 hover:text-red-400 rounded"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </td>
-              </tr>
+              editingId === w.id ? (
+                <tr key={w.id} className="bg-blue-50/40">
+                  <td colSpan={5} className="px-5 py-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Date</label>
+                        <input type="date" className={inputCls} value={editForm.withdrawal_date}
+                          onChange={e => setEditForm({ ...editForm, withdrawal_date: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Amount (KWD)</label>
+                        <input type="number" min="0" step="0.001" className={inputCls} value={editForm.amount}
+                          onChange={e => setEditForm({ ...editForm, amount: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Via</label>
+                        <select className={inputCls} value={editForm.payment_mode}
+                          onChange={e => setEditForm({ ...editForm, payment_mode: e.target.value })}>
+                          {PAYMENT_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Purpose</label>
+                        <input className={inputCls} value={editForm.purpose}
+                          onChange={e => setEditForm({ ...editForm, purpose: e.target.value })} />
+                      </div>
+                      <div className="sm:col-span-2 lg:col-span-4">
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+                        <input className={inputCls} value={editForm.notes}
+                          onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
+                      </div>
+                    </div>
+                    {editError && <p className="text-xs text-red-600 mt-2">{editError}</p>}
+                    <div className="flex gap-2 mt-3">
+                      <button onClick={() => handleUpdate(w.id)} disabled={editSaving}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg disabled:opacity-60 transition">
+                        {editSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        Save
+                      </button>
+                      <button onClick={() => setEditingId(null)} disabled={editSaving}
+                        className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-50 transition">
+                        <X className="w-3.5 h-3.5" /> Cancel
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={w.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{formatDate(w.withdrawal_date)}</td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(w.amount)}</td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                      {MODE_LABELS[w.payment_mode] ?? w.payment_mode}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-600">
+                    {w.purpose && <span className="font-medium">{w.purpose}</span>}
+                    {w.purpose && w.notes && <span className="text-slate-400 mx-1">·</span>}
+                    {w.notes && <span className="text-slate-400 text-xs">{w.notes}</span>}
+                    {!w.purpose && !w.notes && <span className="text-slate-400">—</span>}
+                  </td>
+                  {/* Always visible: hover-only controls are unreachable on the tablets used in the field */}
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => startEdit(w)}
+                        title="Edit withdrawal"
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 rounded-lg transition"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(w.id)}
+                        disabled={deletingId === w.id}
+                        title="Delete withdrawal"
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 border border-slate-200 rounded-lg transition disabled:opacity-60"
+                      >
+                        {deletingId === w.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
             ))}
           </tbody>
         </table>
