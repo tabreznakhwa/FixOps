@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Pencil } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
+import { resolveBack } from '@/lib/backNav'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { PrintActions } from '@/components/print/PrintActions'
 import { CancelPurchaseInvoiceButton } from '../CancelPurchaseInvoiceButton'
@@ -11,7 +12,14 @@ import { PurchaseInvoiceAdvanceActions } from './PurchaseInvoiceAdvanceActions'
 
 export const metadata = { title: 'Purchase Invoice' }
 
-export default async function PurchaseInvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PurchaseInvoiceDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string }>
+}) {
+  const back = resolveBack((await searchParams).return_to, '/inventory/purchase-invoices', 'Back')
   const { id } = await params
   const admin = createAdminClient() as any
   const supabase = await createClient()
@@ -191,7 +199,7 @@ export default async function PurchaseInvoiceDetailPage({ params }: { params: Pr
                 <CancelPurchaseInvoiceButton id={invoice.id} redirect />
               </>
             )}
-            <BackButton fallbackHref="/inventory/purchase-invoices" label="Back" />
+            <BackButton fallbackHref={back.href} label={back.label} />
           </div>
         }
       />

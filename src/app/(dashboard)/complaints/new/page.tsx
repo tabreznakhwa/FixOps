@@ -2,11 +2,17 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
+import { resolveBack } from '@/lib/backNav'
 import { NewComplaintForm } from '@/components/complaints/NewComplaintForm'
 
 export const metadata = { title: 'New Complaint' }
 
-export default async function NewComplaintPage() {
+export default async function NewComplaintPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return_to?: string }>
+}) {
+  const back = resolveBack((await searchParams).return_to, '/complaints', 'Back')
   const supabase = await createClient()
 
   const { data: techniciansRaw } = await supabase
@@ -24,7 +30,7 @@ export default async function NewComplaintPage() {
         title="New Complaint"
         subtitle="Log a new service request"
         actions={
-          <BackButton fallbackHref="/complaints" label="Back" />
+          <BackButton fallbackHref={back.href} label={back.label} />
         }
       />
       <div className="p-6 max-w-2xl">

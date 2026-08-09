@@ -122,7 +122,7 @@ export default async function AMCDetailPage({
                   {customer.email && <p className="text-sm text-slate-600">{customer.email}</p>}
                 </div>
                 <Link
-                  href={`/customers/${customer.id}`}
+                  href={`/customers/${customer.id}?return_to=${encodeURIComponent(`/amc/${contract.id}`)}`}
                   className="mt-3 inline-block text-xs text-blue-600 hover:text-blue-700 font-medium"
                 >
                   View customer →

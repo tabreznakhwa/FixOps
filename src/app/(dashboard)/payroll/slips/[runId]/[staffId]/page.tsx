@@ -3,11 +3,19 @@ import { formatCurrency } from '@/lib/utils'
 import { PrintButton } from './PrintButton'
 import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
+import { resolveBack } from '@/lib/backNav'
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December']
 
-export default async function PayslipPage({ params }: { params: Promise<{ runId: string; staffId: string }> }) {
+export default async function PayslipPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ runId: string; staffId: string }>
+  searchParams: Promise<{ return_to?: string }>
+}) {
+  const back = resolveBack((await searchParams).return_to, '/payroll/process', 'Back to Payslips')
   const { runId, staffId } = await params
   const admin = createAdminClient() as any
 
@@ -47,7 +55,7 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
     return (
       <div className="animate-fade-in p-6">
         <div className="print:hidden mb-4">
-          <BackButton fallbackHref="/payroll/process" label="Back to Payslips" />
+          <BackButton fallbackHref={back.href} label={back.label} />
         </div>
         <div className="max-w-md bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
           <p className="text-base font-semibold text-amber-800 mb-2">Payslip not found</p>
@@ -103,7 +111,7 @@ export default async function PayslipPage({ params }: { params: Promise<{ runId:
   return (
     <div className="animate-fade-in">
       <div className="print:hidden p-6 flex items-center gap-3">
-        <BackButton fallbackHref="/payroll/process" label="Back to Payslips" />
+        <BackButton fallbackHref={back.href} label={back.label} />
         <PrintButton />
       </div>
 

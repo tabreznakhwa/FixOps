@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Phone, MessageCircle, Mail, MapPin, Edit, Plus, Building2, User, Printer } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
+import { resolveBack } from '@/lib/backNav'
 import { formatDate, getStatusColor, getPriorityColor, formatStatus } from '@/lib/utils'
 import { DeleteCustomerButton } from './DeleteCustomerButton'
 
@@ -25,7 +26,14 @@ const categoryIcons: Record<string, string> = {
   inspection: '🔍', quotation: '📝',
 }
 
-export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CustomerDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string }>
+}) {
+  const back = resolveBack((await searchParams).return_to, '/customers', 'Back')
   const { id } = await params
   const supabase = await createClient()
 
@@ -65,10 +73,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         subtitle={customer.customer_code}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <BackButton
-              fallbackHref="/customers"
-              label="Back"
-            />
+            <BackButton fallbackHref={back.href} label={back.label} />
             <Link
               href={`/customers/${customer.id}/edit`}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
@@ -77,7 +82,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             </Link>
             <DeleteCustomerButton customerId={customer.id} customerName={customer.full_name} />
             <Link
-              href={`/complaints/new?customer_id=${customer.id}`}
+              href={`/complaints/new?customer_id=${customer.id}&return_to=${encodeURIComponent(`/customers/${customer.id}`)}`}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" /> Add Complaint
@@ -222,7 +227,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
               )}
             </h3>
             <Link
-              href={`/complaints/new?customer_id=${customer.id}`}
+              href={`/complaints/new?customer_id=${customer.id}&return_to=${encodeURIComponent(`/customers/${customer.id}`)}`}
               className="flex items-center gap-1.5 text-xs text-blue-600 font-semibold hover:text-blue-700 transition-colors"
             >
               <Plus className="w-3.5 h-3.5" /> New Complaint
@@ -240,7 +245,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                 return (
                   <Link
                     key={c.id}
-                    href={`/complaints/${c.id}`}
+                    href={`/complaints/${c.id}?return_to=${encodeURIComponent(`/customers/${customer.id}`)}`}
                     className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors group"
                   >
                     <span className="text-xl flex-shrink-0 mt-0.5">{categoryIcons[cats[0]] ?? '🔧'}</span>

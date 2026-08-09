@@ -344,7 +344,7 @@ export default async function VendorOutstandingPage({
                     return (
                       <tr key={`pi-${pi.id}`} className="hover:bg-slate-50 transition-colors">
                         <td className="px-5 py-3">
-                          <Link href={`/inventory/purchase-invoices/${pi.id}`} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
+                          <Link href={`/inventory/purchase-invoices/${pi.id}?return_to=%2Fsuppliers%2Fvendor-outstanding`} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
                             {pi.invoice_number}
                           </Link>
                         </td>

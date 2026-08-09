@@ -7,6 +7,7 @@ import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatD
 import { ComplaintActions } from './ComplaintActions'
 import { InternalNotes } from './InternalNotes'
 import { BackButton } from '@/components/ui/BackButton'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Complaint Detail' }
 
@@ -21,7 +22,14 @@ const STATUS_FLOW = [
   'work_started', 'waiting_parts', 'waiting_approval', 'completed',
 ]
 
-export default async function ComplaintDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ComplaintDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string }>
+}) {
+  const back = resolveBack((await searchParams).return_to, '/complaints', 'All Complaints')
   const { id } = await params
   const supabase = await createClient()
 
@@ -77,7 +85,7 @@ export default async function ComplaintDetailPage({ params }: { params: Promise<
             >
               <Edit className="w-4 h-4" /> Edit
             </Link>
-            <BackButton fallbackHref="/complaints" label="All Complaints" />
+            <BackButton fallbackHref={back.href} label={back.label} />
           </div>
         }
       />

@@ -418,7 +418,7 @@ export default async function StaffLedgerPage({
                                   </td>
                                   <td className="px-4 py-3.5 text-right">
                                     <Link
-                                      href={`/payroll/slips/${sl.salary_run_id}/${staffId}`}
+                                      href={`/payroll/slips/${sl.salary_run_id}/${staffId}?return_to=${encodeURIComponent(`/staff/ledger?staff_id=${staffId}`)}`}
                                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                                     >
                                       Payslip →
