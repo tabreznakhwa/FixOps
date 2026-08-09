@@ -444,8 +444,25 @@ export default async function AttendancePage({
         {records.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
             <CalendarCheck className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">No attendance records for {periodLabel ?? getMonthLabel(currentMonth)}</p>
-            {!(isKiosk && kioskTodayMarked) && (
+            {/* A page past the end is empty but the period is not — offer a way
+                back instead of a dead end. */}
+            {totalRecords > 0 ? (
+              <>
+                <p className="text-slate-500 font-medium">
+                  Page {pageNum} is past the end — {periodLabel ?? getMonthLabel(currentMonth)} has{' '}
+                  {totalRecords} records across {totalPages} {totalPages === 1 ? 'page' : 'pages'}.
+                </p>
+                <Link
+                  href={buildPageHref(1)}
+                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Back to page 1
+                </Link>
+              </>
+            ) : (
+              <p className="text-slate-500 font-medium">No attendance records for {periodLabel ?? getMonthLabel(currentMonth)}</p>
+            )}
+            {totalRecords === 0 && !(isKiosk && kioskTodayMarked) && (
               <Link
                 href={isKiosk && kioskStaffId ? `/attendance/new?locked_staff_id=${kioskStaffId}` : '/attendance/new'}
                 className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
