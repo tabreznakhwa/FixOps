@@ -3,6 +3,7 @@
 import { useActionState, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createCustomer } from '../actions'
+import { resolveBack, safeReturnTo } from '@/lib/backNav'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Loader2, AlertCircle } from 'lucide-react'
@@ -31,10 +32,8 @@ function NewCustomerPageInner() {
   // Where the user came from — adding a customer part-way through logging a
   // complaint should return to Complaints, not the customer list.
   const searchParams = useSearchParams()
-  const rawReturnTo = searchParams.get('return_to')
-  const returnTo = rawReturnTo?.startsWith('/') && !rawReturnTo.startsWith('//') ? rawReturnTo : null
-  const backHref = returnTo ?? '/customers'
-  const backLabel = returnTo?.startsWith('/complaints') ? 'Complaints' : 'Back'
+  const returnTo = safeReturnTo(searchParams.get('return_to'))
+  const { href: backHref, label: backLabel } = resolveBack(returnTo, '/customers', 'Back')
 
   const isCompanyType = customerType === 'company' || customerType === 'amc'
   const isCreditType = customerType === 'credit'
