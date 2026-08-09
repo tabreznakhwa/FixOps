@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/attendance/auto-absent",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

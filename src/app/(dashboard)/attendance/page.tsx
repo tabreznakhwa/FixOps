@@ -7,6 +7,7 @@ import { DeleteAttendanceButton } from './DeleteAttendanceButton'
 import { formatDate } from '@/lib/utils'
 import { isFriday } from '@/lib/attendance'
 import { StaffFilterSelect } from './StaffFilterSelect'
+import { MarkAbsentButton } from './MarkAbsentButton'
 import { redirect } from 'next/navigation'
 
 export const metadata = { title: 'Attendance' }
@@ -182,6 +183,7 @@ export default async function AttendancePage({
   // Payroll only deducts for rows explicitly marked absent, so an unmarked
   // no-show is paid in full. Surfacing these makes the gap visible the same day
   // instead of at month end.
+  const canMarkAbsent = canEdit
   const isSingleDay = startDate === endDate
   const markedStaffIds = new Set(records.map((r) => r.staff_id))
   const unmarkedStaff = isSingleDay
@@ -313,8 +315,8 @@ export default async function AttendancePage({
                   {periodLabel ? ` ${periodLabel.toLowerCase()}` : ''}
                 </p>
                 <p className="text-xs text-amber-800 mt-0.5">
-                  They neither clocked in nor were marked. Payroll only deducts for days
-                  explicitly marked <strong>Absent</strong>, so these days are currently paid in full.
+                  They neither clocked in nor were marked. These days are closed
+                  automatically overnight; until then they are still paid in full.
                 </p>
                 <div className="flex flex-wrap gap-1.5 mt-2.5">
                   {unmarkedStaff.map((s) => (
@@ -323,6 +325,9 @@ export default async function AttendancePage({
                     </span>
                   ))}
                 </div>
+                {canMarkAbsent && startDate < todayStr && (
+                  <MarkAbsentButton date={startDate} count={unmarkedStaff.length} />
+                )}
               </div>
             </div>
           </div>
