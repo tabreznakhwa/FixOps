@@ -154,6 +154,29 @@ export default async function InvoiceDetailPage({
     ? `/work-orders/${work_order_id}`
     : `/finance/invoices/${id}`
 
+  // Back destination = the route the user actually took. return_to wins, then the
+  // work_order_id/complaint_id set by whichever page linked here, then this
+  // module's own list. Never resolvedWorkOrderId — that falls back to the
+  // invoice's own FK and would send someone arriving from the list to a work
+  // order they never visited.
+  const backHref = return_to
+    ?? (complaint_id ? `/complaints/${complaint_id}`
+      : work_order_id ? `/work-orders/${work_order_id}`
+      : '/finance/invoices')
+
+  // Label is derived from the same value, so the button can never name one
+  // destination while navigating to another.
+  const backLabel = return_to
+    ? (return_to.startsWith('/finance/receivables') ? 'Receivables'
+      : return_to.startsWith('/finance/payments') ? 'Payment'
+      : return_to.startsWith('/work-orders') ? 'Work Order'
+      : return_to.startsWith('/complaints') ? 'Complaint'
+      : return_to.startsWith('/finance/invoices') ? 'Invoices'
+      : 'Back')
+    : complaint_id ? 'Complaint'
+    : work_order_id ? 'Work Order'
+    : 'Invoices'
+
   return (
     <div className="animate-fade-in">
 
@@ -298,15 +321,7 @@ export default async function InvoiceDetailPage({
               </Link>
             )}
             <PrintActions label="Print Invoice" />
-            <BackButton
-              // Back follows the route the user actually took — return_to, then the
-              // work_order_id/complaint_id set by the page that linked here. It must
-              // NOT use resolvedWorkOrderId: that falls back to the invoice's own FK,
-              // which sent users arriving from the invoice list to a work order they
-              // never visited.
-              fallbackHref={return_to ?? (complaint_id ? `/complaints/${complaint_id}` : work_order_id ? `/work-orders/${work_order_id}` : '/finance/invoices')}
-              label={return_to === '/finance/receivables' ? 'Receivables' : complaint_id ? 'Complaint' : work_order_id ? 'Work Order' : 'Invoices'}
-            />
+            <BackButton fallbackHref={backHref} label={backLabel} />
           </div>
         }
       />
