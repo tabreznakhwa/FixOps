@@ -176,6 +176,18 @@ export default async function AttendancePage({
     fridayOt: records.reduce((s, r) => s + (r.friday_ot_amount ?? 0), 0),
   }
 
+  // Staff with no record at all for a single-day view.
+  //
+  // Not clocking in creates nothing — there is no "absent" row, just silence.
+  // Payroll only deducts for rows explicitly marked absent, so an unmarked
+  // no-show is paid in full. Surfacing these makes the gap visible the same day
+  // instead of at month end.
+  const isSingleDay = startDate === endDate
+  const markedStaffIds = new Set(records.map((r) => r.staff_id))
+  const unmarkedStaff = isSingleDay
+    ? staffList.filter((s) => !markedStaffIds.has(s.id) && (!selectedStaffId || s.id === selectedStaffId))
+    : []
+
   const prev = prevMonth(currentMonth)
   const next = nextMonth(currentMonth)
   const isCurrentMonth = currentMonth === `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
@@ -288,6 +300,33 @@ export default async function AttendancePage({
             </div>
           ))}
         </div>
+
+        {/* Staff with no record for this day — otherwise a no-show is invisible
+            and gets paid in full at month end. */}
+        {unmarkedStaff.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <div className="flex items-start gap-2.5">
+              <XCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-900">
+                  {unmarkedStaff.length} {unmarkedStaff.length === 1 ? 'employee has' : 'employees have'} no attendance recorded
+                  {periodLabel ? ` ${periodLabel.toLowerCase()}` : ''}
+                </p>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  They neither clocked in nor were marked. Payroll only deducts for days
+                  explicitly marked <strong>Absent</strong>, so these days are currently paid in full.
+                </p>
+                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                  {unmarkedStaff.map((s) => (
+                    <span key={s.id} className="text-xs font-medium bg-white border border-amber-200 text-amber-900 px-2 py-1 rounded-lg">
+                      {s.full_name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Attendance Table */}
         {records.length === 0 ? (
