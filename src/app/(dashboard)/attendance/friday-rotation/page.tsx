@@ -69,7 +69,19 @@ export default async function FridayRotationPage({
       .limit(5000),
   ])
 
-  const rows = rankFridayRotation(staffRaw ?? [], attendanceRaw ?? [], today)
+  const ranked = rankFridayRotation(staffRaw ?? [], attendanceRaw ?? [], today)
+
+  // Only people who actually do Friday work belong in the rotation. The Friday
+  // rate on the staff profile is the marker for that — without it there is
+  // nothing to pay them for the shift. Otherwise the ranking puts the MD and
+  // CEO top simply because they have never worked a Friday.
+  //
+  // Anyone excluded is still listed below rather than hidden, so a technician
+  // missing a rate by oversight is visible and fixable instead of silently
+  // dropping out of the rotation.
+  const rows = ranked.filter(r => r.shiftRate > 0 || r.totalCount > 0)
+  const notInRotation = ranked.filter(r => r.shiftRate <= 0 && r.totalCount === 0)
+
   const upcoming = nextFriday(now)
   const totalShifts = rows.reduce((s, r) => s + r.totalCount, 0)
 
@@ -137,6 +149,7 @@ export default async function FridayRotationPage({
                   <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">This Month</th>
                   <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Last Month</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Last Worked</th>
+                  <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Rate</th>
                   <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Earned ({WINDOW_MONTHS} mo)</th>
                 </tr>
               </thead>
@@ -175,6 +188,9 @@ export default async function FridayRotationPage({
                           <span className="text-green-700 font-medium">Never</span>
                         )}
                       </td>
+                      <td className="px-4 py-3 text-right text-sm text-slate-500">
+                        {r.shiftRate > 0 ? formatCurrency(r.shiftRate) : <span className="text-amber-600">Not set</span>}
+                      </td>
                       <td className="px-5 py-3 text-right text-sm text-slate-700">
                         {r.totalEarned > 0 ? formatCurrency(r.totalEarned) : <span className="text-slate-300">—</span>}
                       </td>
@@ -185,6 +201,25 @@ export default async function FridayRotationPage({
             </table>
           </div>
         </div>
+
+        {notInRotation.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <p className="text-sm font-semibold text-slate-700">Not in the Friday rotation</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              No Friday rate on their staff record and no Friday shifts worked. If
+              someone here should be in the rotation, set their Friday rate on their
+              staff profile.
+            </p>
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
+              {notInRotation.map(r => (
+                <span key={r.staffId} className="text-xs font-medium bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">
+                  {r.name}
+                  {r.designation && <span className="text-slate-400"> · {r.designation}</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         <form method="get" className="flex items-end gap-2 print:hidden">
           <div>
