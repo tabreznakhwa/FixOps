@@ -63,6 +63,7 @@ const navGroups: Array<{
       { href: '/inventory/purchase-invoices', label: 'Purchase Invoices', icon: ShoppingCart, excludeRoles: ['technician'] },
       { href: '/inventory/opening-stock', label: 'Opening Stock', icon: Layers, excludeRoles: ['technician'] },
       { href: '/inventory/stock-trial', label: 'Stock Trial', icon: Layers, excludeRoles: ['technician'] },
+      { href: '/inventory/parts-used', label: 'Parts Used', icon: Package, excludeRoles: ['technician'] },
       { href: '/suppliers', label: 'Suppliers & PO', icon: Building2, exact: true, excludeRoles: ['technician'] },
       { href: '/suppliers/purchase-register', label: 'Purchase Register', icon: ShoppingCart, excludeRoles: ['technician'] },
       { href: '/suppliers/advances', label: 'Supplier Advances', icon: Banknote, excludeRoles: ['technician'] },
