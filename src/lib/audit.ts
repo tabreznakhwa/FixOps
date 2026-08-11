@@ -13,7 +13,12 @@ export interface AuditParams {
   entityType: string
   entityId?: string
   entityLabel?: string
-  changes?: Record<string, { before: unknown; after: unknown }>
+  /**
+   * Free-form JSONB detail. Field edits use `{ field: { before, after } }`;
+   * other events record whatever is meaningful — a deletion reason, a count of
+   * cascaded records — so this is deliberately not constrained to a diff shape.
+   */
+  changes?: Record<string, unknown>
 }
 
 type AuditLogInsertClient = {

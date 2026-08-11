@@ -5,26 +5,80 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { logAudit } from '@/lib/audit'
 
-export async function deleteCustomer(id: string): Promise<{ error?: string }> {
+/**
+ * Deletes a customer. The reason is mandatory and is written to the audit log,
+ * so a removed record always carries an explanation.
+ *
+ * Financial and operational history is never destroyed by this. Invoices,
+ * payments, quotations and work orders block the delete outright — those are
+ * the books and the job record. Complaints are the one thing that can go, and
+ * only when the caller explicitly opts in, because a mistyped customer usually
+ * has a stray complaint attached and nothing else.
+ */
+export async function deleteCustomer(
+  id: string,
+  reason: string,
+  opts?: { deleteComplaints?: boolean }
+): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
   const { data: profileRaw } = await supabase
-    .from('users').select('organization_id, full_name').eq('id', user.id).single()
-  const profile = profileRaw as unknown as { organization_id: string; full_name: string } | null
+    .from('users').select('organization_id, full_name, role').eq('id', user.id).single()
+  const profile = profileRaw as unknown as { organization_id: string; full_name: string; role: string } | null
   if (!profile?.organization_id) return { error: 'No organization found' }
+  if (!['owner', 'admin'].includes(profile.role)) {
+    return { error: 'Only an owner or admin can delete a customer.' }
+  }
 
-  // Check for linked complaints or invoices
-  const [{ count: complaintCount }, { count: invoiceCount }] = await Promise.all([
-    (supabase as any).from('complaints').select('id', { count: 'exact', head: true }).eq('customer_id', id),
+  const trimmedReason = (reason ?? '').trim()
+  if (trimmedReason.length < 5) {
+    return { error: 'Please give a reason for deleting this customer (at least 5 characters).' }
+  }
+
+  // Anything financial or operational blocks the delete — these are records of
+  // what actually happened and must not disappear to tidy up a list.
+  const [
+    { count: invoiceCount },
+    { count: paymentCount },
+    { count: workOrderCount },
+    { count: quotationCount },
+    { count: complaintCount },
+  ] = await Promise.all([
     (supabase as any).from('invoices').select('id', { count: 'exact', head: true }).eq('customer_id', id),
+    (supabase as any).from('payments').select('id', { count: 'exact', head: true }).eq('customer_id', id),
+    (supabase as any).from('work_orders').select('id', { count: 'exact', head: true }).eq('customer_id', id),
+    (supabase as any).from('quotations').select('id', { count: 'exact', head: true }).eq('customer_id', id),
+    (supabase as any).from('complaints').select('id', { count: 'exact', head: true }).eq('customer_id', id),
   ])
-  if ((complaintCount ?? 0) > 0) return { error: `Cannot delete — customer has ${complaintCount} complaint(s) on record.` }
-  if ((invoiceCount ?? 0) > 0) return { error: `Cannot delete — customer has ${invoiceCount} invoice(s) on record.` }
+
+  const blockers: string[] = []
+  if ((invoiceCount ?? 0) > 0) blockers.push(`${invoiceCount} invoice(s)`)
+  if ((paymentCount ?? 0) > 0) blockers.push(`${paymentCount} payment(s)`)
+  if ((workOrderCount ?? 0) > 0) blockers.push(`${workOrderCount} work order(s)`)
+  if ((quotationCount ?? 0) > 0) blockers.push(`${quotationCount} quotation(s)`)
+  if (blockers.length > 0) {
+    return {
+      error: `Cannot delete — customer has ${blockers.join(', ')} on record. Mark them inactive instead.`,
+    }
+  }
+
+  if ((complaintCount ?? 0) > 0 && !opts?.deleteComplaints) {
+    return {
+      error: `Customer has ${complaintCount} complaint(s). Tick the box below to delete those as well.`,
+    }
+  }
 
   const { data: customerRaw } = await (supabase as any)
     .from('customers').select('full_name, mobile_number').eq('id', id).eq('organization_id', profile.organization_id).single()
+
+  // Complaints go first — the customer row cannot be removed while they point at it.
+  if ((complaintCount ?? 0) > 0) {
+    const { error: complaintErr } = await (supabase as any)
+      .from('complaints').delete().eq('customer_id', id).eq('organization_id', profile.organization_id)
+    if (complaintErr) return { error: `Could not delete linked complaints: ${complaintErr.message}` }
+  }
 
   const { error } = await (supabase as any)
     .from('customers').delete().eq('id', id).eq('organization_id', profile.organization_id)
@@ -38,6 +92,10 @@ export async function deleteCustomer(id: string): Promise<{ error?: string }> {
     entityType: 'customer',
     entityLabel: customerRaw ? `${customerRaw.full_name} (${customerRaw.mobile_number})` : id,
     entityId: id,
+    changes: {
+      reason: trimmedReason,
+      complaints_deleted: (complaintCount ?? 0) > 0 ? complaintCount : 0,
+    },
   })
 
   revalidatePath('/customers')

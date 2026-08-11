@@ -54,9 +54,11 @@ export default async function CustomerDetailPage({
     advance_balance: number; notes: string | null; status: string; created_at: string;
   }
 
-  const { data: complaintsRaw } = await (supabase as any)
+  // Exact count as well as the rows: the list is capped at 20, and the delete
+  // dialog must state the true number it is about to remove.
+  const { data: complaintsRaw, count: complaintTotal } = await (supabase as any)
     .from('complaints')
-    .select('id, complaint_number, description, priority, status, service_category, created_at')
+    .select('id, complaint_number, description, priority, status, service_category, created_at', { count: 'exact' })
     .eq('customer_id', id)
     .order('created_at', { ascending: false })
     .limit(20)
@@ -80,7 +82,11 @@ export default async function CustomerDetailPage({
             >
               <Edit className="w-4 h-4" /> Edit
             </Link>
-            <DeleteCustomerButton customerId={customer.id} customerName={customer.full_name} />
+            <DeleteCustomerButton
+              customerId={customer.id}
+              customerName={customer.full_name}
+              complaintCount={complaintTotal ?? complaints.length}
+            />
             <Link
               href={`/complaints/new?customer_id=${customer.id}&return_to=${encodeURIComponent(`/customers/${customer.id}`)}`}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
