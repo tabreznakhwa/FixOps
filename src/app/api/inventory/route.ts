@@ -15,6 +15,14 @@ export async function POST(request: NextRequest) {
     const profile = profileRaw as { organization_id: string; role: string } | null
     if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    // Creating an item sets its opening current_stock, so this is a stock-changing
+    // operation and needs the same guard as editing one. Without it a technician —
+    // who has inventory 'view' and so reaches this route — could add an item with
+    // any quantity they liked.
+    if (!['owner', 'admin', 'manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json()
     const {
       item_name,

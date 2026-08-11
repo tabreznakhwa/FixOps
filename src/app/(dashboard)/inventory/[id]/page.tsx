@@ -6,6 +6,7 @@ import { Package, AlertTriangle, TrendingUp } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency } from '@/lib/utils'
 import { InventoryActions } from './InventoryActions'
+import { EditItemDetails } from './EditItemDetails'
 
 export const metadata = { title: 'Inventory Item' }
 
@@ -19,7 +20,9 @@ export default async function InventoryItemPage({
 
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
-  const isTechnician = ((profileRaw as { role: string } | null)?.role ?? '') === 'technician'
+  const userRole = (profileRaw as { role: string } | null)?.role ?? ''
+  const isTechnician = userRole === 'technician'
+  const canEditItem = ['owner', 'admin', 'manager'].includes(userRole)
 
   const { data: itemRaw } = await supabase
     .from('inventory_items')
@@ -59,7 +62,19 @@ export default async function InventoryItemPage({
         title={item.item_name}
         subtitle={item.item_code}
         actions={
-          <BackButton fallbackHref="/inventory" label="Back" />
+          <div className="flex items-center gap-2">
+            {/* Same roles the PATCH endpoint allows — technicians get read-only */}
+            {canEditItem && (
+              <EditItemDetails
+                itemId={item.id}
+                itemName={item.item_name}
+                category={item.category}
+                brand={item.brand}
+                unitOfMeasure={item.unit_of_measure}
+              />
+            )}
+            <BackButton fallbackHref="/inventory" label="Back" />
+          </div>
         }
       />
 
