@@ -44,6 +44,25 @@ export async function PATCH(
 
     const supabase = createAdminClient()
 
+    // Capture the level before the write so a manual stock change can be
+    // recorded as a movement. Adjusting stock here previously just overwrote
+    // current_stock with nothing written to inventory_transactions, which is one
+    // of the reasons on-hand figures drifted away from what the ledger explains.
+    let stockBefore: number | null = null
+    let unitCost = 0
+    if ('current_stock' in updatePayload) {
+      const { data: existing } = await (supabase as any)
+        .from('inventory_items')
+        .select('current_stock, purchase_price')
+        .eq('id', id)
+        .eq('organization_id', profile.organization_id)
+        .single()
+      if (existing) {
+        stockBefore = Number(existing.current_stock)
+        unitCost = Number(existing.purchase_price) || 0
+      }
+    }
+
     const { data: updated, error } = await (supabase as any)
       .from('inventory_items')
       .update({ ...updatePayload, updated_at: new Date().toISOString() })
@@ -53,6 +72,32 @@ export async function PATCH(
       .single()
 
     if (error) throw error
+
+    if (stockBefore !== null) {
+      const stockAfter = Number(updated.current_stock)
+      const delta = stockAfter - stockBefore
+      if (delta !== 0) {
+        try {
+          await (supabase as any).from('inventory_transactions').insert({
+            organization_id: profile.organization_id,
+            item_id: id,
+            transaction_type: 'adjustment',
+            // Signed, so the trial balance can tell an increase from a decrease.
+            quantity: delta,
+            unit_cost: unitCost,
+            total_cost: Math.abs(delta) * unitCost,
+            stock_before: stockBefore,
+            stock_after: stockAfter,
+            reference_type: 'manual_adjustment',
+            notes: body.adjustment_reason?.toString().trim() || 'Manual stock adjustment',
+            created_by: user.id,
+          })
+        } catch (ledgerErr) {
+          // Never undo a completed stock change over a failed ledger write.
+          console.error('inventory_transactions write failed (non-critical):', ledgerErr)
+        }
+      }
+    }
 
     return NextResponse.json({ success: true, item: updated })
   } catch (err: unknown) {
