@@ -42,6 +42,29 @@ export async function PATCH(
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
+    // Stock cannot be negative. The UI blocks it, but the UI is not the boundary —
+    // a stock level below zero is meaningless and silently corrupts valuation and
+    // every reconciliation built on top of it.
+    if ('current_stock' in updatePayload) {
+      const qty = Number(updatePayload.current_stock)
+      if (!Number.isFinite(qty)) {
+        return NextResponse.json({ error: 'Stock must be a number' }, { status: 400 })
+      }
+      if (qty < 0) {
+        return NextResponse.json({ error: 'Stock cannot be negative' }, { status: 400 })
+      }
+      updatePayload.current_stock = qty
+    }
+    for (const priceField of ['purchase_price', 'selling_price', 'minimum_stock_level']) {
+      if (priceField in updatePayload) {
+        const v = Number(updatePayload[priceField])
+        if (!Number.isFinite(v) || v < 0) {
+          return NextResponse.json({ error: `${priceField.replace(/_/g, ' ')} cannot be negative` }, { status: 400 })
+        }
+        updatePayload[priceField] = v
+      }
+    }
+
     const supabase = createAdminClient()
 
     // Capture the level before the write so a manual stock change can be
