@@ -20,13 +20,90 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const supabase = createAdminClient() as any
 
     if (body.action === 'cancel') {
+      // Receiving an invoice adds stock. Cancelling it previously only flipped
+      // the status, so the goods stayed on the books forever — stock that was
+      // never really received, with a purchase still sitting in the ledger
+      // explaining it. Cancelling must put the stock back.
+      const { data: invoice } = await supabase
+        .from('purchase_invoices')
+        .select('id, invoice_number, status')
+        .eq('id', id)
+        .eq('organization_id', profile.organization_id)
+        .single()
+
+      if (!invoice) return NextResponse.json({ error: 'Purchase invoice not found' }, { status: 404 })
+      if (invoice.status === 'cancelled') {
+        // Reversing twice would take the stock away a second time.
+        return NextResponse.json({ error: 'This purchase invoice is already cancelled.' }, { status: 400 })
+      }
+
+      const { data: lines } = await supabase
+        .from('purchase_invoice_items')
+        .select('inventory_item_id, quantity, unit_cost, description')
+        .eq('purchase_invoice_id', id)
+        .not('inventory_item_id', 'is', null)
+
+      const items = (lines ?? []) as Array<{
+        inventory_item_id: string; quantity: number; unit_cost: number; description: string
+      }>
+
+      // Refuse rather than drive stock negative: if the goods have already been
+      // fitted to jobs, cancelling the invoice is the wrong correction and would
+      // leave an impossible balance behind.
+      const shortfalls: string[] = []
+      const current = new Map<string, number>()
+      for (const li of items) {
+        const { data: inv } = await supabase
+          .from('inventory_items')
+          .select('item_name, current_stock')
+          .eq('id', li.inventory_item_id)
+          .single()
+        if (!inv) continue
+        const have = Number(inv.current_stock) || 0
+        const need = Number(li.quantity) || 0
+        current.set(li.inventory_item_id, have)
+        if (have < need) shortfalls.push(`${inv.item_name} (have ${have}, invoice ${need})`)
+      }
+      if (shortfalls.length > 0) {
+        return NextResponse.json({
+          error: `Cannot cancel — stock has already been used: ${shortfalls.join('; ')}. Raise a stock adjustment instead.`,
+        }, { status: 400 })
+      }
+
+      for (const li of items) {
+        const before = current.get(li.inventory_item_id) ?? 0
+        const qty = Number(li.quantity) || 0
+        const after = before - qty
+
+        const { error: stockErr } = await supabase
+          .from('inventory_items')
+          .update({ current_stock: after, updated_at: new Date().toISOString() })
+          .eq('id', li.inventory_item_id)
+        if (stockErr) throw stockErr
+
+        await supabase.from('inventory_transactions').insert({
+          organization_id: profile.organization_id,
+          item_id: li.inventory_item_id,
+          transaction_type: 'adjustment',
+          quantity: -qty,
+          unit_cost: Number(li.unit_cost) || 0,
+          total_cost: qty * (Number(li.unit_cost) || 0),
+          stock_before: before,
+          stock_after: after,
+          reference_type: 'purchase_invoice_cancelled',
+          reference_id: id,
+          notes: `Reversal of cancelled Purchase Invoice ${invoice.invoice_number}`,
+          created_by: user.id,
+        })
+      }
+
       const { error } = await supabase
         .from('purchase_invoices')
         .update({ status: 'cancelled', updated_at: new Date().toISOString() })
         .eq('id', id)
         .eq('organization_id', profile.organization_id)
       if (error) throw error
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ success: true, reversedItems: items.length })
     }
 
     if (body.action === 'update') {
