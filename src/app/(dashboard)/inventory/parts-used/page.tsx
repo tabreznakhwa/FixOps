@@ -4,9 +4,12 @@ import { Header } from '@/components/layout/Header'
 import { BackButton } from '@/components/ui/BackButton'
 import { PrintActions } from '@/components/print/PrintActions'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
+import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
+import { SearchBar } from '@/components/ui/SearchBar'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AlertTriangle, Package } from 'lucide-react'
 import Link from 'next/link'
+import { Suspense } from 'react'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Parts Used' }
@@ -145,10 +148,12 @@ export default async function PartsUsedPage({
     return `/inventory/parts-used?${qs.toString()}`
   }
 
+  const viewLabel = view === 'technician' ? 'By Technician' : view === 'detail' ? 'By Job' : 'By Item'
+
   return (
     <div className="animate-fade-in">
       <div className="hidden print:block px-8 pt-8">
-        <OrgLetterhead title="Parts Used" subtitle={`${formatDate(from)} to ${formatDate(to)}`} />
+        <OrgLetterhead title="Parts Used" subtitle={`${viewLabel} · ${formatDate(from)} to ${formatDate(to)}`} />
       </div>
 
       <Header
@@ -163,27 +168,14 @@ export default async function PartsUsedPage({
       />
 
       <div className="p-6 space-y-5">
-        <form method="get" className="flex flex-wrap items-end gap-2 bg-white border border-slate-200 rounded-xl p-3 print:hidden">
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
-            <input type="date" name="from" defaultValue={from}
-              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">To</label>
-            <input type="date" name="to" defaultValue={to}
-              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Search</label>
-            <input name="q" defaultValue={q} placeholder="Item, technician, complaint…"
-              className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          {view !== 'summary' && <input type="hidden" name="view" value={view} />}
-          <button type="submit" className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg transition-colors">
-            Apply
-          </button>
-        </form>
+        <div className="flex flex-wrap items-center gap-3 bg-white border border-slate-200 rounded-xl p-3 print:hidden">
+          <Suspense>
+            <DateRangeFilter basePath="/inventory/parts-used" from={params.from} to={params.to} />
+          </Suspense>
+          <Suspense>
+            <SearchBar basePath="/inventory/parts-used" placeholder="Item, technician, complaint…" />
+          </Suspense>
+        </div>
 
         <div className="flex gap-2 print:hidden">
           {[{ v: 'summary', l: 'By Item' }, { v: 'detail', l: 'By Job' }, { v: 'technician', l: 'By Technician' }].map(({ v, l }) => (
@@ -237,7 +229,7 @@ export default async function PartsUsedPage({
               <h3 className="font-semibold text-slate-900">By Technician</h3>
               <p className="text-xs text-slate-500 mt-0.5">Who used which parts, on which jobs and complaints</p>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto print-report">
               <table className="w-full min-w-[900px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
@@ -283,7 +275,7 @@ export default async function PartsUsedPage({
               <h3 className="font-semibold text-slate-900">By Item</h3>
               <p className="text-xs text-slate-500 mt-0.5">Highest cost first</p>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto print-report">
               <table className="w-full min-w-[760px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
@@ -332,7 +324,7 @@ export default async function PartsUsedPage({
               <h3 className="font-semibold text-slate-900">By Job</h3>
               <p className="text-xs text-slate-500 mt-0.5">{rows.length} issues, most recent first</p>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto print-report">
               <table className="w-full min-w-[1020px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">

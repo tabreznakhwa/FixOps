@@ -95,6 +95,13 @@ body {
   .rounded-xl { break-inside: avoid; }
   /* Remove card shadows on print */
   * { box-shadow: none !important; }
+  /* Report tables (parts-used, stock-trial, etc.) set a fixed min-width for
+     horizontal scrolling on screen; on A4 that overflows the printable width
+     (~186mm) and clips columns off the page. Let the table shrink to fit and
+     drop the scroll container so nothing gets cut off. */
+  .print-report { overflow: visible !important; }
+  .print-report table { min-width: 0 !important; width: 100% !important; font-size: 10px; }
+  .print-report th, .print-report td { padding: 3px 6px !important; }
 }
 
 @keyframes count-up {

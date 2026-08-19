@@ -22,11 +22,32 @@ function startOfWeek(dateStr: string): string {
   return addDays(dateStr, dow === 0 ? -6 : 1 - dow)
 }
 
+function addMonths(dateStr: string, n: number): string {
+  const [y, m] = dateStr.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1 + n, 1))
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-01`
+}
+
 const PRESETS: { label: string; range: () => { from: string; to: string } }[] = [
   { label: 'Today', range: () => { const t = kwDate(); return { from: t, to: t } } },
   { label: 'Yesterday', range: () => { const t = addDays(kwDate(), -1); return { from: t, to: t } } },
   { label: 'This Week', range: () => { const t = kwDate(); return { from: startOfWeek(t), to: t } } },
+  {
+    label: 'Last Week',
+    range: () => {
+      const thisWeekStart = startOfWeek(kwDate())
+      const lastWeekEnd = addDays(thisWeekStart, -1)
+      return { from: addDays(lastWeekEnd, -6), to: lastWeekEnd }
+    },
+  },
   { label: 'This Month', range: () => { const t = kwDate(); return { from: t.slice(0, 7) + '-01', to: t } } },
+  {
+    label: 'Last Month',
+    range: () => {
+      const thisMonthStart = kwDate().slice(0, 7) + '-01'
+      return { from: addMonths(thisMonthStart, -1), to: addDays(thisMonthStart, -1) }
+    },
+  },
   { label: 'This Year', range: () => { const t = kwDate(); return { from: t.slice(0, 4) + '-01-01', to: t } } },
 ]
 
