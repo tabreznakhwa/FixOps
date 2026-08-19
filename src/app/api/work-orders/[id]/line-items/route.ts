@@ -14,6 +14,23 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
  * Non-fatal: a failed ledger write must not undo a part that has already been
  * issued and paid for, so it is logged rather than thrown.
  */
+/**
+ * Atomically apply a signed stock change via the adjust_inventory_stock RPC
+ * (migration 032) instead of a SELECT-then-UPDATE, so two requests touching
+ * the same item's stock at once can't silently lose one of the changes.
+ */
+async function adjustStock(
+  supabase: any,
+  itemId: string,
+  delta: number
+): Promise<{ before: number; after: number }> {
+  const { data, error } = await supabase
+    .rpc('adjust_inventory_stock', { p_item_id: itemId, p_delta: delta })
+    .single()
+  if (error) throw error
+  return { before: Number(data.stock_before), after: Number(data.stock_after) }
+}
+
 async function recordStockMovement(
   supabase: any,
   args: {
@@ -97,17 +114,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
       resolvedPrice = unit_price || invItem.selling_price
 
-      // Deduct stock
-      const { error: stockErr } = await (supabase as any)
-        .from('inventory_items')
-        .update({ current_stock: invItem.current_stock - quantity, updated_at: new Date().toISOString() })
-        .eq('id', inventory_item_id)
-      if (stockErr) throw stockErr
+      // Deduct stock atomically.
+      const { before, after } = await adjustStock(supabase, inventory_item_id, -quantity)
 
       movement = {
         itemId: inventory_item_id,
-        before: Number(invItem.current_stock),
-        after: Number(invItem.current_stock) - quantity,
+        before,
+        after,
         // Ledger records cost, not sale price — this is what feeds COGS.
         cost: Number(invItem.purchase_price) || 0,
       }
@@ -132,13 +145,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (insertErr) {
       // Rollback stock if insert failed
       if (item_type === 'part' && inventory_item_id) {
-        const { data: invItem } = await (supabase as any)
-          .from('inventory_items').select('current_stock').eq('id', inventory_item_id).single()
-        if (invItem) {
-          await (supabase as any).from('inventory_items')
-            .update({ current_stock: invItem.current_stock + quantity, updated_at: new Date().toISOString() })
-            .eq('id', inventory_item_id)
-        }
+        await adjustStock(supabase, inventory_item_id, quantity).catch(err =>
+          console.error('stock rollback failed after insert error:', err)
+        )
       }
       throw insertErr
     }
@@ -239,11 +248,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         }, { status: 400 })
       }
 
-      const { error: stockErr } = await (supabase as any)
-        .from('inventory_items')
-        .update({ current_stock: invItem.current_stock - delta, updated_at: new Date().toISOString() })
-        .eq('id', item.inventory_item_id)
-      if (stockErr) throw stockErr
+      const { before, after } = await adjustStock(supabase, item.inventory_item_id, -delta)
       stockAdjusted = true
 
       // Only the difference moves, so only the difference is recorded.
@@ -256,8 +261,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           type: delta > 0 ? 'issued' : 'returned',
           quantity: Math.abs(delta),
           unitCost: Number(invItem.purchase_price) || 0,
-          stockBefore: Number(invItem.current_stock),
-          stockAfter: Number(invItem.current_stock) - delta,
+          stockBefore: before,
+          stockAfter: after,
           workOrderId,
           userId: user.id,
           notes: `Quantity changed on ${description.trim()}`,
@@ -280,13 +285,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (updateErr) {
       // Put the stock back the way we found it so a failed edit can't leak inventory.
       if (stockAdjusted && item.inventory_item_id) {
-        const { data: invItem } = await (supabase as any)
-          .from('inventory_items').select('current_stock').eq('id', item.inventory_item_id).single()
-        if (invItem) {
-          await (supabase as any).from('inventory_items')
-            .update({ current_stock: invItem.current_stock + delta, updated_at: new Date().toISOString() })
-            .eq('id', item.inventory_item_id)
-        }
+        await adjustStock(supabase, item.inventory_item_id, delta).catch(err =>
+          console.error('stock rollback failed after update error:', err)
+        )
       }
       throw updateErr
     }
@@ -341,30 +342,27 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     // Restore inventory stock if this was a part
     if (item.item_type === 'part' && item.inventory_item_id) {
       const { data: invItem } = await (supabase as any)
-        .from('inventory_items').select('current_stock, purchase_price').eq('id', item.inventory_item_id).single()
-      if (invItem) {
-        await (supabase as any).from('inventory_items')
-          .update({ current_stock: invItem.current_stock + item.quantity, updated_at: new Date().toISOString() })
-          .eq('id', item.inventory_item_id)
+        .from('inventory_items').select('purchase_price').eq('id', item.inventory_item_id).single()
 
-        // Stock coming back is a return, so the ledger nets to zero for a part
-        // that was issued and then removed.
-        const { data: wo } = await (supabase as any)
-          .from('work_orders').select('organization_id').eq('id', workOrderId).single()
-        if (wo) {
-          await recordStockMovement(supabase, {
-            orgId: wo.organization_id,
-            itemId: item.inventory_item_id,
-            type: 'returned',
-            quantity: Number(item.quantity),
-            unitCost: Number(invItem.purchase_price) || 0,
-            stockBefore: Number(invItem.current_stock),
-            stockAfter: Number(invItem.current_stock) + Number(item.quantity),
-            workOrderId,
-            userId: user.id,
-            notes: 'Line item removed from work order',
-          })
-        }
+      const { before, after } = await adjustStock(supabase, item.inventory_item_id, Number(item.quantity))
+
+      // Stock coming back is a return, so the ledger nets to zero for a part
+      // that was issued and then removed.
+      const { data: wo } = await (supabase as any)
+        .from('work_orders').select('organization_id').eq('id', workOrderId).single()
+      if (wo) {
+        await recordStockMovement(supabase, {
+          orgId: wo.organization_id,
+          itemId: item.inventory_item_id,
+          type: 'returned',
+          quantity: Number(item.quantity),
+          unitCost: Number(invItem?.purchase_price) || 0,
+          stockBefore: before,
+          stockAfter: after,
+          workOrderId,
+          userId: user.id,
+          notes: 'Line item removed from work order',
+        })
       }
     }
 

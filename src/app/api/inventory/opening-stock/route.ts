@@ -26,21 +26,40 @@ export async function POST(request: NextRequest) {
   for (const item of items) {
     const qty = Number(item.qty) || 0
 
-    // Update current_stock
-    const { error: updateError } = await admin
+    // Confirm the item belongs to this org before touching it — the admin
+    // client bypasses RLS, so this check is the org boundary.
+    const { data: existing } = await admin
       .from('inventory_items')
-      .update({ current_stock: qty })
+      .select('id')
       .eq('id', item.id)
       .eq('organization_id', profile.organization_id)
+      .single()
+    if (!existing) { errors.push(`Item ${item.id}: not found`); continue }
+
+    // Set current_stock atomically (migration 032) instead of a plain UPDATE,
+    // which could race with any other stock change happening at the same time.
+    const { data: rpcData, error: updateError } = await admin
+      .rpc('set_inventory_stock', { p_item_id: item.id, p_new_stock: qty })
+      .single()
 
     if (updateError) { errors.push(`Item ${item.id}: ${updateError.message}`); continue }
 
-    // Record as opening stock transaction
+    const stockBefore = Number(rpcData.stock_before)
+    const stockAfter = Number(rpcData.stock_after)
+    const delta = stockAfter - stockBefore
+    if (delta === 0) continue
+
+    // Record as opening stock transaction. quantity is the signed CHANGE, not
+    // the new absolute value — logging the absolute value here previously
+    // overstated "received" for every item ever touched by this page, which
+    // corrupted any reconciliation built on top of the ledger.
     await admin.from('inventory_transactions').insert({
       organization_id: profile.organization_id,
       item_id: item.id,
       transaction_type: 'adjustment',
-      quantity: qty,
+      quantity: delta,
+      stock_before: stockBefore,
+      stock_after: stockAfter,
       transaction_date: date,
       notes: 'Opening stock balance',
       created_by: user.id,

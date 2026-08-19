@@ -71,15 +71,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
 
       for (const li of items) {
-        const before = current.get(li.inventory_item_id) ?? 0
         const qty = Number(li.quantity) || 0
-        const after = before - qty
 
-        const { error: stockErr } = await supabase
-          .from('inventory_items')
-          .update({ current_stock: after, updated_at: new Date().toISOString() })
-          .eq('id', li.inventory_item_id)
+        // Remove stock atomically (migration 032) instead of a SELECT-then-UPDATE,
+        // which could race with any other stock change happening at the same time.
+        // (The shortfall check above using `current` is a best-effort pre-check,
+        // not the source of truth — the RPC below is.)
+        const { data: rpcData, error: stockErr } = await supabase
+          .rpc('adjust_inventory_stock', { p_item_id: li.inventory_item_id, p_delta: -qty })
+          .single()
         if (stockErr) throw stockErr
+        const before = Number(rpcData.stock_before)
+        const after = Number(rpcData.stock_after)
 
         await supabase.from('inventory_transactions').insert({
           organization_id: profile.organization_id,

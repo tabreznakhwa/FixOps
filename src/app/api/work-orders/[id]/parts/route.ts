@@ -1,5 +1,23 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
+
+/**
+ * Atomically apply a signed stock change via the adjust_inventory_stock RPC
+ * (migration 032) instead of a SELECT-then-UPDATE, so two requests touching
+ * the same item's stock at once can't silently lose one of the changes.
+ */
+async function adjustStock(
+  supabase: any,
+  itemId: string,
+  delta: number
+): Promise<{ before: number; after: number }> {
+  const { data, error } = await supabase
+    .rpc('adjust_inventory_stock', { p_item_id: itemId, p_delta: delta })
+    .single()
+  if (error) throw error
+  return { before: Number(data.stock_before), after: Number(data.stock_after) }
+}
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: workOrderId } = await params
@@ -48,19 +66,34 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (partErr) throw partErr
 
-    // Deduct from inventory stock
-    const { error: stockErr } = await (supabase as any)
-      .from('inventory_items')
-      .update({
-        current_stock: item.current_stock - quantity_used,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', inventory_item_id)
-
-    if (stockErr) {
+    // Deduct from inventory stock, atomically.
+    let before: number, after: number
+    try {
+      ;({ before, after } = await adjustStock(supabase, inventory_item_id, -quantity_used))
+    } catch (stockErr) {
       // Rollback: delete the part we just inserted
       await (supabase as any).from('work_order_parts').delete().eq('id', part.id)
       throw stockErr
+    }
+
+    // Record in the shared ledger (this legacy path never used to log here at all).
+    const { data: wo } = await (supabase as any)
+      .from('work_orders').select('organization_id').eq('id', workOrderId).single()
+    if (wo) {
+      await (supabase as any).from('inventory_transactions').insert({
+        organization_id: wo.organization_id,
+        item_id: inventory_item_id,
+        transaction_type: 'issued',
+        quantity: quantity_used,
+        unit_cost: 0,
+        total_cost: 0,
+        stock_before: before,
+        stock_after: after,
+        reference_type: 'work_order',
+        reference_id: workOrderId,
+        notes: 'Part added via legacy work_order_parts endpoint',
+        created_by: user.id,
+      }).then(null, (err: unknown) => console.error('inventory_transactions write failed (non-critical):', err))
     }
 
     return NextResponse.json({ success: true, part })
@@ -94,18 +127,26 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     if (partErr || !part) return NextResponse.json({ error: 'Part not found' }, { status: 404 })
 
-    // Restore inventory stock
-    const { data: item } = await (supabase as any)
-      .from('inventory_items')
-      .select('current_stock')
-      .eq('id', part.inventory_item_id)
-      .single()
+    // Restore inventory stock, atomically.
+    const { before, after } = await adjustStock(supabase, part.inventory_item_id, Number(part.quantity_used))
 
-    if (item) {
-      await (supabase as any)
-        .from('inventory_items')
-        .update({ current_stock: item.current_stock + part.quantity_used, updated_at: new Date().toISOString() })
-        .eq('id', part.inventory_item_id)
+    const { data: wo } = await (supabase as any)
+      .from('work_orders').select('organization_id').eq('id', workOrderId).single()
+    if (wo) {
+      await (supabase as any).from('inventory_transactions').insert({
+        organization_id: wo.organization_id,
+        item_id: part.inventory_item_id,
+        transaction_type: 'returned',
+        quantity: Number(part.quantity_used),
+        unit_cost: 0,
+        total_cost: 0,
+        stock_before: before,
+        stock_after: after,
+        reference_type: 'work_order',
+        reference_id: workOrderId,
+        notes: 'Part removed via legacy work_order_parts endpoint',
+        created_by: user.id,
+      }).then(null, (err: unknown) => console.error('inventory_transactions write failed (non-critical):', err))
     }
 
     // Delete the part record

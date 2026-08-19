@@ -67,38 +67,41 @@ export async function PATCH(
 
     const supabase = createAdminClient()
 
-    // Capture the level before the write so a manual stock change can be
-    // recorded as a movement. Adjusting stock here previously just overwrote
-    // current_stock with nothing written to inventory_transactions, which is one
-    // of the reasons on-hand figures drifted away from what the ledger explains.
-    let stockBefore: number | null = null
-    let unitCost = 0
-    if ('current_stock' in updatePayload) {
-      const { data: existing } = await (supabase as any)
-        .from('inventory_items')
-        .select('current_stock, purchase_price')
-        .eq('id', id)
-        .eq('organization_id', profile.organization_id)
-        .single()
-      if (existing) {
-        stockBefore = Number(existing.current_stock)
-        unitCost = Number(existing.purchase_price) || 0
-      }
-    }
+    // current_stock is applied separately via the atomic set_inventory_stock
+    // RPC (migration 032) instead of in the same UPDATE as the other fields —
+    // a plain UPDATE here previously raced with any other concurrent stock
+    // change (issue, receive, etc.) and could silently lose one of them.
+    const desiredStock = 'current_stock' in updatePayload ? Number(updatePayload.current_stock) : null
+    delete updatePayload.current_stock
 
-    const { data: updated, error } = await (supabase as any)
+    // Confirm the item belongs to this org before touching it — the admin
+    // client bypasses RLS, so this check is the org boundary.
+    const { data: existing, error: existingErr } = await (supabase as any)
       .from('inventory_items')
-      .update({ ...updatePayload, updated_at: new Date().toISOString() })
+      .select('id, item_code, item_name, current_stock, is_active, purchase_price')
       .eq('id', id)
       .eq('organization_id', profile.organization_id)
-      .select('id, item_code, item_name, current_stock, is_active')
       .single()
+    if (existingErr || !existing) return NextResponse.json({ error: 'Inventory item not found' }, { status: 404 })
 
-    if (error) throw error
+    if (Object.keys(updatePayload).length > 0) {
+      const { error } = await (supabase as any)
+        .from('inventory_items')
+        .update({ ...updatePayload, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .eq('organization_id', profile.organization_id)
+      if (error) throw error
+    }
 
-    if (stockBefore !== null) {
-      const stockAfter = Number(updated.current_stock)
-      const delta = stockAfter - stockBefore
+    if (desiredStock !== null) {
+      const { before, after } = await (supabase as any)
+        .rpc('set_inventory_stock', { p_item_id: id, p_new_stock: desiredStock })
+        .single()
+        .then(({ data, error }: any) => {
+          if (error) throw error
+          return { before: Number(data.stock_before), after: Number(data.stock_after) }
+        })
+      const delta = after - before
       if (delta !== 0) {
         try {
           await (supabase as any).from('inventory_transactions').insert({
@@ -107,10 +110,10 @@ export async function PATCH(
             transaction_type: 'adjustment',
             // Signed, so the trial balance can tell an increase from a decrease.
             quantity: delta,
-            unit_cost: unitCost,
-            total_cost: Math.abs(delta) * unitCost,
-            stock_before: stockBefore,
-            stock_after: stockAfter,
+            unit_cost: Number(existing.purchase_price) || 0,
+            total_cost: Math.abs(delta) * (Number(existing.purchase_price) || 0),
+            stock_before: before,
+            stock_after: after,
             reference_type: 'manual_adjustment',
             notes: body.adjustment_reason?.toString().trim() || 'Manual stock adjustment',
             created_by: user.id,
@@ -121,6 +124,13 @@ export async function PATCH(
         }
       }
     }
+
+    const { data: updated, error: refetchErr } = await (supabase as any)
+      .from('inventory_items')
+      .select('id, item_code, item_name, current_stock, is_active')
+      .eq('id', id)
+      .single()
+    if (refetchErr) throw refetchErr
 
     return NextResponse.json({ success: true, item: updated })
   } catch (err: unknown) {

@@ -44,7 +44,7 @@ export default async function PartsUsedPage({
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
   const from = params.from || '2026-07-01'
   const to = params.to || today
-  const view = params.view === 'detail' ? 'detail' : 'summary'
+  const view = params.view === 'detail' || params.view === 'technician' ? params.view : 'summary'
   const q = (params.q ?? '').trim().toLowerCase()
 
   // Line items carry no organization_id filter on the join, so scope explicitly.
@@ -53,7 +53,7 @@ export default async function PartsUsedPage({
     .select(`
       id, description, quantity, unit_price, created_at, inventory_item_id,
       inventory_items(item_code, item_name, category, unit_of_measure, purchase_price),
-      work_orders(work_order_number, complaint_id, customer_id,
+      work_orders(work_order_number, complaint_id, customer_id, technician_name,
                   complaints(complaint_number), customers(full_name))
     `)
     .eq('organization_id', profile.organization_id)
@@ -70,6 +70,7 @@ export default async function PartsUsedPage({
     inventory_items: { item_code: string; item_name: string; category: string | null; unit_of_measure: string; purchase_price: number } | null
     work_orders: {
       work_order_number: string
+      technician_name: string | null
       complaints: { complaint_number: string } | null
       customers: { full_name: string } | null
     } | null
@@ -80,7 +81,11 @@ export default async function PartsUsedPage({
     ? all.filter(r =>
         (r.inventory_items?.item_name ?? '').toLowerCase().includes(q) ||
         (r.inventory_items?.item_code ?? '').toLowerCase().includes(q) ||
-        (r.description ?? '').toLowerCase().includes(q))
+        (r.description ?? '').toLowerCase().includes(q) ||
+        (r.work_orders?.technician_name ?? '').toLowerCase().includes(q) ||
+        (r.work_orders?.work_order_number ?? '').toLowerCase().includes(q) ||
+        (r.work_orders?.complaints?.complaint_number ?? '').toLowerCase().includes(q) ||
+        (r.work_orders?.customers?.full_name ?? '').toLowerCase().includes(q))
     : all
 
   // Summary per item
@@ -107,6 +112,27 @@ export default async function PartsUsedPage({
   }
 
   const summary = [...byItem.values()].sort((a, b) => b.cost - a.cost)
+
+  const byTechnician = new Map<string, {
+    technician: string; qty: number; cost: number; charged: number; jobs: Set<string>; complaints: Set<string>; items: Set<string>
+  }>()
+
+  for (const r of rows) {
+    const technician = r.work_orders?.technician_name?.trim() || 'Unassigned'
+    const cur = byTechnician.get(technician) ?? {
+      technician, qty: 0, cost: 0, charged: 0, jobs: new Set<string>(), complaints: new Set<string>(), items: new Set<string>(),
+    }
+    const qty = Number(r.quantity) || 0
+    cur.qty += qty
+    cur.cost += qty * (Number(r.inventory_items?.purchase_price) || 0)
+    cur.charged += qty * (Number(r.unit_price) || 0)
+    if (r.work_orders?.work_order_number) cur.jobs.add(r.work_orders.work_order_number)
+    if (r.work_orders?.complaints?.complaint_number) cur.complaints.add(r.work_orders.complaints.complaint_number)
+    cur.items.add(r.inventory_items?.item_name ?? r.description)
+    byTechnician.set(technician, cur)
+  }
+
+  const technicianSummary = [...byTechnician.values()].sort((a, b) => b.cost - a.cost)
   const totalCost = summary.reduce((s, i) => s + i.cost, 0)
   const totalCharged = summary.reduce((s, i) => s + i.charged, 0)
   const totalQty = summary.reduce((s, i) => s + i.qty, 0)
@@ -149,18 +175,18 @@ export default async function PartsUsedPage({
               className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Item</label>
-            <input name="q" defaultValue={q} placeholder="Search item…"
+            <label className="block text-xs font-medium text-slate-500 mb-1">Search</label>
+            <input name="q" defaultValue={q} placeholder="Item, technician, complaint…"
               className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-          {view === 'detail' && <input type="hidden" name="view" value="detail" />}
+          {view !== 'summary' && <input type="hidden" name="view" value={view} />}
           <button type="submit" className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg transition-colors">
             Apply
           </button>
         </form>
 
         <div className="flex gap-2 print:hidden">
-          {[{ v: 'summary', l: 'By Item' }, { v: 'detail', l: 'By Job' }].map(({ v, l }) => (
+          {[{ v: 'summary', l: 'By Item' }, { v: 'detail', l: 'By Job' }, { v: 'technician', l: 'By Technician' }].map(({ v, l }) => (
             <Link key={v} href={viewHref(v)}
               className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 view === v ? 'bg-blue-600 text-white shadow-sm'
@@ -204,6 +230,52 @@ export default async function PartsUsedPage({
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
             <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500 font-medium">No parts issued between {formatDate(from)} and {formatDate(to)}</p>
+          </div>
+        ) : view === 'technician' ? (
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100">
+              <h3 className="font-semibold text-slate-900">By Technician</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Who used which parts, on which jobs and complaints</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px]">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Technician</th>
+                    <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Qty Used</th>
+                    <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Items</th>
+                    <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Jobs</th>
+                    <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Complaints</th>
+                    <th className="text-right text-xs font-semibold text-amber-700 uppercase tracking-wider px-4 py-3">Cost</th>
+                    <th className="text-right text-xs font-semibold text-green-700 uppercase tracking-wider px-5 py-3">Charged</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {technicianSummary.map(t => (
+                    <tr key={t.technician} className="hover:bg-slate-50/50">
+                      <td className="px-5 py-3 text-sm font-medium text-slate-800">{t.technician}</td>
+                      <td className="px-4 py-3 text-right text-sm font-semibold text-slate-900">{t.qty.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-sm text-slate-600">{t.items.size}</td>
+                      <td className="px-4 py-3 text-right text-sm text-slate-600">{t.jobs.size}</td>
+                      <td className="px-4 py-3 text-right text-sm text-slate-600">{t.complaints.size}</td>
+                      <td className="px-4 py-3 text-right text-sm text-amber-700">{formatCurrency(t.cost)}</td>
+                      <td className="px-5 py-3 text-right text-sm text-green-700">
+                        {t.charged > 0 ? formatCurrency(t.charged) : <span className="text-slate-300">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-50 border-t border-slate-200">
+                    <td className="px-5 py-3 text-sm font-bold text-slate-900">Total</td>
+                    <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">{totalQty.toFixed(2)}</td>
+                    <td className="px-4 py-3" colSpan={3} />
+                    <td className="px-4 py-3 text-right text-sm font-bold text-amber-700">{formatCurrency(totalCost)}</td>
+                    <td className="px-5 py-3 text-right text-sm font-bold text-green-700">{formatCurrency(totalCharged)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
         ) : view === 'summary' ? (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -261,11 +333,12 @@ export default async function PartsUsedPage({
               <p className="text-xs text-slate-500 mt-0.5">{rows.length} issues, most recent first</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
+              <table className="w-full min-w-[1020px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Date</th>
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Item</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Technician</th>
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Work Order</th>
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Complaint</th>
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Customer</th>
@@ -281,6 +354,7 @@ export default async function PartsUsedPage({
                         <p className="text-sm text-slate-800">{r.inventory_items?.item_name ?? r.description}</p>
                         <p className="text-xs font-mono text-slate-400">{r.inventory_items?.item_code ?? '—'}</p>
                       </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{r.work_orders?.technician_name ?? '—'}</td>
                       <td className="px-4 py-3 text-sm font-mono text-slate-600">{r.work_orders?.work_order_number ?? '—'}</td>
                       <td className="px-4 py-3 text-sm font-mono text-slate-600">{r.work_orders?.complaints?.complaint_number ?? '—'}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{r.work_orders?.customers?.full_name ?? '—'}</td>

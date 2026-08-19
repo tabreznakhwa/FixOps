@@ -139,20 +139,14 @@ export async function PATCH(
 
         if (!invItemId) continue
 
-        // Fetch current stock
-        const { data: invRaw } = await admin
-          .from('inventory_items')
-          .select('current_stock')
-          .eq('id', invItemId)
+        // Receive stock atomically (migration 032) instead of a SELECT-then-UPDATE,
+        // which could race with any other stock change happening at the same time.
+        const { data: rpcData, error: stockErr } = await admin
+          .rpc('adjust_inventory_stock', { p_item_id: invItemId, p_delta: delta })
           .single()
-        const stockBefore = Number((invRaw as { current_stock: number } | null)?.current_stock ?? 0)
-        const stockAfter = stockBefore + delta
-
-        // Update current_stock
-        await admin
-          .from('inventory_items')
-          .update({ current_stock: stockAfter, updated_at: new Date().toISOString() })
-          .eq('id', invItemId)
+        if (stockErr) throw stockErr
+        const stockBefore = Number(rpcData.stock_before)
+        const stockAfter = Number(rpcData.stock_after)
 
         // Record inventory transaction
         await admin.from('inventory_transactions').insert({

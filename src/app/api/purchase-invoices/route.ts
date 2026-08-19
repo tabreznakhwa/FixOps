@@ -113,26 +113,30 @@ export async function POST(request: NextRequest) {
       // Non-inventory items skip stock updates entirely
       if (!it.inventory_item_id) continue
 
-      // Get current stock for transaction record
+      // Get purchase_price for the fallback below (not used for stock — that's atomic now)
       const { data: invItem } = await supabase
         .from('inventory_items')
-        .select('current_stock, purchase_price')
+        .select('purchase_price')
         .eq('id', it.inventory_item_id)
         .single()
 
-      const stockBefore = invItem?.current_stock ?? 0
-      const stockAfter = stockBefore + qty
+      // Receive stock atomically (migration 032) instead of a SELECT-then-UPDATE,
+      // which could race with any other stock change happening at the same time.
+      const { data: rpcData, error: stockErr } = await supabase
+        .rpc('adjust_inventory_stock', { p_item_id: it.inventory_item_id, p_delta: qty })
+        .single()
+      if (stockErr) throw stockErr
+      const stockBefore = Number(rpcData.stock_before)
+      const stockAfter = Number(rpcData.stock_after)
 
-      // Update current_stock
-      const { error: stockErr } = await supabase
+      // Purchase price is unrelated to the race being fixed — update it separately.
+      await supabase
         .from('inventory_items')
         .update({
-          current_stock: stockAfter,
           purchase_price: unitCost > 0 ? unitCost : (invItem?.purchase_price ?? 0),
           updated_at: new Date().toISOString(),
         })
         .eq('id', it.inventory_item_id)
-      if (stockErr) throw stockErr
 
       // Record inventory transaction
       await supabase.from('inventory_transactions').insert({
