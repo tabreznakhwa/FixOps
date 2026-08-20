@@ -117,13 +117,15 @@ export default async function PartsUsedPage({
   const summary = [...byItem.values()].sort((a, b) => b.cost - a.cost)
 
   const byTechnician = new Map<string, {
-    technician: string; qty: number; cost: number; charged: number; jobs: Set<string>; complaints: Set<string>; items: Set<string>
+    technician: string; qty: number; cost: number; charged: number; jobs: Set<string>; complaints: Set<string>
+    items: Map<string, { name: string; qty: number }>
   }>()
 
   for (const r of rows) {
     const technician = r.work_orders?.technician_name?.trim() || 'Unassigned'
     const cur = byTechnician.get(technician) ?? {
-      technician, qty: 0, cost: 0, charged: 0, jobs: new Set<string>(), complaints: new Set<string>(), items: new Set<string>(),
+      technician, qty: 0, cost: 0, charged: 0, jobs: new Set<string>(), complaints: new Set<string>(),
+      items: new Map<string, { name: string; qty: number }>(),
     }
     const qty = Number(r.quantity) || 0
     cur.qty += qty
@@ -131,7 +133,10 @@ export default async function PartsUsedPage({
     cur.charged += qty * (Number(r.unit_price) || 0)
     if (r.work_orders?.work_order_number) cur.jobs.add(r.work_orders.work_order_number)
     if (r.work_orders?.complaints?.complaint_number) cur.complaints.add(r.work_orders.complaints.complaint_number)
-    cur.items.add(r.inventory_items?.item_name ?? r.description)
+    const itemKey = r.inventory_item_id
+    const itemName = r.inventory_items?.item_name ?? r.description
+    const existing = cur.items.get(itemKey)
+    cur.items.set(itemKey, { name: itemName, qty: (existing?.qty ?? 0) + qty })
     byTechnician.set(technician, cur)
   }
 
@@ -151,7 +156,7 @@ export default async function PartsUsedPage({
   const viewLabel = view === 'technician' ? 'By Technician' : view === 'detail' ? 'By Job' : 'By Item'
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in print-landscape">
       <div className="hidden print:block px-8 pt-8">
         <OrgLetterhead title="Parts Used" subtitle={`${viewLabel} · ${formatDate(from)} to ${formatDate(to)}`} />
       </div>
@@ -230,12 +235,12 @@ export default async function PartsUsedPage({
               <p className="text-xs text-slate-500 mt-0.5">Who used which parts, on which jobs and complaints</p>
             </div>
             <div className="overflow-x-auto print-report">
-              <table className="w-full min-w-[900px]">
+              <table className="w-full min-w-[1100px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Technician</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Parts Used</th>
                     <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Qty Used</th>
-                    <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Items</th>
                     <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Jobs</th>
                     <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Complaints</th>
                     <th className="text-right text-xs font-semibold text-amber-700 uppercase tracking-wider px-4 py-3">Cost</th>
@@ -244,10 +249,19 @@ export default async function PartsUsedPage({
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {technicianSummary.map(t => (
-                    <tr key={t.technician} className="hover:bg-slate-50/50">
-                      <td className="px-5 py-3 text-sm font-medium text-slate-800">{t.technician}</td>
+                    <tr key={t.technician} className="hover:bg-slate-50/50 align-top">
+                      <td className="px-5 py-3 text-sm font-medium text-slate-800 whitespace-nowrap">{t.technician}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        <div className="flex flex-col gap-0.5">
+                          {[...t.items.values()].sort((a, b) => b.qty - a.qty).map(i => (
+                            <div key={i.name} className="flex items-baseline gap-1.5">
+                              <span>{i.name}</span>
+                              <span className="text-xs text-slate-400 font-mono whitespace-nowrap">×{i.qty.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-right text-sm font-semibold text-slate-900">{t.qty.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-sm text-slate-600">{t.items.size}</td>
                       <td className="px-4 py-3 text-right text-sm text-slate-600">{t.jobs.size}</td>
                       <td className="px-4 py-3 text-right text-sm text-slate-600">{t.complaints.size}</td>
                       <td className="px-4 py-3 text-right text-sm text-amber-700">{formatCurrency(t.cost)}</td>
@@ -259,9 +273,9 @@ export default async function PartsUsedPage({
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-50 border-t border-slate-200">
-                    <td className="px-5 py-3 text-sm font-bold text-slate-900">Total</td>
+                    <td className="px-5 py-3 text-sm font-bold text-slate-900" colSpan={2}>Total</td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">{totalQty.toFixed(2)}</td>
-                    <td className="px-4 py-3" colSpan={3} />
+                    <td className="px-4 py-3" colSpan={2} />
                     <td className="px-4 py-3 text-right text-sm font-bold text-amber-700">{formatCurrency(totalCost)}</td>
                     <td className="px-5 py-3 text-right text-sm font-bold text-green-700">{formatCurrency(totalCharged)}</td>
                   </tr>

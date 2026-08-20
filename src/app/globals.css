@@ -77,7 +77,21 @@ body {
   margin: 10mm 12mm;
 }
 
+/* Wide reports (parts-used, etc.) print landscape via the CSS named-page
+   mechanism: `page: <ident>` on the printed container pairs with this
+   `@page <ident>` to swap orientation for just that page, while invoices,
+   quotations and other single-column documents stay on the default portrait
+   @page rule above. Supported in Chrome/Edge; Firefox and Safari fall back
+   to the default portrait @page — content still reflows to fit the table
+   width rules below either way, just without the wider page. */
+@page landscape-report {
+  size: A4 landscape;
+  margin: 10mm 12mm;
+}
+
 @media print {
+  .print-landscape { page: landscape-report; }
+
   /* Hide sidebar and topbar */
   aside, nav { display: none !important; }
   /* Full-width main content */
