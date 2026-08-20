@@ -19,6 +19,81 @@ interface Props {
   canEditAnyNote: boolean
 }
 
+// Matches a line already in list form, e.g. "  1. text" or "  • text",
+// capturing indent / number / rest so Enter can continue it.
+const NUMBERED_LINE = /^(\s*)(\d+)\.\s(.*)$/
+const BULLETED_LINE = /^(\s*)[•-]\s(.*)$/
+
+/**
+ * Pressing Enter on a "1. …" or "• …" line continues the list instead of
+ * dropping back to plain text — auto-incrementing the number, or repeating
+ * the bullet. Pressing Enter on an empty list item exits the list, same as
+ * word processors do, rather than inserting another empty "4. ".
+ */
+function handleListEnter(
+  e: React.KeyboardEvent<HTMLTextAreaElement>,
+  value: string,
+  setValue: (v: string) => void
+) {
+  if (e.key !== 'Enter') return
+  const el = e.currentTarget
+  const cursor = el.selectionStart
+  const before = value.slice(0, cursor)
+  const after = value.slice(cursor)
+  const lineStart = before.lastIndexOf('\n') + 1
+  const currentLine = before.slice(lineStart)
+
+  const numbered = currentLine.match(NUMBERED_LINE)
+  const bulleted = numbered ? null : currentLine.match(BULLETED_LINE)
+  if (!numbered && !bulleted) return // not in a list — normal newline
+
+  e.preventDefault()
+  const indent = numbered ? numbered[1] : bulleted![1]
+  const rest = numbered ? numbered[3] : bulleted![2]
+
+  if (rest.trim() === '') {
+    const newBefore = before.slice(0, lineStart)
+    const newValue = newBefore + after
+    setValue(newValue)
+    placeCursor(el, newBefore.length)
+    return
+  }
+
+  const prefix = numbered ? `${indent}${parseInt(numbered[2], 10) + 1}. ` : `${indent}• `
+  const newValue = before + '\n' + prefix + after
+  setValue(newValue)
+  placeCursor(el, before.length + 1 + prefix.length)
+}
+
+function placeCursor(el: HTMLTextAreaElement, pos: number) {
+  requestAnimationFrame(() => el.setSelectionRange(pos, pos))
+}
+
+/** Renders a note as a real list when its lines look like "1. …" / "• …", instead of raw text. */
+function NoteBody({ text }: { text: string }) {
+  return (
+    <div className="text-sm text-slate-800 space-y-0.5">
+      {text.split('\n').map((line, i) => {
+        const numbered = line.match(NUMBERED_LINE)
+        const bulleted = numbered ? null : line.match(BULLETED_LINE)
+        const match = numbered ?? bulleted
+        if (match) {
+          const indent = match[1]
+          const rest = numbered ? numbered[3] : bulleted![2]
+          const marker = numbered ? `${numbered[2]}.` : '•'
+          return (
+            <div key={i} className="flex gap-2" style={indent ? { paddingLeft: `${indent.length * 0.5}rem` } : undefined}>
+              <span className="text-slate-400 flex-shrink-0 tabular-nums">{marker}</span>
+              <span className="whitespace-pre-wrap">{rest}</span>
+            </div>
+          )
+        }
+        return line ? <p key={i} className="whitespace-pre-wrap">{line}</p> : <div key={i} className="h-1.5" />
+      })}
+    </div>
+  )
+}
+
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60000)
@@ -110,7 +185,8 @@ export function InternalNotes({ complaintId, initialNotes, currentUserId, canEdi
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
-          placeholder="Add a handover note — e.g. Parts ordered from Al Ghanim ETA 2 days, or Customer wants call before visit…"
+          onKeyDown={e => handleListEnter(e, text, setText)}
+          placeholder="Add a handover note — e.g. Parts ordered from Al Ghanim ETA 2 days, or Customer wants call before visit… Start a line with &quot;1. &quot; or &quot;• &quot; for a list."
           rows={3}
           className="w-full border border-amber-200 bg-white rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
         />
@@ -141,6 +217,7 @@ export function InternalNotes({ complaintId, initialNotes, currentUserId, canEdi
                     <textarea
                       value={editText}
                       onChange={e => setEditText(e.target.value)}
+                      onKeyDown={e => handleListEnter(e, editText, setEditText)}
                       rows={3}
                       autoFocus
                       className="w-full border border-amber-200 bg-white rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
@@ -170,7 +247,7 @@ export function InternalNotes({ complaintId, initialNotes, currentUserId, canEdi
                 ) : (
                   <>
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm text-slate-800 whitespace-pre-wrap flex-1">{n.note}</p>
+                      <div className="flex-1"><NoteBody text={n.note} /></div>
                       {canEdit && (
                         <button
                           type="button"
