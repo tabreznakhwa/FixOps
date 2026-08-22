@@ -116,11 +116,24 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     })
   }
 
-  const { data: countsRaw } = await supabase
-    .from('complaints')
-    .select('status')
-    .not('status', 'in', '(cancelled,paid)')
-  const counts = countsRaw as unknown as { status: string }[]
+  // PostgREST caps a single response at 1000 rows regardless of `.limit()` (see
+  // fetchAllCustomers() in src/lib/customers.ts for the same issue on customers).
+  // A bare `.select('status')` here silently truncated at exactly 1000 rows once
+  // the org passed that many complaints — "All (1000)" was the row cap, not the
+  // real total, and the per-status tab counts were undercounted by the same cut.
+  // Page through with .range() so every complaint is counted.
+  const counts: { status: string }[] = []
+  for (let offset = 0; offset < 50_000; offset += 1000) {
+    const { data: chunk, error: chunkError } = await supabase
+      .from('complaints')
+      .select('status')
+      .not('status', 'in', '(cancelled,paid)')
+      .range(offset, offset + 999)
+    if (chunkError) break
+    const rows = (chunk ?? []) as { status: string }[]
+    counts.push(...rows)
+    if (rows.length < 1000) break
+  }
 
   const statusCounts: Record<string, number> = {}
   counts?.forEach((c: { status: string }) => { statusCounts[c.status] = (statusCounts[c.status] ?? 0) + 1 })
