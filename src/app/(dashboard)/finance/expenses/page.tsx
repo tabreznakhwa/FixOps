@@ -75,13 +75,20 @@ export default async function ExpensesPage({
   if (params.category) query = query.eq('category', params.category)
   if (params.q) query = query.ilike('description', `%${params.q}%`)
 
-  const { data: rawExpenses } = await query
+  const [{ data: rawExpenses }, { data: customCategoriesRaw }] = await Promise.all([
+    query,
+    (supabase as any).from('expense_categories').select('value, label').order('label'),
+  ])
 
   const expenses = (rawExpenses ?? []) as Array<{
     id: string; expense_number: string; expense_date: string; category: string
     description: string; amount: number; payment_method: string
     reference_number: string | null; notes: string | null
   }>
+
+  const customCategories = (customCategoriesRaw ?? []) as { value: string; label: string }[]
+  const categoryLabels: Record<string, string> = { ...CATEGORY_LABELS }
+  customCategories.forEach(c => { categoryLabels[c.value] = c.label })
 
   const totalAmount = expenses.reduce((s, e) => s + e.amount, 0)
   const cashTotal = expenses.filter(e => e.payment_method === 'cash').reduce((s, e) => s + e.amount, 0)
@@ -114,8 +121,8 @@ export default async function ExpensesPage({
           <Suspense>
             <CategorySelect
               basePath="/finance/expenses"
-              categories={Object.keys(CATEGORY_LABELS)}
-              labelMap={CATEGORY_LABELS}
+              categories={Object.keys(categoryLabels)}
+              labelMap={categoryLabels}
               value={params.category ?? ''}
             />
           </Suspense>
@@ -190,7 +197,7 @@ export default async function ExpensesPage({
                       <td className="px-4 py-3.5 text-xs text-slate-400 font-mono">{e.expense_number}</td>
                       <td className="px-4 py-3.5">
                         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${CATEGORY_COLORS[e.category] ?? 'bg-slate-100 text-slate-700'}`}>
-                          {CATEGORY_LABELS[e.category] ?? e.category}
+                          {categoryLabels[e.category] ?? e.category}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-sm text-slate-800">

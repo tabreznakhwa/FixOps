@@ -2,9 +2,11 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, AlertCircle, ChevronDown } from 'lucide-react'
+import { Loader2, AlertCircle, ChevronDown, X } from 'lucide-react'
 
-const CATEGORIES = [
+const ADD_NEW = '__add_new__'
+
+const BUILTIN_CATEGORIES = [
   { value: 'rent', label: 'Rent' },
   { value: 'electricity', label: 'Electricity' },
   { value: 'water', label: 'Water' },
@@ -40,12 +42,27 @@ interface Props {
     reference_number: string | null
     notes: string | null
   }
+  customCategories: { value: string; label: string }[]
+  canManageCategories: boolean
 }
 
-export function EditExpenseForm({ id, initial }: Props) {
+export function EditExpenseForm({ id, initial, customCategories, canManageCategories }: Props) {
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+
+  // The expense's own current category might be a custom type not in
+  // customCategories yet (e.g. RLS trimmed something) or, more commonly, is
+  // simply already present — either way make sure it's always selectable.
+  const initialCategories = [...BUILTIN_CATEGORIES, ...customCategories]
+  if (!initialCategories.some(c => c.value === initial.category)) {
+    initialCategories.push({ value: initial.category, label: initial.category })
+  }
+  const [categories, setCategories] = useState(initialCategories)
+  const [addingCategory, setAddingCategory] = useState(false)
+  const [newCategoryLabel, setNewCategoryLabel] = useState('')
+  const [categorySaving, setCategorySaving] = useState(false)
+  const [categoryError, setCategoryError] = useState('')
 
   const [form, setForm] = useState({
     expense_date: initial.expense_date,
@@ -60,6 +77,39 @@ export function EditExpenseForm({ id, initial }: Props) {
   const set = (field: keyof typeof form) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => setForm(f => ({ ...f, [field]: e.target.value }))
+
+  const onCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if (e.target.value === ADD_NEW) {
+      setAddingCategory(true)
+      setCategoryError('')
+      return
+    }
+    setForm(f => ({ ...f, category: e.target.value }))
+  }
+
+  const saveNewCategory = async () => {
+    const label = newCategoryLabel.trim()
+    if (!label) { setCategoryError('Please enter a name'); return }
+    setCategorySaving(true)
+    setCategoryError('')
+    try {
+      const res = await fetch('/api/expense-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to add expense type')
+      setCategories(prev => [...prev, { value: data.value, label: data.label }])
+      setForm(f => ({ ...f, category: data.value }))
+      setAddingCategory(false)
+      setNewCategoryLabel('')
+    } catch (err: unknown) {
+      setCategoryError(err instanceof Error ? err.message : 'Failed to add expense type')
+    } finally {
+      setCategorySaving(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -115,14 +165,48 @@ export function EditExpenseForm({ id, initial }: Props) {
           </div>
           <div>
             <label className={labelClass}>Category <span className="text-red-500">*</span></label>
-            <div className="relative">
-              <select value={form.category} onChange={set('category')} className={inputClass + ' appearance-none pr-9'}>
-                {CATEGORIES.map(c => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
+            {addingCategory ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={newCategoryLabel}
+                    onChange={e => setNewCategoryLabel(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveNewCategory() } }}
+                    placeholder="e.g. Client Gifts"
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={saveNewCategory}
+                    disabled={categorySaving || !newCategoryLabel.trim()}
+                    className="flex-shrink-0 flex items-center gap-1 px-3 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition"
+                  >
+                    {categorySaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Add'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAddingCategory(false); setNewCategoryLabel(''); setCategoryError('') }}
+                    disabled={categorySaving}
+                    className="flex-shrink-0 p-2.5 border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-lg transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {categoryError && <p className="text-xs text-red-600">{categoryError}</p>}
+              </div>
+            ) : (
+              <div className="relative">
+                <select value={form.category} onChange={onCategoryChange} className={inputClass + ' appearance-none pr-9'}>
+                  {categories.map(c => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                  {canManageCategories && <option value={ADD_NEW}>＋ Add New Type…</option>}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+            )}
           </div>
         </div>
 
