@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { AlertTriangle, ChevronDown, ChevronRight, Search, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { AlertTriangle, ChevronDown, ChevronRight, Printer, Search, X } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 
@@ -24,8 +25,10 @@ interface Customer {
 }
 
 export function ReceivablesClient({ customers }: { customers: Customer[] }) {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const filtered = search.trim()
     ? customers.filter(c =>
@@ -36,6 +39,28 @@ export function ReceivablesClient({ customers }: { customers: Customer[] }) {
     : customers
 
   const maxBalance = customers[0]?.total_balance ?? 1
+
+  const toggleInvoice = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleAllForCustomer = (invoiceIds: string[]) => {
+    const allSelected = invoiceIds.every(id => selected.has(id))
+    setSelected(prev => {
+      const next = new Set(prev)
+      invoiceIds.forEach(id => allSelected ? next.delete(id) : next.add(id))
+      return next
+    })
+  }
+
+  const printSelected = () => {
+    router.push(`/finance/invoices/print-batch?ids=${Array.from(selected).join(',')}&return_to=/finance/receivables`)
+  }
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -109,13 +134,38 @@ export function ReceivablesClient({ customers }: { customers: Customer[] }) {
                 </div>
 
                 {/* Expandable invoice list */}
-                {isOpen && (
+                {isOpen && (() => {
+                  const selectableIds = c.invoices.filter(inv => inv.id).map(inv => inv.id)
+                  const allSelected = selectableIds.length > 0 && selectableIds.every(id => selected.has(id))
+                  return (
                   <div className="bg-slate-50 border-t border-slate-100 px-5 py-3">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Balance Invoices</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Balance Invoices</p>
+                      {selectableIds.length > 0 && (
+                        <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500 cursor-pointer" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={allSelected}
+                            onChange={() => toggleAllForCustomer(selectableIds)}
+                            className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          Select all
+                        </label>
+                      )}
+                    </div>
                     <div className="space-y-1.5">
                       {c.invoices.map((inv, i) => (
                         <div key={inv.id ?? i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-slate-100">
                           <div className="flex items-center gap-3">
+                            {inv.id && (
+                              <input
+                                type="checkbox"
+                                checked={selected.has(inv.id)}
+                                onChange={() => toggleInvoice(inv.id)}
+                                onClick={e => e.stopPropagation()}
+                                className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                              />
+                            )}
                             {inv.id ? (
                               <Link href={`/finance/invoices/${inv.id}?return_to=/finance/receivables`}
                                 className="text-xs font-mono font-semibold text-blue-600 hover:underline"
@@ -144,10 +194,31 @@ export function ReceivablesClient({ customers }: { customers: Customer[] }) {
                       ))}
                     </div>
                   </div>
-                )}
+                  )
+                })()}
               </div>
             )
           })}
+        </div>
+      )}
+
+      {selected.size > 0 && (
+        <div className="sticky bottom-0 left-0 right-0 bg-slate-900 text-white px-5 py-3 flex items-center justify-between shadow-lg">
+          <span className="text-sm font-medium">{selected.size} invoice{selected.size === 1 ? '' : 's'} selected</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelected(new Set())}
+              className="px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-white transition-colors"
+            >
+              Clear
+            </button>
+            <button
+              onClick={printSelected}
+              className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Printer className="w-4 h-4" /> Print / Save PDF
+            </button>
+          </div>
         </div>
       )}
     </div>

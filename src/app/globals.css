@@ -116,6 +116,11 @@ body {
   .print-report { overflow: visible !important; }
   .print-report table { min-width: 0 !important; width: 100% !important; font-size: 10px; }
   .print-report th, .print-report td { padding: 3px 6px !important; }
+  /* Batch-printing multiple documents (e.g. several selected invoices from
+     Receivables) — force each one onto its own page instead of letting them
+     run together or split mid-document. */
+  .print-page-break { break-after: page; }
+  .print-page-break:last-child { break-after: auto; }
 }
 
 @keyframes count-up {
