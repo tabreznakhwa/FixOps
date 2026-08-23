@@ -3,11 +3,11 @@ import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
 import { Suspense } from 'react'
-import { Plus, FileText, TrendingUp, Clock, AlertCircle, CheckCircle2, Pencil, Search } from 'lucide-react'
-import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
+import { Plus, FileText, TrendingUp, Clock, AlertCircle, CheckCircle2, Search } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
-import { DeleteInvoiceButton } from './DeleteInvoiceButton'
 import { InvoiceSearchBar } from './InvoiceSearchBar'
+import { InvoiceTableClient } from './InvoiceTableClient'
 
 export const metadata = { title: 'Invoices' }
 
@@ -66,12 +66,6 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
   const totalCollected = allInvoices?.reduce((s, i) => s + i.amount_paid, 0) ?? 0
   const totalPending = allInvoices?.reduce((s, i) => s + i.balance_due, 0) ?? 0
   const overdueCount = allInvoices?.filter((i) => i.status === 'overdue').length ?? 0
-
-  const statusIcons: Record<string, React.ReactNode> = {
-    paid: <CheckCircle2 className="w-3.5 h-3.5" />,
-    overdue: <AlertCircle className="w-3.5 h-3.5" />,
-    partial: <Clock className="w-3.5 h-3.5" />,
-  }
 
   return (
     <div className="animate-fade-in">
@@ -172,99 +166,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
             <p className="text-slate-500 font-medium">No invoices found</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Invoice</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Customer</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Date</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Due Date</th>
-                  <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Amount</th>
-                  <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Balance</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Status</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden xl:table-cell">Notes</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {invoices.map((inv) => {
-                  const customer = inv.customers as { full_name: string } | null
-                  const isOverdue = inv.status === 'overdue'
-                  const canEdit = canEditDelete && !['paid', 'cancelled'].includes(inv.status)
-                  const canDelete = canEditDelete && !['paid', 'cancelled'].includes(inv.status)
-                  return (
-                    <tr key={inv.id} className={`hover:bg-slate-50 transition-colors group ${isOverdue ? 'bg-red-50/30' : ''}`}>
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-slate-400" />
-                          <div>
-                            <p className="text-sm font-mono font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">
-                              {inv.invoice_number}
-                            </p>
-                            <p className="text-xs text-slate-400 capitalize">{inv.invoice_type}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5 hidden md:table-cell text-sm text-slate-700">
-                        {customer?.full_name}
-                      </td>
-                      <td className="px-4 py-3.5 hidden lg:table-cell text-sm text-slate-600">
-                        {formatDate(inv.invoice_date)}
-                      </td>
-                      <td className={`px-4 py-3.5 hidden lg:table-cell text-sm ${isOverdue ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
-                        {inv.due_date ? formatDate(inv.due_date) : '—'}
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        <p className="text-sm font-bold text-slate-900">{formatCurrency(inv.total_amount)}</p>
-                        {inv.amount_paid > 0 && (
-                          <p className="text-xs text-green-600">+{formatCurrency(inv.amount_paid)} paid</p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        {inv.status === 'paid' ? (
-                          <p className="text-sm font-bold text-green-600">{formatCurrency(0)}</p>
-                        ) : (
-                          <p className={`text-sm font-bold ${inv.balance_due > 0 ? 'text-amber-600' : 'text-green-600'}`}>
-                            {formatCurrency(inv.balance_due)}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <div className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusColor(inv.status)}`}>
-                          {statusIcons[inv.status]}
-                          {formatStatus(inv.status)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5 hidden xl:table-cell text-sm text-slate-500 max-w-[160px] truncate">
-                        {inv.notes ?? '—'}
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Link
-                            href={`/finance/invoices/${inv.id}`}
-                            className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1"
-                          >
-                            View
-                          </Link>
-                          {canEdit && (
-                            <Link
-                              href={`/finance/invoices/${inv.id}/edit`}
-                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Edit invoice"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Link>
-                          )}
-                          {canDelete && <DeleteInvoiceButton id={inv.id} status={inv.status} />}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <InvoiceTableClient invoices={invoices} canEditDelete={canEditDelete} />
         )}
       </div>
     </div>
