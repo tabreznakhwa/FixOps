@@ -112,6 +112,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
       const { error } = await supabase.from('purchase_invoices').update(updates).eq('id', id).eq('organization_id', profile.organization_id)
       if (error) throw error
+
+      // Editing payment_mode on the invoice used to have no effect anywhere
+      // else — supplier_payments (what Bank Book/Cash Book actually read)
+      // had no link back to its invoice, so an edit could never reach the
+      // ledger row it was meant to correct. Keep them in sync now that
+      // there's a real link (migration 035).
+      if ('payment_mode' in body) {
+        const { error: syncErr } = await supabase
+          .from('supplier_payments')
+          .update({ payment_mode: updates.payment_mode })
+          .eq('purchase_invoice_id', id)
+        if (syncErr) console.error('supplier_payments payment_mode sync failed (non-critical):', syncErr)
+      }
+
       return NextResponse.json({ success: true })
     }
 

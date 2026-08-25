@@ -149,17 +149,24 @@ export async function POST(request: NextRequest) {
         .eq('id', it.inventory_item_id)
     }
 
-    // Record supplier payment for cash purchases (if supplier is linked)
+    // Record supplier payment for cash purchases (if supplier is linked).
+    // Non-critical: the invoice, its line items, and stock have already
+    // committed by this point, so a ledger-write failure here shouldn't
+    // fail the whole request — but it must not be silently discarded
+    // either, which is exactly how a 'knet' payment_mode used to vanish
+    // with zero trace (the enum this column used didn't allow it).
     if (payment_type === 'cash' && supplier_id) {
-      await supabase.from('supplier_payments').insert({
+      const { error: spErr } = await supabase.from('supplier_payments').insert({
         organization_id: orgId,
         supplier_id,
+        purchase_invoice_id: invoice.id,
         payment_date: invoice_date,
         amount_paid: totalAmount,
         payment_mode: payment_mode || 'cash',
         notes: `Purchase Invoice ${invoiceNumber}`,
         paid_by: user.id,
       })
+      if (spErr) console.error('supplier_payments insert failed (non-critical):', spErr)
     }
 
     return NextResponse.json({ success: true, id: invoice.id, invoiceNumber: invoice.invoice_number })

@@ -115,6 +115,7 @@ export function EditPurchaseInvoiceForm({ invoice, suppliers }: { invoice: Invoi
           <option value="cash">Cash</option>
           <option value="bank_transfer">Bank Transfer</option>
           <option value="cheque">Cheque</option>
+          <option value="knet">KNET</option>
           <option value="online">Online</option>
         </select>
       </div>

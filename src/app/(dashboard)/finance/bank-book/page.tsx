@@ -10,10 +10,10 @@ import { Suspense } from 'react'
 
 export const metadata = { title: 'Bank Book' }
 
-const BANK_MODES = ['bank_transfer', 'cheque', 'pos', 'online', 'card']
+const BANK_MODES = ['bank_transfer', 'cheque', 'pos', 'online', 'card', 'knet']
 const MODE_LABELS: Record<string, string> = {
   bank_transfer: 'Bank Transfer', cheque: 'Cheque', pos: 'POS',
-  online: 'Online', card: 'Card',
+  online: 'Online', card: 'Card', knet: 'KNET',
 }
 const CATEGORY_LABELS: Record<string, string> = {
   rent: 'Rent', electricity: 'Electricity', water: 'Water', phone: 'Phone / Mobile',
