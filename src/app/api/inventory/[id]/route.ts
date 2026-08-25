@@ -94,35 +94,25 @@ export async function PATCH(
     }
 
     if (desiredStock !== null) {
-      const { before, after } = await (supabase as any)
-        .rpc('set_inventory_stock', { p_item_id: id, p_new_stock: desiredStock })
-        .single()
-        .then(({ data, error }: any) => {
-          if (error) throw error
-          return { before: Number(data.stock_before), after: Number(data.stock_after) }
+      // set_inventory_stock_logged (migration 034) does the stock UPDATE and
+      // the inventory_transactions insert in one call, so they can't drift
+      // apart the way a separate RPC + insert pair could — see line-items/
+      // route.ts for the live bug (Compressor ZR-72) that motivated this.
+      const { error } = await (supabase as any)
+        .rpc('set_inventory_stock_logged', {
+          p_item_id: id,
+          p_new_stock: desiredStock,
+          p_org_id: profile.organization_id,
+          p_transaction_type: 'adjustment',
+          // Signed, so the trial balance can tell an increase from a decrease.
+          p_unit_cost: Number(existing.purchase_price) || 0,
+          p_reference_type: 'manual_adjustment',
+          p_reference_id: null,
+          p_notes: body.adjustment_reason?.toString().trim() || 'Manual stock adjustment',
+          p_created_by: user.id,
         })
-      const delta = after - before
-      if (delta !== 0) {
-        try {
-          await (supabase as any).from('inventory_transactions').insert({
-            organization_id: profile.organization_id,
-            item_id: id,
-            transaction_type: 'adjustment',
-            // Signed, so the trial balance can tell an increase from a decrease.
-            quantity: delta,
-            unit_cost: Number(existing.purchase_price) || 0,
-            total_cost: Math.abs(delta) * (Number(existing.purchase_price) || 0),
-            stock_before: before,
-            stock_after: after,
-            reference_type: 'manual_adjustment',
-            notes: body.adjustment_reason?.toString().trim() || 'Manual stock adjustment',
-            created_by: user.id,
-          })
-        } catch (ledgerErr) {
-          // Never undo a completed stock change over a failed ledger write.
-          console.error('inventory_transactions write failed (non-critical):', ledgerErr)
-        }
-      }
+        .single()
+      if (error) throw error
     }
 
     const { data: updated, error: refetchErr } = await (supabase as any)

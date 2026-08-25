@@ -36,34 +36,27 @@ export async function POST(request: NextRequest) {
       .single()
     if (!existing) { errors.push(`Item ${item.id}: not found`); continue }
 
-    // Set current_stock atomically (migration 032) instead of a plain UPDATE,
-    // which could race with any other stock change happening at the same time.
-    const { data: rpcData, error: updateError } = await admin
-      .rpc('set_inventory_stock', { p_item_id: item.id, p_new_stock: qty })
+    // Set current_stock and record the ledger entry atomically, in one call
+    // (set_inventory_stock_logged, migration 034) — the previous two-step
+    // version (RPC, then a separate insert) also referenced a
+    // transaction_date column that inventory_transactions has never had, so
+    // every non-zero opening-stock update was silently failing to write a
+    // ledger row at all (the insert's error was never even checked).
+    const { error: updateError } = await admin
+      .rpc('set_inventory_stock_logged', {
+        p_item_id: item.id,
+        p_new_stock: qty,
+        p_org_id: profile.organization_id,
+        p_transaction_type: 'adjustment',
+        p_unit_cost: 0,
+        p_reference_type: 'opening_stock',
+        p_reference_id: null,
+        p_notes: date ? `Opening stock balance as of ${date}` : 'Opening stock balance',
+        p_created_by: user.id,
+      })
       .single()
 
     if (updateError) { errors.push(`Item ${item.id}: ${updateError.message}`); continue }
-
-    const stockBefore = Number(rpcData.stock_before)
-    const stockAfter = Number(rpcData.stock_after)
-    const delta = stockAfter - stockBefore
-    if (delta === 0) continue
-
-    // Record as opening stock transaction. quantity is the signed CHANGE, not
-    // the new absolute value — logging the absolute value here previously
-    // overstated "received" for every item ever touched by this page, which
-    // corrupted any reconciliation built on top of the ledger.
-    await admin.from('inventory_transactions').insert({
-      organization_id: profile.organization_id,
-      item_id: item.id,
-      transaction_type: 'adjustment',
-      quantity: delta,
-      stock_before: stockBefore,
-      stock_after: stockAfter,
-      transaction_date: date,
-      notes: 'Opening stock balance',
-      created_by: user.id,
-    })
   }
 
   if (errors.length) return NextResponse.json({ error: errors.join('; ') }, { status: 500 })

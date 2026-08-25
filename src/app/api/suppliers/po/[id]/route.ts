@@ -139,29 +139,24 @@ export async function PATCH(
 
         if (!invItemId) continue
 
-        // Receive stock atomically (migration 032) instead of a SELECT-then-UPDATE,
-        // which could race with any other stock change happening at the same time.
-        const { data: rpcData, error: stockErr } = await admin
-          .rpc('adjust_inventory_stock', { p_item_id: invItemId, p_delta: delta })
+        // Receive stock and record the ledger entry atomically, in one call
+        // (adjust_inventory_stock_logged, migration 034) instead of a
+        // SELECT-then-UPDATE-then-INSERT, so a failure partway through can't
+        // leave stock changed with no matching ledger row.
+        const { error: stockErr } = await admin
+          .rpc('adjust_inventory_stock_logged', {
+            p_item_id: invItemId,
+            p_delta: delta,
+            p_org_id: profile.organization_id,
+            p_transaction_type: 'purchase',
+            p_unit_cost: existing.unit_cost,
+            p_reference_type: 'purchase_order',
+            p_reference_id: poId,
+            p_notes: null,
+            p_created_by: user.id,
+          })
           .single()
         if (stockErr) throw stockErr
-        const stockBefore = Number(rpcData.stock_before)
-        const stockAfter = Number(rpcData.stock_after)
-
-        // Record inventory transaction
-        await admin.from('inventory_transactions').insert({
-          organization_id: profile.organization_id,
-          item_id: invItemId,
-          transaction_type: 'purchase',
-          quantity: delta,
-          unit_cost: existing.unit_cost,
-          total_cost: delta * existing.unit_cost,
-          stock_before: stockBefore,
-          stock_after: stockAfter,
-          reference_type: 'purchase_order',
-          reference_id: poId,
-          created_by: user.id,
-        })
       }
 
       // Check if all items are fully received

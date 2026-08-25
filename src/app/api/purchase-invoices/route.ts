@@ -120,16 +120,26 @@ export async function POST(request: NextRequest) {
         .eq('id', it.inventory_item_id)
         .single()
 
-      // Receive stock atomically (migration 032) instead of a SELECT-then-UPDATE,
-      // which could race with any other stock change happening at the same time.
-      const { data: rpcData, error: stockErr } = await supabase
-        .rpc('adjust_inventory_stock', { p_item_id: it.inventory_item_id, p_delta: qty })
+      // Receive stock and record the ledger entry atomically, in one call
+      // (adjust_inventory_stock_logged, migration 034) instead of a
+      // SELECT-then-UPDATE-then-INSERT, so a failure partway through can't
+      // leave stock changed with no matching ledger row.
+      const { error: stockErr } = await supabase
+        .rpc('adjust_inventory_stock_logged', {
+          p_item_id: it.inventory_item_id,
+          p_delta: qty,
+          p_org_id: orgId,
+          p_transaction_type: 'purchase',
+          p_unit_cost: unitCost,
+          p_reference_type: 'purchase_invoice',
+          p_reference_id: invoice.id,
+          p_notes: `Purchase Invoice ${invoiceNumber}`,
+          p_created_by: user.id,
+        })
         .single()
       if (stockErr) throw stockErr
-      const stockBefore = Number(rpcData.stock_before)
-      const stockAfter = Number(rpcData.stock_after)
 
-      // Purchase price is unrelated to the race being fixed — update it separately.
+      // Purchase price is unrelated to the stock change — update it separately.
       await supabase
         .from('inventory_items')
         .update({
@@ -137,22 +147,6 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq('id', it.inventory_item_id)
-
-      // Record inventory transaction
-      await supabase.from('inventory_transactions').insert({
-        organization_id: orgId,
-        item_id: it.inventory_item_id,
-        transaction_type: 'purchase',
-        quantity: qty,
-        unit_cost: unitCost,
-        total_cost: totalCost,
-        stock_before: stockBefore,
-        stock_after: stockAfter,
-        reference_type: 'purchase_invoice',
-        reference_id: invoice.id,
-        notes: `Purchase Invoice ${invoiceNumber}`,
-        created_by: user.id,
-      })
     }
 
     // Record supplier payment for cash purchases (if supplier is linked)

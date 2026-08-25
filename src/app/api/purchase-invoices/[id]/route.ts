@@ -73,31 +73,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       for (const li of items) {
         const qty = Number(li.quantity) || 0
 
-        // Remove stock atomically (migration 032) instead of a SELECT-then-UPDATE,
-        // which could race with any other stock change happening at the same time.
+        // Remove stock and record the ledger entry atomically, in one call
+        // (adjust_inventory_stock_logged, migration 034) instead of a
+        // SELECT-then-UPDATE-then-INSERT, so a failure partway through can't
+        // leave stock changed with no matching ledger row.
         // (The shortfall check above using `current` is a best-effort pre-check,
         // not the source of truth — the RPC below is.)
-        const { data: rpcData, error: stockErr } = await supabase
-          .rpc('adjust_inventory_stock', { p_item_id: li.inventory_item_id, p_delta: -qty })
+        const { error: stockErr } = await supabase
+          .rpc('adjust_inventory_stock_logged', {
+            p_item_id: li.inventory_item_id,
+            p_delta: -qty,
+            p_org_id: profile.organization_id,
+            p_transaction_type: 'adjustment',
+            p_unit_cost: Number(li.unit_cost) || 0,
+            p_reference_type: 'purchase_invoice_cancelled',
+            p_reference_id: id,
+            p_notes: `Reversal of cancelled Purchase Invoice ${invoice.invoice_number}`,
+            p_created_by: user.id,
+          })
           .single()
         if (stockErr) throw stockErr
-        const before = Number(rpcData.stock_before)
-        const after = Number(rpcData.stock_after)
-
-        await supabase.from('inventory_transactions').insert({
-          organization_id: profile.organization_id,
-          item_id: li.inventory_item_id,
-          transaction_type: 'adjustment',
-          quantity: -qty,
-          unit_cost: Number(li.unit_cost) || 0,
-          total_cost: qty * (Number(li.unit_cost) || 0),
-          stock_before: before,
-          stock_after: after,
-          reference_type: 'purchase_invoice_cancelled',
-          reference_id: id,
-          notes: `Reversal of cancelled Purchase Invoice ${invoice.invoice_number}`,
-          created_by: user.id,
-        })
       }
 
       const { error } = await supabase

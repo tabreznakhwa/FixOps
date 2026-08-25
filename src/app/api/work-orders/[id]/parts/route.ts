@@ -3,17 +3,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 
 /**
- * Atomically apply a signed stock change via the adjust_inventory_stock RPC
- * (migration 032) instead of a SELECT-then-UPDATE, so two requests touching
- * the same item's stock at once can't silently lose one of the changes.
+ * Atomically apply a signed stock change AND record it in the
+ * inventory_transactions ledger, in a single database round trip
+ * (adjust_inventory_stock_logged, migration 034) — see line-items/route.ts
+ * for why the stock change and the ledger write need to be one call, not two.
  */
-async function adjustStock(
+async function adjustStockLogged(
   supabase: any,
-  itemId: string,
-  delta: number
+  args: {
+    itemId: string
+    delta: number
+    orgId: string
+    type: 'issued' | 'returned'
+    workOrderId: string
+    userId: string
+    notes: string
+  }
 ): Promise<{ before: number; after: number }> {
   const { data, error } = await supabase
-    .rpc('adjust_inventory_stock', { p_item_id: itemId, p_delta: delta })
+    .rpc('adjust_inventory_stock_logged', {
+      p_item_id: args.itemId,
+      p_delta: args.delta,
+      p_org_id: args.orgId,
+      p_transaction_type: args.type,
+      p_unit_cost: 0,
+      p_reference_type: 'work_order',
+      p_reference_id: args.workOrderId,
+      p_notes: args.notes,
+      p_created_by: args.userId,
+    })
     .single()
   if (error) throw error
   return { before: Number(data.stock_before), after: Number(data.stock_after) }
@@ -50,6 +68,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }, { status: 400 })
     }
 
+    const { data: wo } = await (supabase as any)
+      .from('work_orders').select('organization_id').eq('id', workOrderId).single()
+    if (!wo) return NextResponse.json({ error: 'Work order not found' }, { status: 404 })
+
     // Insert into work_order_parts
     const { data: part, error: partErr } = await (supabase as any)
       .from('work_order_parts')
@@ -66,34 +88,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (partErr) throw partErr
 
-    // Deduct from inventory stock, atomically.
-    let before: number, after: number
+    // Deduct from inventory stock and record the ledger entry atomically.
     try {
-      ;({ before, after } = await adjustStock(supabase, inventory_item_id, -quantity_used))
+      await adjustStockLogged(supabase, {
+        itemId: inventory_item_id,
+        delta: -quantity_used,
+        orgId: wo.organization_id,
+        type: 'issued',
+        workOrderId,
+        userId: user.id,
+        notes: 'Part added via legacy work_order_parts endpoint',
+      })
     } catch (stockErr) {
       // Rollback: delete the part we just inserted
       await (supabase as any).from('work_order_parts').delete().eq('id', part.id)
       throw stockErr
-    }
-
-    // Record in the shared ledger (this legacy path never used to log here at all).
-    const { data: wo } = await (supabase as any)
-      .from('work_orders').select('organization_id').eq('id', workOrderId).single()
-    if (wo) {
-      await (supabase as any).from('inventory_transactions').insert({
-        organization_id: wo.organization_id,
-        item_id: inventory_item_id,
-        transaction_type: 'issued',
-        quantity: quantity_used,
-        unit_cost: 0,
-        total_cost: 0,
-        stock_before: before,
-        stock_after: after,
-        reference_type: 'work_order',
-        reference_id: workOrderId,
-        notes: 'Part added via legacy work_order_parts endpoint',
-        created_by: user.id,
-      }).then(null, (err: unknown) => console.error('inventory_transactions write failed (non-critical):', err))
     }
 
     return NextResponse.json({ success: true, part })
@@ -127,27 +136,20 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     if (partErr || !part) return NextResponse.json({ error: 'Part not found' }, { status: 404 })
 
-    // Restore inventory stock, atomically.
-    const { before, after } = await adjustStock(supabase, part.inventory_item_id, Number(part.quantity_used))
-
     const { data: wo } = await (supabase as any)
       .from('work_orders').select('organization_id').eq('id', workOrderId).single()
-    if (wo) {
-      await (supabase as any).from('inventory_transactions').insert({
-        organization_id: wo.organization_id,
-        item_id: part.inventory_item_id,
-        transaction_type: 'returned',
-        quantity: Number(part.quantity_used),
-        unit_cost: 0,
-        total_cost: 0,
-        stock_before: before,
-        stock_after: after,
-        reference_type: 'work_order',
-        reference_id: workOrderId,
-        notes: 'Part removed via legacy work_order_parts endpoint',
-        created_by: user.id,
-      }).then(null, (err: unknown) => console.error('inventory_transactions write failed (non-critical):', err))
-    }
+    if (!wo) return NextResponse.json({ error: 'Work order not found' }, { status: 404 })
+
+    // Restore inventory stock and record the ledger entry atomically.
+    await adjustStockLogged(supabase, {
+      itemId: part.inventory_item_id,
+      delta: Number(part.quantity_used),
+      orgId: wo.organization_id,
+      type: 'returned',
+      workOrderId,
+      userId: user.id,
+      notes: 'Part removed via legacy work_order_parts endpoint',
+    })
 
     // Delete the part record
     const { error: deleteErr } = await (supabase as any)

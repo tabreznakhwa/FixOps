@@ -3,67 +3,49 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 
 /**
- * Records a stock movement in the inventory_transactions ledger.
+ * Atomically apply a signed stock change AND record it in the
+ * inventory_transactions ledger, in a single database round trip
+ * (adjust_inventory_stock_logged, migration 034).
  *
- * Purchases have always written to this ledger but issues never did — parts
- * going out on a job just decremented inventory_items.current_stock. That left
- * Stock Trial reporting zero issued no matter how much stock moved, produced
- * impossible negative opening balances (opening is derived as closing minus
- * recorded movements), and left the cost of parts out of profit reporting.
- *
- * Non-fatal: a failed ledger write must not undo a part that has already been
- * issued and paid for, so it is logged rather than thrown.
+ * This used to be two separate calls — adjust_inventory_stock (migration 032)
+ * followed by a plain insert into inventory_transactions. Each was atomic on
+ * its own, but the pair wasn't: if the ledger insert failed for any reason
+ * after the stock change had already landed, current_stock moved with zero
+ * audit trail. The old code even swallowed that failure on purpose ("a failed
+ * ledger write must not undo a part that's already been issued and paid
+ * for") — which is exactly what happened live to Compressor ZR-72: a clean
+ * transaction history ending at stock_after = 1, then current_stock silently
+ * at 0 forty minutes later with no matching row. Folding both into one RPC
+ * call removes that window — they now succeed or fail together.
  */
-/**
- * Atomically apply a signed stock change via the adjust_inventory_stock RPC
- * (migration 032) instead of a SELECT-then-UPDATE, so two requests touching
- * the same item's stock at once can't silently lose one of the changes.
- */
-async function adjustStock(
-  supabase: any,
-  itemId: string,
-  delta: number
-): Promise<{ before: number; after: number }> {
-  const { data, error } = await supabase
-    .rpc('adjust_inventory_stock', { p_item_id: itemId, p_delta: delta })
-    .single()
-  if (error) throw error
-  return { before: Number(data.stock_before), after: Number(data.stock_after) }
-}
-
-async function recordStockMovement(
+async function adjustStockLogged(
   supabase: any,
   args: {
-    orgId: string
     itemId: string
+    delta: number
+    orgId: string
     type: 'issued' | 'returned' | 'adjustment'
-    quantity: number
     unitCost: number
-    stockBefore: number
-    stockAfter: number
     workOrderId: string
     userId: string
     notes?: string
   }
-) {
-  try {
-    await supabase.from('inventory_transactions').insert({
-      organization_id: args.orgId,
-      item_id: args.itemId,
-      transaction_type: args.type,
-      quantity: Math.abs(args.quantity),
-      unit_cost: args.unitCost,
-      total_cost: Math.abs(args.quantity) * args.unitCost,
-      stock_before: args.stockBefore,
-      stock_after: args.stockAfter,
-      reference_type: 'work_order',
-      reference_id: args.workOrderId,
-      notes: args.notes ?? null,
-      created_by: args.userId,
+): Promise<{ before: number; after: number }> {
+  const { data, error } = await supabase
+    .rpc('adjust_inventory_stock_logged', {
+      p_item_id: args.itemId,
+      p_delta: args.delta,
+      p_org_id: args.orgId,
+      p_transaction_type: args.type,
+      p_unit_cost: args.unitCost,
+      p_reference_type: 'work_order',
+      p_reference_id: args.workOrderId,
+      p_notes: args.notes ?? null,
+      p_created_by: args.userId,
     })
-  } catch (err) {
-    console.error('inventory_transactions write failed (non-critical):', err)
-  }
+    .single()
+  if (error) throw error
+  return { before: Number(data.stock_before), after: Number(data.stock_after) }
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -98,7 +80,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // If part, validate and deduct inventory
     let resolvedPrice = unit_price
-    let movement: { itemId: string; before: number; after: number; cost: number } | null = null
+    let movement: { itemId: string; cost: number } | null = null
     if (item_type === 'part' && inventory_item_id) {
       const { data: invItem, error: invErr } = await (supabase as any)
         .from('inventory_items')
@@ -114,16 +96,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
       resolvedPrice = unit_price || invItem.selling_price
 
-      // Deduct stock atomically.
-      const { before, after } = await adjustStock(supabase, inventory_item_id, -quantity)
-
-      movement = {
+      // Deduct stock and record the ledger entry atomically.
+      const cost = Number(invItem.purchase_price) || 0
+      await adjustStockLogged(supabase, {
         itemId: inventory_item_id,
-        before,
-        after,
+        delta: -quantity,
+        orgId: wo.organization_id,
+        type: 'issued',
         // Ledger records cost, not sale price — this is what feeds COGS.
-        cost: Number(invItem.purchase_price) || 0,
-      }
+        unitCost: cost,
+        workOrderId,
+        userId: user.id,
+        notes: description?.trim() || undefined,
+      })
+
+      movement = { itemId: inventory_item_id, cost }
     }
 
     // Insert line item
@@ -143,28 +130,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .single()
 
     if (insertErr) {
-      // Rollback stock if insert failed
-      if (item_type === 'part' && inventory_item_id) {
-        await adjustStock(supabase, inventory_item_id, quantity).catch(err =>
-          console.error('stock rollback failed after insert error:', err)
-        )
+      // Reverse the stock+ledger change if the line item never actually got
+      // recorded. Best-effort: the line item insert has already failed, so
+      // there's nothing further to protect by throwing over this too.
+      if (movement) {
+        await adjustStockLogged(supabase, {
+          itemId: movement.itemId,
+          delta: quantity,
+          orgId: wo.organization_id,
+          type: 'returned',
+          unitCost: movement.cost,
+          workOrderId,
+          userId: user.id,
+          notes: 'Rollback: line item insert failed',
+        }).catch(err => console.error('stock rollback failed after insert error:', err))
       }
       throw insertErr
-    }
-
-    if (movement) {
-      await recordStockMovement(supabase, {
-        orgId: wo.organization_id,
-        itemId: movement.itemId,
-        type: 'issued',
-        quantity,
-        unitCost: movement.cost,
-        stockBefore: movement.before,
-        stockAfter: movement.after,
-        workOrderId,
-        userId: user.id,
-        notes: description?.trim() || undefined,
-      })
     }
 
     // Recalculate and persist final_amount (non-critical — don't fail the insert if this errors)
@@ -234,6 +215,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // Adjust stock by the difference before writing the new values.
     const delta = quantity - Number(item.quantity)
     let stockAdjusted = false
+    let orgId: string | null = null
+    let unitCost = 0
     if (item.item_type === 'part' && item.inventory_item_id && delta !== 0) {
       const { data: invItem } = await (supabase as any)
         .from('inventory_items')
@@ -248,26 +231,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         }, { status: 400 })
       }
 
-      const { before, after } = await adjustStock(supabase, item.inventory_item_id, -delta)
-      stockAdjusted = true
-
-      // Only the difference moves, so only the difference is recorded.
       const { data: wo } = await (supabase as any)
         .from('work_orders').select('organization_id').eq('id', workOrderId).single()
-      if (wo) {
-        await recordStockMovement(supabase, {
-          orgId: wo.organization_id,
-          itemId: item.inventory_item_id,
-          type: delta > 0 ? 'issued' : 'returned',
-          quantity: Math.abs(delta),
-          unitCost: Number(invItem.purchase_price) || 0,
-          stockBefore: before,
-          stockAfter: after,
-          workOrderId,
-          userId: user.id,
-          notes: `Quantity changed on ${description.trim()}`,
-        })
-      }
+      if (!wo) return NextResponse.json({ error: 'Work order not found' }, { status: 404 })
+      const woOrgId: string = wo.organization_id
+      orgId = woOrgId
+      unitCost = Number(invItem.purchase_price) || 0
+
+      // Only the difference moves, so only the difference is recorded — stock
+      // and ledger update together atomically.
+      await adjustStockLogged(supabase, {
+        itemId: item.inventory_item_id,
+        delta: -delta,
+        orgId: woOrgId,
+        type: delta > 0 ? 'issued' : 'returned',
+        unitCost,
+        workOrderId,
+        userId: user.id,
+        notes: `Quantity changed on ${description.trim()}`,
+      })
+      stockAdjusted = true
     }
 
     const { data: updated, error: updateErr } = await (supabase as any)
@@ -284,10 +267,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (updateErr) {
       // Put the stock back the way we found it so a failed edit can't leak inventory.
-      if (stockAdjusted && item.inventory_item_id) {
-        await adjustStock(supabase, item.inventory_item_id, delta).catch(err =>
-          console.error('stock rollback failed after update error:', err)
-        )
+      if (stockAdjusted && item.inventory_item_id && orgId) {
+        await adjustStockLogged(supabase, {
+          itemId: item.inventory_item_id,
+          delta,
+          orgId,
+          type: 'adjustment',
+          unitCost,
+          workOrderId,
+          userId: user.id,
+          notes: 'Rollback: line item update failed',
+        }).catch(err => console.error('stock rollback failed after update error:', err))
       }
       throw updateErr
     }
@@ -344,26 +334,23 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       const { data: invItem } = await (supabase as any)
         .from('inventory_items').select('purchase_price').eq('id', item.inventory_item_id).single()
 
-      const { before, after } = await adjustStock(supabase, item.inventory_item_id, Number(item.quantity))
-
-      // Stock coming back is a return, so the ledger nets to zero for a part
-      // that was issued and then removed.
       const { data: wo } = await (supabase as any)
         .from('work_orders').select('organization_id').eq('id', workOrderId).single()
-      if (wo) {
-        await recordStockMovement(supabase, {
-          orgId: wo.organization_id,
-          itemId: item.inventory_item_id,
-          type: 'returned',
-          quantity: Number(item.quantity),
-          unitCost: Number(invItem?.purchase_price) || 0,
-          stockBefore: before,
-          stockAfter: after,
-          workOrderId,
-          userId: user.id,
-          notes: 'Line item removed from work order',
-        })
-      }
+      if (!wo) return NextResponse.json({ error: 'Work order not found' }, { status: 404 })
+
+      // Stock coming back is a return, so the ledger nets to zero for a part
+      // that was issued and then removed — stock and ledger update together
+      // atomically.
+      await adjustStockLogged(supabase, {
+        itemId: item.inventory_item_id,
+        delta: Number(item.quantity),
+        orgId: wo.organization_id,
+        type: 'returned',
+        unitCost: Number(invItem?.purchase_price) || 0,
+        workOrderId,
+        userId: user.id,
+        notes: 'Line item removed from work order',
+      })
     }
 
     const { error: deleteErr } = await (supabase as any)
