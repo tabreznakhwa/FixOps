@@ -84,6 +84,13 @@ export default async function BankBookPage({
     .order('issued_date', { ascending: true })
     .limit(5000)
 
+  const { data: allRepaymentsRaw } = await (supabase as any)
+    .from('staff_advance_repayments')
+    .select('repayment_date, amount, notes, staff(full_name)')
+    .eq('payment_method', 'bank')
+    .order('repayment_date', { ascending: true })
+    .limit(5000)
+
   const { data: allAmcPaymentsRaw } = await (supabase as any)
     .from('amc_payments')
     .select('payment_date, amount, payment_mode, reference_number, amc_contracts(contract_number, customers(full_name))')
@@ -110,6 +117,7 @@ export default async function BankBookPage({
   type Expense = { expense_date: string; expense_number: string; category: string; description: string; amount: number; payment_method: string; reference_number: string | null }
   type Salary = { payment_date: string; net_salary: number; payment_mode: string; staff: { full_name: string } | null; salary_runs: { salary_month: number; salary_year: number } | null }
   type AdvancePay = { issued_date: string; type: string; amount: number; notes: string | null; staff: { full_name: string } | null }
+  type RepaymentPay = { repayment_date: string; amount: number; notes: string | null; staff: { full_name: string } | null }
   type AmcPay = { payment_date: string; amount: number; payment_mode: string; reference_number: string | null; amc_contracts: { contract_number: string; customers: { full_name: string } | null } | null }
   type Transfer = { transfer_date: string; from_account: string; to_account: string; amount: number; reference_number: string | null; notes: string | null }
   type Withdrawal = { withdrawal_date: string; amount: number; payment_mode: string; purpose: string | null; notes: string | null }
@@ -119,6 +127,7 @@ export default async function BankBookPage({
   const allExpenses = (allExpensesRaw ?? []) as Expense[]
   const allSalaries = (allSalariesRaw ?? []) as Salary[]
   const allAdvances = (allAdvancesRaw ?? []) as AdvancePay[]
+  const allRepayments = (allRepaymentsRaw ?? []) as RepaymentPay[]
   const allAmcPayments = (allAmcPaymentsRaw ?? []) as AmcPay[]
   const allTransfers = (allTransfersRaw ?? []) as Transfer[]
   const allWithdrawals = (allWithdrawalsRaw ?? []) as Withdrawal[]
@@ -131,6 +140,7 @@ export default async function BankBookPage({
   const totalBankIn = allReceipts.reduce((s, r) => s + r.amount_received, 0)
     + allAmcPayments.reduce((s, p) => s + p.amount, 0)
     + bankTransfersIn.reduce((s, t) => s + t.amount, 0)
+    + allRepayments.reduce((s, r) => s + r.amount, 0)
   const totalBankOut = allSupplierPayments.reduce((s, r) => s + r.amount_paid, 0)
     + allExpenses.reduce((s, r) => s + r.amount, 0)
     + allSalaries.reduce((s, r) => s + r.net_salary, 0)
@@ -144,6 +154,7 @@ export default async function BankBookPage({
     allReceipts.filter((r) => r.payment_date < from).reduce((s, r) => s + r.amount_received, 0)
     + allAmcPayments.filter((p) => p.payment_date < from).reduce((s, p) => s + p.amount, 0)
     + bankTransfersIn.filter((t) => t.transfer_date < from).reduce((s, t) => s + t.amount, 0)
+    + allRepayments.filter((r) => r.repayment_date < from).reduce((s, r) => s + r.amount, 0)
   )
   const prePeriodOut = allTime ? 0 : (
     allSupplierPayments.filter((p) => p.payment_date < from).reduce((s, p) => s + p.amount_paid, 0)
@@ -200,6 +211,13 @@ export default async function BankBookPage({
       narration: `${a.type === 'loan' ? 'Loan' : 'Salary Advance'} — ${a.staff?.full_name ?? 'Staff'}${a.notes ? ` (${a.notes})` : ''}`,
       mode: 'Bank Transfer',
       receipts: 0, payments: a.amount,
+      ref: '—',
+    })),
+    ...allRepayments.filter((r) => inPeriod(r.repayment_date)).map((r) => ({
+      date: r.repayment_date,
+      narration: `Loan/Advance Repayment — ${r.staff?.full_name ?? 'Staff'}${r.notes ? ` (${r.notes})` : ''}`,
+      mode: 'Bank Transfer',
+      receipts: r.amount, payments: 0,
       ref: '—',
     })),
     ...allAmcPayments.filter((p) => inPeriod(p.payment_date)).map((p) => ({

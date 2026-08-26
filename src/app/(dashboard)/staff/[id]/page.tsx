@@ -77,6 +77,15 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
     id: string; type: string; amount: number; issued_date: string; payment_method: string | null; notes: string | null
   }>
 
+  const { data: repaymentsRaw } = await (supabase as any)
+    .from('staff_advance_repayments')
+    .select('id, amount, repayment_date, payment_method, notes')
+    .eq('staff_id', id)
+    .order('repayment_date', { ascending: false })
+  const repayments = (repaymentsRaw ?? []) as Array<{
+    id: string; amount: number; repayment_date: string; payment_method: string | null; notes: string | null
+  }>
+
   const visaDays = daysUntil(s.visa_expiry_date)
   const passportDays = daysUntil(s.passport_expiry_date)
   const grossSalary = s.basic_salary + (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + s.food_allowance + s.other_allowance + (s.fixed_overtime_monthly ?? 0)
@@ -275,6 +284,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
               staffId={s.id}
               currentBalance={s.advance_balance ?? 0}
               advances={advances}
+              repayments={repayments}
             />
 
             {s.notes && (

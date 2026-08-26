@@ -70,6 +70,10 @@ export default async function StaffLedgerPage({
     id: string; type: string; amount: number; issued_date: string
     payment_method: string | null; notes: string | null
   }
+  type StaffRepayment = {
+    id: string; amount: number; repayment_date: string
+    payment_method: string | null; notes: string | null
+  }
   type StaffInfo = {
     full_name: string; staff_code: string; designation: string | null
     department: string | null; advance_balance: number
@@ -78,9 +82,10 @@ export default async function StaffLedgerPage({
   let staffInfo: StaffInfo | null = null
   let allSlips: SalarySlip[] = []
   let allAdvances: StaffAdvance[] = []
+  let allRepayments: StaffRepayment[] = []
 
   if (staffId && canView) {
-    const [{ data: si }, { data: runsRaw }, { data: slipsRaw }, { data: advRaw }] = await Promise.all([
+    const [{ data: si }, { data: runsRaw }, { data: slipsRaw }, { data: advRaw }, { data: repayRaw }] = await Promise.all([
       admin.from('staff').select('full_name, staff_code, designation, department, advance_balance').eq('id', staffId).single(),
       admin.from('salary_runs').select('id, salary_month, salary_year, status').eq('organization_id', orgId),
       admin.from('salary_slips')
@@ -90,6 +95,10 @@ export default async function StaffLedgerPage({
         .select('id, type, amount, issued_date, payment_method, notes')
         .eq('staff_id', staffId)
         .order('issued_date', { ascending: true }),
+      admin.from('staff_advance_repayments')
+        .select('id, amount, repayment_date, payment_method, notes')
+        .eq('staff_id', staffId)
+        .order('repayment_date', { ascending: true }),
     ])
 
     staffInfo = si as StaffInfo | null
@@ -111,6 +120,7 @@ export default async function StaffLedgerPage({
       ) as SalarySlip[]
 
     allAdvances = (advRaw ?? []) as StaffAdvance[]
+    allRepayments = (repayRaw ?? []) as StaffRepayment[]
   }
 
   // Apply date filters
@@ -129,10 +139,17 @@ export default async function StaffLedgerPage({
     return true
   })
 
+  const filteredRepayments = allRepayments.filter((r) => {
+    if (!fromDate && !toDate) return true
+    if (fromDate && r.repayment_date < fromDate) return false
+    if (toDate && r.repayment_date > toDate) return false
+    return true
+  })
+
   // Build advance & loan ledger (chronological timeline)
   type LedgerEntry = {
     id: string; date: string; description: string
-    type: 'advance' | 'loan' | 'recovery'; debit: number; credit: number; balance: number
+    type: 'advance' | 'loan' | 'recovery' | 'repayment'; debit: number; credit: number; balance: number
   }
 
   const advanceEvents: Array<Omit<LedgerEntry, 'id' | 'balance'>> = []
@@ -160,6 +177,21 @@ export default async function StaffLedgerPage({
       type: 'recovery',
       debit: 0,
       credit: sl.advance_deduction,
+    })
+  }
+
+  for (const r of filteredRepayments) {
+    const method = r.payment_method === 'bank' ? 'Bank Transfer' : r.payment_method === 'cash' ? 'Cash' : null
+    advanceEvents.push({
+      date: r.repayment_date,
+      description: [
+        'Repayment',
+        method ? `(${method})` : null,
+        r.notes ? `— ${r.notes}` : null,
+      ].filter(Boolean).join(' '),
+      type: 'repayment',
+      debit: 0,
+      credit: r.amount,
     })
   }
 
@@ -306,9 +338,10 @@ export default async function StaffLedgerPage({
                                 <span className={`inline-flex text-xs font-semibold px-2 py-0.5 rounded-full ${
                                   row.type === 'advance' ? 'bg-orange-100 text-orange-700' :
                                   row.type === 'loan' ? 'bg-purple-100 text-purple-700' :
+                                  row.type === 'repayment' ? 'bg-teal-100 text-teal-700' :
                                   'bg-green-100 text-green-700'
                                 }`}>
-                                  {row.type === 'recovery' ? 'Recovery' : row.type === 'loan' ? 'Loan' : 'Advance'}
+                                  {row.type === 'recovery' ? 'Recovery' : row.type === 'repayment' ? 'Repayment' : row.type === 'loan' ? 'Loan' : 'Advance'}
                                 </span>
                               </td>
                               <td className="px-4 py-3.5 text-right font-semibold text-red-600">
