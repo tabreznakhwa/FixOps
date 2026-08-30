@@ -46,7 +46,7 @@ export default async function DashboardPage() {
     isTechnician
       ? Promise.resolve({ data: [] })
       : supabase.from('invoices').select('invoice_date, total_amount, amount_paid').gte('invoice_date', monthStart).not('status', 'in', '(cancelled,written_off)').order('invoice_date'),
-    supabase.from('complaints').select('status').not('status', 'in', '(cancelled)'),
+    supabase.rpc('get_complaint_status_counts'),
     supabase.from('complaints').select('id, complaint_number, description, priority, status, created_at, customers(full_name)').order('created_at', { ascending: false }).limit(8),
     supabase.from('users').select('id, full_name').eq('role', 'technician').eq('status', 'active'),
     supabase.from('staff').select('id, full_name').eq('employment_status', 'active'),
@@ -57,7 +57,7 @@ export default async function DashboardPage() {
   ])
 
   type RevRow = { invoice_date: string; total_amount: number; amount_paid: number }
-  type StatusRow = { status: string }
+  type StatusRow = { status: string; count: number }
   type RecRow = { balance_due: number; status: string }
   type TechRow = { id: string; full_name: string }
   const seenNames = new Set<string>()
@@ -84,10 +84,12 @@ export default async function DashboardPage() {
   const monthRevenue = rev.reduce((sum, i) => sum + (i.total_amount ?? 0), 0)
   const monthCollected = rev.reduce((sum, i) => sum + (i.amount_paid ?? 0), 0)
 
-  // Build complaint status breakdown
+  // Build complaint status breakdown — counts come pre-aggregated from
+  // get_complaint_status_counts() (one row per status), not from summing a
+  // raw row fetch that used to silently cap at 1000 (see migration 040).
   const statusCounts: Record<string, number> = {}
   statusRows.forEach((c) => {
-    statusCounts[c.status] = (statusCounts[c.status] ?? 0) + 1
+    statusCounts[c.status] = Number(c.count)
   })
 
   return (
