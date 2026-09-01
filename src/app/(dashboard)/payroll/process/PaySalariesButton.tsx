@@ -79,9 +79,9 @@ export function PaySalariesButton({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-2 sm:p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+          <div className="relative my-2 sm:my-4 bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[calc(100vh-1rem)] sm:max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
               <div>
