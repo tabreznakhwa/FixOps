@@ -31,8 +31,11 @@ export function PaySalariesButton({
 }) {
   const [open, setOpen] = useState(false)
   const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }))
+  // Most staff here are actually paid by bank transfer regardless of
+  // whether their profile happens to have an IBAN on file, so default
+  // everyone to bank transfer — cash is the exception, not the rule.
   const [modes, setModes] = useState<Record<string, string>>(
-    Object.fromEntries(pendingSlips.map(s => [s.slipId, s.hasIban ? 'bank_transfer' : 'cash']))
+    Object.fromEntries(pendingSlips.map(s => [s.slipId, 'bank_transfer']))
   )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
