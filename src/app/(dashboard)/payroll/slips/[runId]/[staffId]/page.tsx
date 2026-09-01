@@ -39,6 +39,7 @@ export default async function PayslipPage({
     gross_salary: number; deductions: number; advance_deduction: number; net_salary: number
     absent_days: number | null; absent_deduction: number | null; food_deduction: number | null
     payment_status: string; payment_date: string | null; payment_mode: string | null
+    advance_balance_after: number | null
   } | null
 
   const { data: staffRaw } = await admin
@@ -93,10 +94,17 @@ export default async function PayslipPage({
     { label: 'Friday Overtime', amount: slip.friday_overtime ?? 0 },
   ].filter((e) => e.amount > 0)
 
-  // Fetch current advance balance
-  const { data: staffBalanceRaw } = await admin
-    .from('staff').select('advance_balance').eq('id', staffId).maybeSingle()
-  const remainingAdvance = (staffBalanceRaw as { advance_balance: number | null } | null)?.advance_balance ?? 0
+  // Advance balance remaining as of THIS slip's own deduction — frozen at
+  // processing time (see migration 041), not the current live balance,
+  // so a later month's deduction can't retroactively change what an
+  // already-issued payslip shows. Slips processed before that migration
+  // have no frozen value; fall back to the live balance for those only.
+  let remainingAdvance = slip.advance_balance_after
+  if (remainingAdvance === null) {
+    const { data: staffBalanceRaw } = await admin
+      .from('staff').select('advance_balance').eq('id', staffId).maybeSingle()
+    remainingAdvance = (staffBalanceRaw as { advance_balance: number | null } | null)?.advance_balance ?? 0
+  }
 
   const deductions = [
     ...(absentDeduction > 0 ? [{

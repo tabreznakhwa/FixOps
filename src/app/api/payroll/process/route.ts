@@ -78,6 +78,11 @@ export async function POST(request: Request) {
     const fixedOT = s.overtime_eligible && hasWorkedFridayOrHoliday ? (s.fixed_overtime_monthly ?? 0) : 0
 
     const advDeduct = Math.min(entry?.advance_deduction ?? 0, s.advance_balance ?? 0)
+    // Freeze what the balance actually is right after THIS month's own
+    // deduction — the payslip page reads this instead of live-fetching
+    // staff.advance_balance, so a later month's deduction can no longer
+    // retroactively change what an already-issued payslip displays.
+    const advBalanceAfter = Math.max(0, (s.advance_balance ?? 0) - advDeduct)
 
     const absentDays = entry?.absent_days ?? 0
     const absentDeduction = absentDays > 0
@@ -116,6 +121,7 @@ export async function POST(request: Request) {
       food_deduction: foodDeduction,
       deductions: totalAbsenceDeduction,
       advance_deduction: advDeduct,
+      advance_balance_after: advBalanceAfter,
       net_salary: net,
       payment_status: 'pending',
     }
@@ -145,13 +151,12 @@ export async function POST(request: Request) {
   const { error: slipError } = await adminDb.from('salary_slips').insert(slipsWithRun)
   if (slipError) return NextResponse.json({ error: slipError.message }, { status: 500 })
 
-  // Decrement advance_balance for staff who had deductions
+  // Decrement advance_balance for staff who had deductions — written from
+  // the same frozen advance_balance_after just stored on their slip, so the
+  // live balance and the payslip's snapshot can never disagree.
   const deductionUpdates = slips.filter((sl) => sl.advance_deduction > 0)
   for (const sl of deductionUpdates) {
-    const staffRecord = staff.find((s) => s.id === sl.staff_id)
-    if (!staffRecord) continue
-    const newBalance = Math.max(0, (staffRecord.advance_balance ?? 0) - sl.advance_deduction)
-    await adminDb.from('staff').update({ advance_balance: newBalance }).eq('id', sl.staff_id)
+    await adminDb.from('staff').update({ advance_balance: sl.advance_balance_after }).eq('id', sl.staff_id)
   }
 
   return NextResponse.json({ success: true, runId: runData.id })
