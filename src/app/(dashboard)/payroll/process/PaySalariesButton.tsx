@@ -88,6 +88,7 @@ export function PaySalariesButton({
                 <h4 className="text-sm font-bold text-slate-900">Mark Salaries as Paid</h4>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {pendingCount} employees · Total {fmtKWD(totalNet)}
+                  {pendingCount > 5 && <span className="text-blue-500"> · scroll the list below to see everyone ↓</span>}
                 </p>
               </div>
               <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-600 p-1">
