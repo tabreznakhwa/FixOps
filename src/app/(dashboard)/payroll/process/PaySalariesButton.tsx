@@ -79,9 +79,9 @@ export function PaySalariesButton({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-2 sm:p-4 overflow-y-auto">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="relative my-2 sm:my-4 bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[calc(100vh-1rem)] sm:max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-[9999] bg-black/40 p-3 sm:p-6 overflow-y-auto">
+          <div className="fixed inset-0" onClick={() => setOpen(false)} />
+          <div className="relative mx-auto bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-[calc(100vh-1.5rem)] sm:h-[calc(100vh-3rem)] flex flex-col overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
               <div>
@@ -106,7 +106,7 @@ export function PaySalariesButton({
             </div>
 
             {/* Per-employee mode list */}
-            <div className="overflow-y-auto flex-1">
+            <div className="overflow-y-auto flex-1 min-h-0">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-slate-50 border-b border-slate-100">
                   <tr>
