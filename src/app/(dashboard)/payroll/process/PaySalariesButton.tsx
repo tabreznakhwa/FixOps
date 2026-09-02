@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { DollarSign, X } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
@@ -41,6 +42,16 @@ export function PaySalariesButton({
   const [error, setError] = useState('')
   const router = useRouter()
 
+  // This button is rendered inside <Header>, which has backdrop-blur-md —
+  // a backdrop-filter (like a transform) makes its element the containing
+  // block for any `position: fixed` descendant. Without a portal, the modal
+  // below would be sized/positioned relative to the header's own thin bar
+  // instead of the page, no matter what inset/z-index classes it carries.
+  // Rendering into document.body escapes that entirely. `mounted` avoids
+  // touching `document` during SSR.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
   if (pendingCount === 0) return null
 
   function setMode(slipId: string, mode: string) {
@@ -78,7 +89,7 @@ export function PaySalariesButton({
         Pay {pendingCount} Salaries
       </button>
 
-      {open && (
+      {open && mounted && createPortal(
         <div className="fixed inset-0 z-[9999] bg-black/40 p-3 sm:p-6 overflow-y-auto">
           <div className="fixed inset-0" onClick={() => setOpen(false)} />
           <div className="relative mx-auto bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-[calc(100vh-1.5rem)] sm:h-[calc(100vh-3rem)] flex flex-col overflow-hidden">
@@ -166,7 +177,8 @@ export function PaySalariesButton({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )
