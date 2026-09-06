@@ -9,7 +9,7 @@ import { TechnicianWorkload } from '@/components/dashboard/TechnicianWorkload'
 import { LowStockAlert } from '@/components/dashboard/LowStockAlert'
 import { formatDate } from '@/lib/utils'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 export const metadata = { title: 'Dashboard' }
 
 export default async function DashboardPage() {

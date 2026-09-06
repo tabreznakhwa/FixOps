@@ -9,7 +9,7 @@ import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { ComplaintSearchBar } from './ComplaintSearchBar'
 import { ComplaintList, type ComplaintListItem } from './ComplaintList'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 export const metadata = { title: 'Complaints' }
 
 
@@ -116,27 +116,19 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     })
   }
 
-  // PostgREST caps a single response at 1000 rows regardless of `.limit()` (see
-  // fetchAllCustomers() in src/lib/customers.ts for the same issue on customers).
-  // A bare `.select('status')` here silently truncated at exactly 1000 rows once
-  // the org passed that many complaints — "All (1000)" was the row cap, not the
-  // real total, and the per-status tab counts were undercounted by the same cut.
-  // Page through with .range() so every complaint is counted.
-  const counts: { status: string }[] = []
-  for (let offset = 0; offset < 50_000; offset += 1000) {
-    const { data: chunk, error: chunkError } = await supabase
-      .from('complaints')
-      .select('status')
-      .not('status', 'in', '(cancelled,paid)')
-      .range(offset, offset + 999)
-    if (chunkError) break
-    const rows = (chunk ?? []) as { status: string }[]
-    counts.push(...rows)
-    if (rows.length < 1000) break
-  }
+  // Use the get_complaint_status_counts() RPC (migration 040) instead of
+  // paging through raw rows with .range() — one DB call vs. one per 1000 rows,
+  // and it can never hit the PostgREST 1000-row cap regardless of org size.
+  const { data: statusRows } = await supabase.rpc('get_complaint_status_counts')
+  const counts = (statusRows ?? []) as { status: string; count: number }[]
 
   const statusCounts: Record<string, number> = {}
-  counts?.forEach((c: { status: string }) => { statusCounts[c.status] = (statusCounts[c.status] ?? 0) + 1 })
+  counts?.forEach((c) => { statusCounts[c.status] = Number(c.count) })
+  // RPC excludes 'cancelled' but not 'paid' — the old query excluded both, so
+  // drop 'paid' from the tab counts (it shouldn't show up in the active-tabs row).
+  if ('paid' in statusCounts) delete statusCounts.paid
+
+  const totalActive = Object.values(statusCounts).reduce((a, b) => a + b, 0)
 
   const dateQS = [
     params.from ? `from=${params.from}` : '',
@@ -178,7 +170,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
             href={`/complaints${dateQS ? `?${dateQS}` : ''}`}
             className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${!params.status ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
           >
-            All ({counts?.length ?? 0})
+            All ({totalActive})
           </Link>
           {['new', 'assigned', 'accepted', 'on_the_way', 'work_started', 'waiting_parts', 'waiting_approval', 'completed'].map((s) => (
             <Link

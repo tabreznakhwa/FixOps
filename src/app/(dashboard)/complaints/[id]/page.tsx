@@ -198,6 +198,7 @@ export default async function ComplaintDetailPage({
                 {linkedWorkOrders.map(wo => (
                   <Link
                     key={wo.id}
+                    prefetch={false}
                     href={`/work-orders/${wo.id}?complaint_id=${complaint.id}`}
                     className="flex items-center justify-between p-3 bg-slate-50 hover:bg-blue-50 rounded-lg transition group border border-slate-200"
                   >
@@ -313,6 +314,7 @@ export default async function ComplaintDetailPage({
                 {linkedWorkOrders.map(wo => (
                   <Link
                     key={wo.id}
+                    prefetch={false}
                     href={`/work-orders/${wo.id}?complaint_id=${complaint.id}`}
                     className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-blue-50 rounded-lg transition group"
                   >

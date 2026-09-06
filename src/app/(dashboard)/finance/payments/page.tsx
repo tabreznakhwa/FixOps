@@ -9,7 +9,7 @@ import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { CancelPaymentButton } from './CancelPaymentButton'
 import { PaymentSearchBar } from './PaymentSearchBar'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 export const metadata = { title: 'Payments' }
 
 const MODE_ICONS: Record<string, string> = {
