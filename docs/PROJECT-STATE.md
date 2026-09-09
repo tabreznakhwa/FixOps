@@ -1,7 +1,16 @@
 # FixOps — current state
 
 Read this first. It exists so a new session does not have to rediscover the app
-by exploration. Last updated 11 Aug 2026.
+by exploration. Last updated 9 Sept 2026.
+
+**Note:** commits `fccbb1d`…`2ca13b6` (Pay Salaries modal portal/zoom fixes, a
+Vercel function-invocation-spike fix replacing `force-dynamic` with ISR
+`revalidate=60` + a `get_complaint_status_counts` RPC, and a second inventory
+reconciliation dated 2 Sept) landed on `main` after this doc's previous
+11 Aug update, from a session that didn't write its own state back here. Their
+substance was not re-verified before this edit — treat that stretch of history
+as real (it's on `main`) but undocumented, and reconcile properly if it matters
+to what you're doing.
 
 **Live:** https://fixops-nine.vercel.app · repo `tabreznakhwa/FixOps` · Vercel `tabzai/fixops`
 **Stack:** Next.js 16 (App Router) · Supabase (Postgres + RLS) · Tailwind · deployed on Vercel.
@@ -13,13 +22,22 @@ by exploration. Last updated 11 Aug 2026.
 | # | Item | Who |
 |---|------|-----|
 | 1 | `AI_API_KEY` env var (DeepSeek) — Business Insights advisor is built but inert without it | user |
-| 2 | `CRON_SECRET` env var — nightly auto-absent job will not run without it | user |
-| 3 | R22 (ITM00021) selling price is **0** — ~KWD 1,000 of gas fitted unbilled per 6 weeks. Largest recurring loss found | user |
-| 4 | Backfill historical stock issues from `work_order_line_items` into `inventory_transactions` — agreed in principle, not built | agent |
-| 5 | Check for stock left behind by cancelled purchase invoices (query in "Inventory ledger" below) | user then agent |
+| 2 | R22 (ITM00021) selling price is **0** — ~KWD 1,000 of gas fitted unbilled per 6 weeks. Largest recurring loss found | user |
+| 3 | Backfill historical stock issues from `work_order_line_items` into `inventory_transactions` — agreed in principle, not built | agent |
+| 4 | Check for stock left behind by cancelled purchase invoices (query in "Inventory ledger" below) | user then agent |
+
+`CRON_SECRET` was set in Vercel 9 Sept 2026 — the nightly auto-absent job
+(00:00 UTC / 3am Kuwait) should now actually authenticate and run. It hadn't
+been set before this, which is why staff who didn't clock in (e.g. Farhan
+Dalvi, 8 Sept) were never auto-marked absent — every cron call 401'd silently.
+**Verify it's really running**: check `/attendance` a day or two out; if
+unmarked absences from the day before appear without anyone clicking "Mark all
+absent" by hand, it worked. If not, re-check the env var is on the Production
+environment and that a redeploy happened after it was added.
 
 Migrations **028, 029, 030 have been run.** Physical stock count applied 11 Aug
-(26 of 27 items exact).
+(26 of 27 items exact); a further reconciliation is dated 2 Sept per commit
+`62f7e5d` (see note above — not independently re-verified here).
 
 ---
 
