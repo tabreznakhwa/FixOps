@@ -28,16 +28,16 @@ async function getAdminProfile() {
 
   const { data: profileRaw } = await supabaseUser
     .from('users')
-    .select('organization_id, role')
+    .select('organization_id, role, full_name')
     .eq('id', user.id)
     .single()
-  const profile = profileRaw as unknown as { organization_id: string | null; role: string } | null
+  const profile = profileRaw as unknown as { organization_id: string | null; role: string; full_name: string } | null
 
   if (!profile?.organization_id || !['owner', 'admin'].includes(profile.role)) {
     return { error: NextResponse.json({ error: 'Only admin and owner can convert quotations' }, { status: 403 }) }
   }
 
-  return { user, profile: { organization_id: profile.organization_id, role: profile.role } }
+  return { user, profile: { organization_id: profile.organization_id, role: profile.role, full_name: profile.full_name } }
 }
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -150,6 +150,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     await logAudit({
       orgId: auth.profile.organization_id,
       userId: auth.user.id,
+      userName: auth.profile.full_name,
       action: 'convert',
       entityType: 'quotation',
       entityId: id,

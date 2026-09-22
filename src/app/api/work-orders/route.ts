@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
     const { data: profile } = await (supabaseUser as any)
       .from('users')
-      .select('organization_id, role')
+      .select('organization_id, role, full_name')
       .eq('id', user.id)
       .single()
 
@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
     await logAudit({
       orgId: profile.organization_id,
       userId: user.id,
+      userName: profile.full_name,
       action: 'create',
       entityType: 'work_order',
       entityId: wo.id,

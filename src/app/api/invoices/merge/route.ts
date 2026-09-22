@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: profile } = await (supabaseUser as any)
-      .from('users').select('organization_id, role').eq('id', user.id).single()
+      .from('users').select('organization_id, role, full_name').eq('id', user.id).single()
     if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     if (!['admin', 'owner', 'manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -134,6 +134,7 @@ export async function POST(request: NextRequest) {
     await logAudit({
       orgId: profile.organization_id,
       userId: user.id,
+      userName: profile.full_name,
       action: 'create',
       entityType: 'invoice',
       entityId: newInvoice.id,

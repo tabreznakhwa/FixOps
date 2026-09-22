@@ -66,7 +66,7 @@ export async function DELETE(
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: profile } = await (supabaseUser as any)
-      .from('users').select('organization_id, role').eq('id', user.id).single()
+      .from('users').select('organization_id, role, full_name').eq('id', user.id).single()
     if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     if (!['admin', 'owner', 'manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -109,7 +109,7 @@ export async function DELETE(
     await supabase.from('invoice_items').delete().eq('invoice_id', id)
     await supabase.from('invoices').delete().eq('id', id)
 
-    await logAudit({ orgId: profile.organization_id, userId: user.id, action: 'delete', entityType: 'invoice', entityId: id, entityLabel: inv.invoice_number })
+    await logAudit({ orgId: profile.organization_id, userId: user.id, userName: profile.full_name, action: 'delete', entityType: 'invoice', entityId: id, entityLabel: inv.invoice_number })
     return NextResponse.json({ success: true })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : JSON.stringify(err)
@@ -129,7 +129,7 @@ export async function PATCH(
 
     const { data: profile } = await (supabaseUser as any)
       .from('users')
-      .select('organization_id, role')
+      .select('organization_id, role, full_name')
       .eq('id', user.id)
       .single()
 
@@ -179,7 +179,7 @@ export async function PATCH(
       const { error: itemsErr } = await supabaseAdmin.from('invoice_items').insert(lineItemRows)
       if (itemsErr) throw itemsErr
 
-      await logAudit({ orgId: profile.organization_id, userId: user.id, action: 'update', entityType: 'invoice', entityId: id, entityLabel: `${existing.invoice_number} — KWD ${totalAmount.toFixed(3)}` })
+      await logAudit({ orgId: profile.organization_id, userId: user.id, userName: profile.full_name, action: 'update', entityType: 'invoice', entityId: id, entityLabel: `${existing.invoice_number} — KWD ${totalAmount.toFixed(3)}` })
       return NextResponse.json({ success: true, id })
     }
 

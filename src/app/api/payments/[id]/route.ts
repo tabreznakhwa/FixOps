@@ -44,8 +44,8 @@ export async function PATCH(
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: profileRaw } = await (supabaseUser as any)
-      .from('users').select('organization_id, role').eq('id', user.id).single()
-    const profile = profileRaw as { organization_id: string; role: string } | null
+      .from('users').select('organization_id, role, full_name').eq('id', user.id).single()
+    const profile = profileRaw as { organization_id: string; role: string; full_name: string } | null
     if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await request.json()
@@ -94,7 +94,7 @@ export async function PATCH(
         }
       }
 
-      await logAudit({ orgId: profile.organization_id, userId: user.id, action: 'delete', entityType: 'payment', entityId: id, entityLabel: payment.payment_number })
+      await logAudit({ orgId: profile.organization_id, userId: user.id, userName: profile.full_name, action: 'delete', entityType: 'payment', entityId: id, entityLabel: payment.payment_number })
       return NextResponse.json({ success: true })
     }
 
@@ -131,7 +131,7 @@ export async function PATCH(
       await supabase.from('customer_ledger_entries').update({ entry_type: 'payment' })
         .eq('reference_id', id).eq('reference_type', 'payment')
 
-      await logAudit({ orgId: profile.organization_id, userId: user.id, action: 'update', entityType: 'payment', entityId: id, entityLabel: payment.payment_number })
+      await logAudit({ orgId: profile.organization_id, userId: user.id, userName: profile.full_name, action: 'update', entityType: 'payment', entityId: id, entityLabel: payment.payment_number })
       return NextResponse.json({ success: true })
     }
 
@@ -172,7 +172,7 @@ export async function PATCH(
     const { error: updateErr } = await supabase.from('payments').update(updatePayload).eq('id', id)
     if (updateErr) throw updateErr
 
-    await logAudit({ orgId: profile.organization_id, userId: user.id, action: 'update', entityType: 'payment', entityId: id, entityLabel: payment.payment_number })
+    await logAudit({ orgId: profile.organization_id, userId: user.id, userName: profile.full_name, action: 'update', entityType: 'payment', entityId: id, entityLabel: payment.payment_number })
     return NextResponse.json({ success: true })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : JSON.stringify(err)

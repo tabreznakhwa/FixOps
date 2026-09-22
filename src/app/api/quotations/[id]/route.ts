@@ -12,16 +12,16 @@ async function getAdminProfile() {
 
   const { data: profileRaw } = await supabaseUser
     .from('users')
-    .select('organization_id, role')
+    .select('organization_id, role, full_name')
     .eq('id', user.id)
     .single()
-  const profile = profileRaw as unknown as { organization_id: string | null; role: string } | null
+  const profile = profileRaw as unknown as { organization_id: string | null; role: string; full_name: string } | null
 
   if (!profile?.organization_id || !['owner', 'admin'].includes(profile.role)) {
     return { error: NextResponse.json({ error: 'Only admin and owner can access quotations' }, { status: 403 }) }
   }
 
-  return { user, profile: { organization_id: profile.organization_id, role: profile.role } }
+  return { user, profile: { organization_id: profile.organization_id, role: profile.role, full_name: profile.full_name } }
 }
 
 async function validateCustomerAndWorkOrder(
@@ -175,7 +175,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       const { error: itemErr } = await admin.from('quotation_items').insert(rows)
       if (itemErr) throw itemErr
 
-      await logAudit({ orgId: auth.profile.organization_id, userId: auth.user.id, action: 'update', entityType: 'quotation', entityId: id, entityLabel: existing.quotation_number })
+      await logAudit({ orgId: auth.profile.organization_id, userId: auth.user.id, userName: auth.profile.full_name, action: 'update', entityType: 'quotation', entityId: id, entityLabel: existing.quotation_number })
       return NextResponse.json({ success: true, id })
     }
 
@@ -233,7 +233,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     const { error } = await admin.from('quotations').delete().eq('id', id).eq('organization_id', auth.profile.organization_id)
     if (error) throw error
 
-    await logAudit({ orgId: auth.profile.organization_id, userId: auth.user.id, action: 'delete', entityType: 'quotation', entityId: id, entityLabel: existing.quotation_number })
+    await logAudit({ orgId: auth.profile.organization_id, userId: auth.user.id, userName: auth.profile.full_name, action: 'delete', entityType: 'quotation', entityId: id, entityLabel: existing.quotation_number })
     return NextResponse.json({ success: true })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to delete quotation'
