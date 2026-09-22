@@ -61,25 +61,44 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     customers: { full_name: string } | null; invoices: { invoice_number: string } | null
   }>
 
-  // Mode breakdown
-  const { data: allPaymentsRaw } = await supabase
-    .from('payments')
-    .select('payment_mode, amount_received, payment_date')
-    .eq('is_cancelled', false)
-  const allPayments = allPaymentsRaw as unknown as { payment_mode: string; amount_received: number; payment_date?: string }[]
-
-  const modeBreakdown: Record<string, number> = {}
-  allPayments?.forEach((p) => {
-    modeBreakdown[p.payment_mode] = (modeBreakdown[p.payment_mode] ?? 0) + p.amount_received
-  })
-
+  // Today's collection — queried directly from the DB instead of filtered out
+  // of an "all payments" fetch. PostgREST caps a response at 1000 rows with
+  // no guaranteed order when the query has no explicit .order()/.range(), so
+  // once an org passes that many non-cancelled payments, today's rows have
+  // no guarantee of being in whatever arbitrary subset comes back — that's
+  // what made this card go blank.
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
-  const todayPayments = allPayments?.filter((p) => (p.payment_date ?? '').slice(0, 10) === todayStr) ?? []
+  const { data: todayPaymentsRaw } = await supabase
+    .from('payments')
+    .select('payment_mode, amount_received')
+    .eq('is_cancelled', false)
+    .eq('payment_date', todayStr)
+  const todayPayments = (todayPaymentsRaw ?? []) as { payment_mode: string; amount_received: number }[]
   const totalToday = todayPayments.reduce((s, p) => s + p.amount_received, 0)
   const todayCash = todayPayments.filter(p => p.payment_mode === 'cash').reduce((s, p) => s + p.amount_received, 0)
   const todayBank = todayPayments.filter(p => p.payment_mode !== 'cash').reduce((s, p) => s + p.amount_received, 0)
 
-  const totalMonth = allPayments?.reduce((s, p) => s + p.amount_received, 0) ?? 0
+  // Mode breakdown (all-time) — same row-cap risk as above, so page through
+  // it in 1000-row chunks rather than trusting a single bare select().
+  type ModeRow = { payment_mode: string; amount_received: number }
+  const allPayments: ModeRow[] = []
+  for (let offset = 0; offset < 50_000; offset += 1000) {
+    const { data: chunk, error: chunkError } = await supabase
+      .from('payments')
+      .select('payment_mode, amount_received')
+      .eq('is_cancelled', false)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + 999)
+    if (chunkError) break
+    const rows = (chunk ?? []) as ModeRow[]
+    allPayments.push(...rows)
+    if (rows.length < 1000) break
+  }
+
+  const modeBreakdown: Record<string, number> = {}
+  allPayments.forEach((p) => {
+    modeBreakdown[p.payment_mode] = (modeBreakdown[p.payment_mode] ?? 0) + p.amount_received
+  })
 
   return (
     <div className="animate-fade-in">
