@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAuthedProfile } from '@/lib/auth/session'
 import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import { DashboardStats } from '@/components/dashboard/DashboardStats'
@@ -15,10 +16,8 @@ export const metadata = { title: 'Dashboard' }
 export default async function DashboardPage() {
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileRaw } = await (supabase as any)
-    .from('users').select('role').eq('id', user!.id).single()
-  const role = (profileRaw as { role: string } | null)?.role ?? 'technician'
+  const { profile } = await getAuthedProfile()
+  const role = profile?.role ?? 'technician'
   const isTechnician = role === 'technician'
 
   const todayISO = (() => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return d.toISOString() })()

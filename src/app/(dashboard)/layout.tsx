@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { AssignmentNotifier } from '@/components/layout/AssignmentNotifier'
 import { getRoleAccess } from '@/lib/orgPermissions'
 import { TabShellOrContent } from '@/components/layout/TabShellOrContent'
+import { getAuthedProfile } from '@/lib/auth/session'
 
 // Injected on EVERY dashboard page (iframe or not).
 // At runtime it self-exits when not inside an iframe, so the outer shell is unaffected.
@@ -23,22 +23,9 @@ const IFRAME_GUARD = `(function(){
 })();`
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, profile } = await getAuthedProfile()
 
   if (!user) redirect('/login')
-
-  const { data: profileRaw } = await supabase
-    .from('users')
-    .select('full_name, email, role, status, avatar_url, organization_id')
-    .eq('id', user.id)
-    .single()
-
-  const profile = profileRaw as unknown as {
-    full_name: string; email: string; role: string; status: string
-    avatar_url: string | null; organization_id: string
-  } | null
-
   if (!profile || profile.status === 'pending') redirect('/pending')
   if (profile.status !== 'active') redirect('/login')
 

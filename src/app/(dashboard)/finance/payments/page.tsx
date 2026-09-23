@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAuthedProfile } from '@/lib/auth/session'
 import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
@@ -20,9 +21,8 @@ const MODE_ICONS: Record<string, string> = {
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ mode?: string; from?: string; to?: string; q?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
-  const userRole = (profileRaw as { role: string } | null)?.role ?? ''
+  const { profile } = await getAuthedProfile()
+  const userRole = profile?.role ?? ''
   const canEditDelete = ['owner', 'admin', 'manager'].includes(userRole)
 
   const hasDateFilter = Boolean(params.from || params.to || params.q)

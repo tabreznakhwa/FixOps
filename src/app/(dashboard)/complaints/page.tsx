@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAuthedProfile } from '@/lib/auth/session'
 import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
@@ -17,11 +18,8 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   const params = await searchParams
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileRaw } = user
-    ? await supabase.from('users').select('role').eq('id', user.id).single()
-    : { data: null }
-  const role = (profileRaw as { role: string } | null)?.role ?? ''
+  const { profile } = await getAuthedProfile()
+  const role = profile?.role ?? ''
   const isTechnician = role === 'technician'
   const canReorder = ['owner', 'admin', 'manager'].includes(role)
 
