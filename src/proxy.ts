@@ -2,7 +2,13 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getRouteModule, getDefaultPermission, LOCKED_ROLES } from '@/lib/permissions'
 
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/pending', '/api/auth', '/portal', '/api/complaints/public']
+// /api/attendance/auto-absent is exempt: Vercel Cron calls it with only a
+// `Authorization: Bearer <CRON_SECRET>` header, no Supabase session cookie, so
+// the !user check below was redirecting every cron invocation to /login before
+// it ever reached the route's own CRON_SECRET check — the reason the nightly
+// auto-absent job never wrote a row. The route still gates GET on that secret
+// itself, and POST still does its own user+role check internally.
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/pending', '/api/auth', '/portal', '/api/complaints/public', '/api/attendance/auto-absent']
 
 // ---------------------------------------------------------------------------
 // IP-based rate limiter (in-memory per edge-worker instance).
