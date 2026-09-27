@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { isFixedOtMonth } from '@/lib/attendance'
 
 interface StaffEntry {
   staff_id: string
@@ -75,7 +76,10 @@ export async function POST(request: Request) {
     // All staff get Friday/holiday OT; only overtime_eligible staff get daily normal OT
     const fridayOT = entry?.friday_ot_amount ?? 0
     const hasWorkedFridayOrHoliday = fridayOT > 0
-    const fixedOT = s.overtime_eligible && hasWorkedFridayOrHoliday ? (s.fixed_overtime_monthly ?? 0) : 0
+    // Fixed OT is summer-only (Mar–Sep). In winter it's simply not paid.
+    const fixedOT = isFixedOtMonth(month) && s.overtime_eligible && hasWorkedFridayOrHoliday
+      ? (s.fixed_overtime_monthly ?? 0)
+      : 0
 
     const advDeduct = Math.min(entry?.advance_deduction ?? 0, s.advance_balance ?? 0)
     // Freeze what the balance actually is right after THIS month's own

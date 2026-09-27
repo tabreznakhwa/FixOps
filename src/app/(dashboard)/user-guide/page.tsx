@@ -258,7 +258,7 @@ export default function UserGuidePage() {
           <Sub title="Viewing Records">
             <p>The main Attendance page shows all records for the current month. Use the month selector and staff filter to drill down. Summary cards show total Present, Absent, Half Day, and Leave counts.</p>
           </Sub>
-          <Tip>Overtime worked between 5:30 PM and 8:00 PM is tracked as Fixed Overtime — the monthly fixed OT amount is set in each staff member's profile.</Tip>
+          <Tip>In summer (March–September), overtime worked between 5:30 PM and 8:00 PM is tracked as Fixed Overtime — the monthly fixed OT amount is set in each staff member's profile. In winter (October–February) fixed overtime is off and any time past the 8-hour duty is normal overtime.</Tip>
         </Section>
 
         {/* 13. Payroll */}

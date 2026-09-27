@@ -20,6 +20,19 @@ export function isFriday(dateStr: string): boolean {
   return new Date(y, m - 1, d).getDay() === 5
 }
 
+// Fixed overtime is a summer-only benefit. It runs from 1 March through 30
+// September, and is OFF during the winter (1 October – end of February), when
+// the time beyond the 8-hour duty is paid as normal overtime instead.
+export function isFixedOtMonth(month: number): boolean {
+  return month >= 3 && month <= 9
+}
+
+export function isFixedOtSeasonForDate(dateStr: string): boolean {
+  if (!dateStr) return true
+  const m = Number(dateStr.slice(5, 7))
+  return Number.isInteger(m) && m >= 1 && m <= 12 ? isFixedOtMonth(m) : true
+}
+
 export interface AttendanceBreakdown {
   hoursWorked: number
   lunchDeducted: boolean
@@ -33,6 +46,7 @@ export function calcAttendanceBreakdown(
   checkIn: string,
   checkOut: string,
   isFridayOrHoliday = false,
+  isFixedOtSeason = true,
 ): AttendanceBreakdown | null {
   if (!checkIn || !checkOut) return null
 
@@ -73,14 +87,21 @@ export function calcAttendanceBreakdown(
   // Regular day
   const hoursWorked = Math.round(totalHours * 4) / 4
 
-  // Fixed OT: time between DUTY_END (17:30) and FIXED_OT_END (20:00)
-  const dutyEndM = toMins(DUTY_END)
-  const fixedOtStart = Math.max(outM > dutyEndM ? dutyEndM : outM, dutyEndM)
-  const fixedOtEnd = Math.min(outM, FIXED_OT_END_M)
-  const fixedOtActualHrs = Math.round((Math.max(0, fixedOtEnd - fixedOtStart) / 60) * 4) / 4
-
-  // Normal OT: time after 8 PM (20:00), multiplied by 1.25
-  const normalOtActualHrs = Math.max(0, outM > FIXED_OT_END_M ? (outM - FIXED_OT_END_M) / 60 : 0)
+  let fixedOtActualHrs: number
+  let normalOtActualHrs: number
+  if (isFixedOtSeason) {
+    // Summer (Mar–Sep): fixed OT covers DUTY_END (17:30) → FIXED_OT_END (20:00);
+    // normal OT only starts after 20:00.
+    const dutyEndM = toMins(DUTY_END)
+    const fixedOtEnd = Math.min(outM, FIXED_OT_END_M)
+    fixedOtActualHrs = Math.round((Math.max(0, fixedOtEnd - dutyEndM) / 60) * 4) / 4
+    normalOtActualHrs = Math.max(0, outM > FIXED_OT_END_M ? (outM - FIXED_OT_END_M) / 60 : 0)
+  } else {
+    // Winter (Oct–Feb): no fixed overtime. Everything beyond the 8-hour duty is
+    // normal overtime — the same "first 8h, rest ×1.25" shape as the Friday rule.
+    fixedOtActualHrs = 0
+    normalOtActualHrs = Math.max(0, totalHours - STANDARD_HOURS)
+  }
   const normalOtPaidHrs = Math.round(normalOtActualHrs * OT_MULTIPLIER * 4) / 4
 
   return {

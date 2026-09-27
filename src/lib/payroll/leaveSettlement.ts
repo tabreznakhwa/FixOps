@@ -20,6 +20,8 @@
  * deduction base excludes the food allowance — both match the monthly run.
  */
 
+import { isFixedOtMonth } from '@/lib/attendance'
+
 /** The business treats every month as 30 days, matching the monthly payroll run. */
 export const PAYROLL_DAYS_IN_MONTH = 30
 
@@ -97,8 +99,12 @@ export function calcLeaveSettlement(
 
   // Fixed OT is gated exactly as the monthly run gates it — eligible staff who
   // actually worked a Friday or public holiday — then pro-rated for the window.
+  // It is summer-only, so in winter it is simply not paid.
+  const isFixedOtSeason = isFixedOtMonth(Number(monthStart.slice(5, 7)))
   const fixedOtMonthly =
-    staff.overtime_eligible && fridayOvertime > 0 ? Number(staff.fixed_overtime_monthly) || 0 : 0
+    isFixedOtSeason && staff.overtime_eligible && fridayOvertime > 0
+      ? Number(staff.fixed_overtime_monthly) || 0
+      : 0
   const fixedOtEarned = fixedOtMonthly * proRataFactor
 
   // Overtime is actual, never pro-rated: hours already recorded are already earned.

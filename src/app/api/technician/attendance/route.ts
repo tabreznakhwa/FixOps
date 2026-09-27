@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
-import { calcAttendanceBreakdown, isFriday, kuwaitISODate, kuwaitTimeHHMM, payableOvertimeHours } from '@/lib/attendance'
+import { calcAttendanceBreakdown, isFriday, isFixedOtSeasonForDate, kuwaitISODate, kuwaitTimeHHMM, payableOvertimeHours } from '@/lib/attendance'
 
 async function resolveStaff(userId: string) {
   const admin = createAdminClient() as any
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     // A day already flagged as a public holiday follows the same rules as Friday.
     const isHolidayToday = isFriday(today) || Boolean(existing.is_public_holiday)
-    const breakdown = calcAttendanceBreakdown(existing.check_in, nowTime, isHolidayToday)
+    const breakdown = calcAttendanceBreakdown(existing.check_in, nowTime, isHolidayToday, isFixedOtSeasonForDate(today))
 
     // Friday / public-holiday OT is paid to EVERY employee, whether or not they are
     // overtime-eligible — but only on a day they actually worked. On such a day

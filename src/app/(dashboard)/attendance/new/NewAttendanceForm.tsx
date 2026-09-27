@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { calcAttendanceBreakdown, isFriday, DUTY_START, DUTY_END } from '@/lib/attendance'
+import { calcAttendanceBreakdown, isFriday, isFixedOtSeasonForDate, DUTY_START, DUTY_END } from '@/lib/attendance'
 
 interface StaffMember {
   id: string
@@ -66,9 +66,10 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
 
   const isFridayDate = isFriday(date)
   const isFridayOrHoliday = isFridayDate || isPublicHoliday
+  const fixedOtSeason = isFixedOtSeasonForDate(date)
 
   const showTimes = status === 'present' || status === 'half_day'
-  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut, isFridayOrHoliday) : null
+  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut, isFridayOrHoliday, fixedOtSeason) : null
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -335,19 +336,25 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
                       <div className="flex items-center justify-between mb-2">
                         <div>
                           <p className="font-semibold text-slate-800">Fixed Overtime</p>
-                          <p className="text-xs text-slate-400 mt-0.5">5:30 PM – 8:00 PM period</p>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {fixedOtSeason ? '5:30 PM – 8:00 PM period' : 'Off for winter — resumes in March'}
+                          </p>
                         </div>
                         <p className="font-semibold text-slate-600 text-sm">
                           {breakdown.fixedOtHrs > 0 ? `${fmtHrs(breakdown.fixedOtHrs)} eligible` : '—'}
                         </p>
                       </div>
-                      <p className="text-xs text-blue-600 mt-1">Monthly fixed OT amount is set in the staff profile (HR settings)</p>
+                      {fixedOtSeason && (
+                        <p className="text-xs text-blue-600 mt-1">Monthly fixed OT amount is set in the staff profile (HR settings)</p>
+                      )}
                     </div>
 
                     {breakdown.normalOtActualHrs > 0 ? (
                       <div className="flex items-center justify-between px-4 py-3 bg-amber-50">
                         <div>
-                          <p className="font-semibold text-amber-800">Normal Overtime (after 8 PM)</p>
+                          <p className="font-semibold text-amber-800">
+                            Normal Overtime {fixedOtSeason ? '(after 8 PM)' : '(after 8 hours)'}
+                          </p>
                           <p className="text-xs text-amber-600 mt-0.5">
                             {fmtHrs(breakdown.normalOtActualHrs)} actual × 1.25 = {fmtHrs(breakdown.normalOtPaidHrs)} paid
                           </p>
@@ -357,7 +364,9 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
                     ) : (
                       <div className="flex items-center justify-between px-4 py-3">
                         <div>
-                          <p className="font-semibold text-slate-600">Normal Overtime (after 8 PM)</p>
+                          <p className="font-semibold text-slate-600">
+                            Normal Overtime {fixedOtSeason ? '(after 8 PM)' : '(after 8 hours)'}
+                          </p>
                           <p className="text-xs text-slate-400 mt-0.5">1 hr worked = 1.25 hrs paid</p>
                         </div>
                         <p className="text-slate-400 text-sm">—</p>

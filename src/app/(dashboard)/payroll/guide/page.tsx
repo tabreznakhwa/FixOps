@@ -316,7 +316,7 @@ export default function PayrollGuidePage() {
                   <Field label="Food Allowance" desc="Paid as its own line on the payslip. Excluded from the absence deduction." />
                   <Field label="Other Allowance" desc="Any additional allowance. Label it using the Allowance Name field." />
                   <Field label="Allowance Name" desc="Custom label — e.g. Housing Allowance, Transport Allowance." />
-                  <Field label="Fixed Overtime Monthly" desc="Paid only in months where the employee is OT-eligible and worked a Friday or public holiday." />
+                  <Field label="Fixed Overtime Monthly" desc="Paid only in summer months (March–September) where the employee is OT-eligible and worked a Friday or public holiday. Off during winter (October–February)." />
                   <Field label="Overtime Eligible" desc="Gates daily overtime and fixed OT only. Friday/holiday OT is unaffected." />
                   <Field label="Friday OT Amount" desc="Flat KWD amount per Friday or public holiday worked." />
                 </div>
@@ -338,8 +338,8 @@ export default function PayrollGuidePage() {
                   <ul className="text-sm text-slate-600 space-y-1 list-disc list-inside">
                     <li>Standard shift 8:30 AM – 5:30 PM (8 hours)</li>
                     <li>1-hour lunch deducted if the shift spans 1:00 – 2:00 PM</li>
-                    <li><strong>Fixed OT band:</strong> 5:30 PM – 8:00 PM</li>
-                    <li><strong>Normal OT:</strong> after 8:00 PM, at 1.25× (1 hour worked = 1.25 paid hours)</li>
+                    <li><strong>Summer (Mar–Sep) — Fixed OT band:</strong> 5:30 PM – 8:00 PM, then Normal OT after 8:00 PM at 1.25×</li>
+                    <li><strong>Winter (Oct–Feb) — no fixed OT:</strong> everything after the 8-hour duty is Normal OT at 1.25×</li>
                   </ul>
                 </div>
                 <div className="border border-purple-200 bg-purple-50 rounded-lg p-4">

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, CalendarX, Info } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { isFixedOtMonth } from '@/lib/attendance'
 
 interface StaffRow {
   id: string
@@ -180,7 +181,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
                 // only carry Friday/holiday hours beyond the first 8.
                 const normalOT = calcNormalOT(s.basic_salary ?? 0, normalOtPaidHours)
                 const fridayOT = fridayOtAmountMap[s.id] ?? 0
-                const fixedOT = s.overtime_eligible && fridayOT > 0 ? (s.fixed_overtime_monthly ?? 0) : 0
+                const fixedOT = isFixedOtMonth(month) && s.overtime_eligible && fridayOT > 0 ? (s.fixed_overtime_monthly ?? 0) : 0
 
                 const absentDays = absentDaysMap[s.id] ?? 0
                 const absentDeduct = calcAbsentDeduction(s, absentDays, fixedOT)
