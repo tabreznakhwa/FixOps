@@ -336,10 +336,10 @@ export default function PayrollGuidePage() {
                 <div className="border border-slate-200 rounded-lg p-4">
                   <p className="font-semibold text-slate-800 text-sm mb-2">Regular Weekday (Sat – Thu)</p>
                   <ul className="text-sm text-slate-600 space-y-1 list-disc list-inside">
-                    <li>Standard shift 8:30 AM – 5:30 PM (8 hours)</li>
-                    <li>1-hour lunch deducted if the shift spans 1:00 – 2:00 PM</li>
-                    <li><strong>Summer (Mar–Sep) — Fixed OT band:</strong> 5:30 PM – 8:00 PM, then Normal OT after 8:00 PM at 1.25×</li>
-                    <li><strong>Winter (Oct–Feb) — no fixed OT:</strong> everything after the 8-hour duty is Normal OT at 1.25×</li>
+                    <li><strong>From 1 Oct 2026:</strong> the 8-hour duty starts at the employee's clock-in time — clock in at 12 PM and the duty runs to 8 PM, clock in at 1 PM and it runs to 9 PM</li>
+                    <li>Overtime = any time worked beyond those 8 hours from clock-in, paid at 1.25×</li>
+                    <li><strong>Summer (Mar–Sep):</strong> the flat Fixed Overtime Monthly is also paid (eligible staff who worked a Friday or holiday)</li>
+                    <li><strong>Winter (Oct–Feb):</strong> no fixed overtime — only the after-8-hours normal overtime</li>
                   </ul>
                 </div>
                 <div className="border border-purple-200 bg-purple-50 rounded-lg p-4">

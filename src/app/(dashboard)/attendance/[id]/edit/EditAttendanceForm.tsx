@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { calcAttendanceBreakdown, isFriday, isFixedOtSeasonForDate, DUTY_START, DUTY_END } from '@/lib/attendance'
+import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, DUTY_START, DUTY_END } from '@/lib/attendance'
 
 interface Record {
   id: string; date: string; status: string
@@ -33,10 +33,10 @@ export function EditAttendanceForm({ record }: { record: Record }) {
 
   const isFridayDate = isFriday(date)
   const isFridayOrHoliday = isFridayDate || isPublicHoliday
-  const fixedOtSeason = isFixedOtSeasonForDate(date)
+  const anchored = usesClockInAnchor(date)
 
   const showTimes = status === 'present' || status === 'half_day'
-  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut, isFridayOrHoliday, fixedOtSeason) : null
+  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut, isFridayOrHoliday, date) : null
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -134,12 +134,20 @@ export function EditAttendanceForm({ record }: { record: Record }) {
               <div>
                 <label className={labelClass}>Check In</label>
                 <input type="time" value={checkIn} onChange={e => setCheckIn(e.target.value)} className={inputClass} />
-                {!isFridayOrHoliday && <p className="text-xs text-slate-400 mt-1">Duty starts 8:30 AM</p>}
+                {!isFridayOrHoliday && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    {anchored ? '8-hour duty starts at clock-in' : 'Standard duty starts 8:30 AM'}
+                  </p>
+                )}
               </div>
               <div>
                 <label className={labelClass}>Check Out</label>
                 <input type="time" value={checkOut} onChange={e => setCheckOut(e.target.value)} className={inputClass} />
-                {!isFridayOrHoliday && <p className="text-xs text-slate-400 mt-1">Duty ends 5:30 PM</p>}
+                {!isFridayOrHoliday && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    {anchored ? 'Overtime after 8 hours from clock-in' : 'Overtime after 8 PM'}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -180,9 +188,6 @@ export function EditAttendanceForm({ record }: { record: Record }) {
                         </div>
                         <p className="font-bold text-blue-700 text-base">{fmtHrs(breakdown.fixedOtHrs)}</p>
                       </div>
-                      {breakdown.lunchDeducted && (
-                        <p className="text-xs text-slate-400 mt-1">Lunch break (1:00–2:00 PM) deducted</p>
-                      )}
                     </div>
 
                     {breakdown.normalOtActualHrs > 0 ? (
@@ -205,35 +210,51 @@ export function EditAttendanceForm({ record }: { record: Record }) {
                       </div>
                     )}
                   </>
+                ) : anchored ? (
+                  <>
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <div>
+                        <p className="font-semibold text-slate-800">Regular Hours</p>
+                        <p className="text-xs text-slate-400 mt-0.5">8-hour duty from clock-in</p>
+                      </div>
+                      <p className="font-bold text-slate-900 text-base">{fmtHrs(breakdown.hoursWorked)}</p>
+                    </div>
+                    {breakdown.normalOtActualHrs > 0 && (
+                      <div className="flex items-center justify-between px-4 py-3 bg-amber-50">
+                        <div>
+                          <p className="font-semibold text-amber-800">Overtime (after 8 hours)</p>
+                          <p className="text-xs text-amber-600 mt-0.5">{fmtHrs(breakdown.normalOtActualHrs)} × 1.25 = {fmtHrs(breakdown.normalOtPaidHrs)} paid</p>
+                        </div>
+                        <p className="font-bold text-amber-700 text-base">{fmtHrs(breakdown.normalOtPaidHrs)}</p>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <>
                     <div className="flex items-center justify-between px-4 py-3">
                       <div>
                         <p className="font-semibold text-slate-800">Regular Hours</p>
-                        {breakdown.lunchDeducted && <p className="text-xs text-slate-400 mt-0.5">Lunch (1–2 PM) deducted</p>}
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {breakdown.lunchDeducted ? 'Lunch (1–2 PM) deducted' : '8:30 AM – 5:30 PM standard'}
+                        </p>
                       </div>
                       <p className="font-bold text-slate-900 text-base">{fmtHrs(breakdown.hoursWorked)}</p>
                     </div>
                     <div className={`px-4 py-3 ${breakdown.fixedOtHrs > 0 ? 'bg-blue-50' : ''}`}>
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center justify-between">
                         <div>
                           <p className="font-semibold text-slate-800">Fixed Overtime</p>
-                          <p className="text-xs text-slate-400 mt-0.5">
-                            {fixedOtSeason ? '5:30 PM – 8:00 PM period' : 'Off for winter — resumes in March'}
-                          </p>
+                          <p className="text-xs text-slate-400 mt-0.5">5:30 PM – 8:00 PM period</p>
                         </div>
-                        <p className="font-semibold text-slate-600 text-sm">
-                          {breakdown.fixedOtHrs > 0 ? `${fmtHrs(breakdown.fixedOtHrs)} eligible` : '—'}
+                        <p className={breakdown.fixedOtHrs > 0 ? 'font-bold text-blue-700 text-base' : 'text-slate-400 text-sm'}>
+                          {breakdown.fixedOtHrs > 0 ? fmtHrs(breakdown.fixedOtHrs) : '—'}
                         </p>
                       </div>
-                      {fixedOtSeason && <p className="text-xs text-blue-600">Monthly fixed OT amount is set in the staff profile</p>}
                     </div>
                     {breakdown.normalOtActualHrs > 0 && (
                       <div className="flex items-center justify-between px-4 py-3 bg-amber-50">
                         <div>
-                          <p className="font-semibold text-amber-800">
-                            Normal OT {fixedOtSeason ? '(after 8 PM)' : '(after 8 hours)'}
-                          </p>
+                          <p className="font-semibold text-amber-800">Normal Overtime (after 8 PM)</p>
                           <p className="text-xs text-amber-600 mt-0.5">{fmtHrs(breakdown.normalOtActualHrs)} × 1.25 = {fmtHrs(breakdown.normalOtPaidHrs)} paid</p>
                         </div>
                         <p className="font-bold text-amber-700 text-base">{fmtHrs(breakdown.normalOtPaidHrs)}</p>
