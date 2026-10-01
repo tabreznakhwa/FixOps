@@ -9,7 +9,8 @@ const FRIDAY_FIXED_OT_HOURS = 8     // Friday/holiday: first 8 worked hours = fi
 const OT_MULTIPLIER = 1.25           // Normal OT: 1 hr = 1.25 paid hrs
 
 // From this date the 8-hour duty is anchored to the employee's clock-in time —
-// no fixed 8:30–5:30 schedule, no lunch deduction, no daily fixed-OT window.
+// no fixed 8:30–5:30 schedule, no daily fixed-OT window — and the lunch hour
+// follows the employee's shift rather than applying to everyone.
 // Before it, the old seasonal rules apply unchanged.
 const CLOCK_IN_ANCHOR_START = '2026-10-01'
 
@@ -64,7 +65,9 @@ export function dutyHints(date: string, shift: Shift = 'morning'): {
       : { dutyStart: 'Morning shift starts 8:30 AM', overtime: 'Overtime after 5:30 PM (1 hr lunch)' }
   }
   if (usesClockInAnchor(date)) {
-    return { dutyStart: '8-hour duty starts at clock-in', overtime: 'Overtime after 8 hours from clock-in' }
+    return shift === 'evening'
+      ? { dutyStart: '8-hour duty starts at clock-in', overtime: 'Overtime after 8 hours from clock-in (no break)' }
+      : { dutyStart: '8-hour duty starts at clock-in', overtime: 'Overtime after 8 worked hours (1 hr lunch)' }
   }
   return { dutyStart: 'Standard duty starts 8:30 AM', overtime: 'Overtime after 8 PM' }
 }
@@ -128,16 +131,14 @@ export function calcAttendanceBreakdown(
     return Math.max(0, Math.min(outM, LUNCH_END_M) - Math.max(inM, LUNCH_START_M))
   }
 
-  // Lunch (1–2 PM) is deducted under the pre-1-Oct-2026 rules, and for the
-  // winter MORNING shift, whose 8:30–17:30 span is 8 worked hours plus an hour
-  // of lunch. The winter evening shift runs straight through, and the clock-in
-  // anchored rule has no lunch deduction at all.
-  let lunchDeduct = 0
-  if (winterShift && !isFridayOrHoliday) {
-    lunchDeduct = shift === 'morning' ? lunchOverlap() : 0
-  } else if (!anchored) {
-    lunchDeduct = lunchOverlap()
-  }
+  // Lunch (1–2 PM). From 1 Oct 2026 it follows the employee's shift in EVERY
+  // case — summer and winter, ordinary days, Fridays and public holidays alike:
+  // morning shift takes an hour, evening shift works straight through. Before
+  // that date lunch was deducted for everyone, which is preserved so saved
+  // historical records keep the breakdown they were calculated with.
+  const lunchDeduct = anchored
+    ? (shift === 'morning' ? lunchOverlap() : 0)
+    : lunchOverlap()
 
   const netMins = outM - inM - lunchDeduct
   const totalHours = Math.round((netMins / 60) * 4) / 4
@@ -186,7 +187,7 @@ export function calcAttendanceBreakdown(
     const normalOtPaidHrs = Math.round(normalOtActualHrs * OT_MULTIPLIER * 4) / 4
     return {
       hoursWorked,
-      lunchDeducted: false,
+      lunchDeducted: lunchDeduct > 0,
       fixedOtHrs: 0,
       normalOtActualHrs,
       normalOtPaidHrs,
