@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, normalizeShift, dutyHints, DUTY_START, DUTY_END } from '@/lib/attendance'
+import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, dutyHints, DUTY_START, DUTY_END } from '@/lib/attendance'
 
 interface Record {
   id: string; date: string; status: string
@@ -9,7 +9,7 @@ interface Record {
   hours_worked: number; overtime_hours: number
   notes: string | null; is_public_holiday: boolean
   friday_ot_amount: number
-  staff: { full_name: string; friday_ot_amount: number; shift: string | null } | null
+  staff: { full_name: string; friday_ot_amount: number } | null
 }
 
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white'
@@ -34,12 +34,10 @@ export function EditAttendanceForm({ record }: { record: Record }) {
   const isFridayDate = isFriday(date)
   const isFridayOrHoliday = isFridayDate || isPublicHoliday
   const anchored = usesClockInAnchor(date)
-  const hints = dutyHints(date, normalizeShift(record.staff?.shift))
+  const hints = dutyHints(date)
 
   const showTimes = status === 'present' || status === 'half_day'
-  // Oct–Feb overtime starts at a fixed time that depends on the employee's shift.
-  const shift = normalizeShift(record.staff?.shift)
-  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut, isFridayOrHoliday, date, shift) : null
+  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut, isFridayOrHoliday, date) : null
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

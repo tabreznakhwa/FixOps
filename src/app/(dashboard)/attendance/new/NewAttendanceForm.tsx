@@ -1,14 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, normalizeShift, dutyHints, DUTY_START, DUTY_END } from '@/lib/attendance'
+import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, dutyHints, DUTY_START, DUTY_END } from '@/lib/attendance'
 
 interface StaffMember {
   id: string
   full_name: string
   designation: string | null
   friday_ot_amount: number
-  shift: string | null
 }
 
 interface Props {
@@ -70,10 +69,8 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
   const anchored = usesClockInAnchor(date)
 
   const showTimes = status === 'present' || status === 'half_day'
-  // Oct–Feb overtime starts at a fixed time that depends on the employee's shift.
-  const shift = normalizeShift(staff.find((s) => s.id === staffId)?.shift)
-  const hints = dutyHints(date, shift)
-  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut, isFridayOrHoliday, date, shift) : null
+  const hints = dutyHints(date)
+  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut, isFridayOrHoliday, date) : null
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()

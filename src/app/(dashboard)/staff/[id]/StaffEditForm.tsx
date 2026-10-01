@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { SHIFTS, SHIFT_LABELS, normalizeShift } from '@/lib/attendance'
 
 interface StaffRecord {
   id: string; full_name: string; designation: string | null; department: string | null
@@ -17,7 +16,6 @@ interface StaffRecord {
   opening_loan: number
   overtime_eligible: boolean; bank_name: string | null; iban: string | null
   employment_status: string; notes: string | null
-  shift: string | null
 }
 
 const DEPARTMENTS = ['Operations', 'Technical', 'Administration', 'Finance', 'HR', 'Store', 'Sales']
@@ -49,7 +47,6 @@ export function StaffEditForm({ staff }: { staff: StaffRecord }) {
     opening_advance: String(staff.opening_advance ?? 0),
     opening_loan: String(staff.opening_loan ?? 0),
     overtime_eligible: staff.overtime_eligible ?? false,
-    shift: normalizeShift(staff.shift),
     bank_name: staff.bank_name ?? '',
     iban: staff.iban ?? '',
     employment_status: staff.employment_status,
@@ -208,15 +205,6 @@ export function StaffEditForm({ staff }: { staff: StaffRecord }) {
             <input type="number" min="0" step="0.01" value={form.friday_ot_amount}
               onChange={(e) => set('friday_ot_amount', e.target.value)} className={`${inputClass} text-right`} />
             <p className="text-xs text-slate-400 mt-1">Pre-filled on Friday/holiday attendance records</p>
-          </div>
-          <div key="shift">
-            <label className={labelClass}>Shift</label>
-            <select value={form.shift} onChange={(e) => set('shift', e.target.value)} className={inputClass}>
-              {SHIFTS.map((s) => <option key={s} value={s}>{SHIFT_LABELS[s]}</option>)}
-            </select>
-            <p className="text-xs text-slate-400 mt-1">
-              Oct–Feb only. Morning OT starts after 5:30 PM (1 hr lunch); evening OT after 10 PM (no break).
-            </p>
           </div>
           <div className="col-span-2 flex items-center gap-2 mt-1">
             <input type="checkbox" id="ot_eligible" checked={form.overtime_eligible}

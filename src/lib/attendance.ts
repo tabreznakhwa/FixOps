@@ -9,65 +9,38 @@ const FRIDAY_FIXED_OT_HOURS = 8     // Friday/holiday: first 8 worked hours = fi
 const OT_MULTIPLIER = 1.25           // Normal OT: 1 hr = 1.25 paid hrs
 
 // From this date the 8-hour duty is anchored to the employee's clock-in time —
-// no fixed 8:30–5:30 schedule, no daily fixed-OT window — and the lunch hour
-// follows the employee's shift rather than applying to everyone.
+// no fixed 8:30–5:30 schedule and no daily fixed-OT window. Overtime begins once
+// 8 hours have actually been WORKED, lunch excluded.
 // Before it, the old seasonal rules apply unchanged.
 const CLOCK_IN_ANCHOR_START = '2026-10-01'
 
-// ── Winter shifts (October–February), from 1 Oct 2026 ──────────────────────
-// Two fixed shifts, assigned per employee on their staff profile:
-//   Morning  08:30–17:30 — 9 clock hours covering 8 worked + 1 hour lunch,
-//                          so overtime only starts after 17:30.
-//   Evening  14:00–22:00 — a straight 8 hours with no break, so overtime
-//                          only starts after 22:00.
-// The overtime start is a FIXED clock time, not clock-in + N hours: arriving
-// late does not push the overtime boundary later. This overrides the clock-in
-// anchor above for Oct–Feb; March–September is unaffected.
-export type Shift = 'morning' | 'evening'
-export const SHIFTS: Shift[] = ['morning', 'evening']
-export const SHIFT_LABELS: Record<Shift, string> = {
-  morning: 'Morning (8:30 AM – 5:30 PM)',
-  evening: 'Evening (2:00 PM – 10:00 PM)',
-}
-export const MORNING_SHIFT_START = '08:30'
-export const MORNING_OT_START = '17:30'
-export const EVENING_SHIFT_START = '14:00'
-export const EVENING_OT_START = '22:00'
-const WINTER_SHIFT_START = '2026-10-01'
-
-export function normalizeShift(value?: string | null): Shift {
-  return value === 'evening' ? 'evening' : 'morning'
-}
-
-/** True on an Oct–Feb date once the fixed winter shifts are in effect. */
-export function usesWinterShifts(dateStr?: string): boolean {
-  if (!dateStr || dateStr < WINTER_SHIFT_START) return false
-  const month = Number(dateStr.slice(5, 7))
-  return month >= 10 || month <= 2
-}
-
-/** Clock time after which work counts as overtime, for a winter shift. */
-export function winterOtStart(shift: Shift): string {
-  return shift === 'evening' ? EVENING_OT_START : MORNING_OT_START
-}
+// ── Shifts and the lunch hour ──────────────────────────────────────────────
+// Morning staff take an hour for lunch; evening staff work straight through.
+// There is deliberately no shift field: people move between shifts constantly,
+// so anything stored per employee would be wrong most of the time, and guessing
+// the shift from the clock-in time misreads a late arrival as an evening start.
+//
+// Instead the lunch hour detects itself. It is deducted only when the working
+// window actually covers 1–2 PM, so a morning shift (08:30–17:30) always loses
+// the hour and an evening shift (from 2 PM) never does — without the system
+// needing to know, or be told, which shift anyone is on.
+//
+// For anyone working their normal shift this matches fixed 5:30 PM / 10 PM
+// overtime boundaries exactly:
+//   Morning 08:30–17:30 → 9 clock − 1 lunch = 8 worked → no overtime
+//   Evening 14:00–22:00 → 8 clock − 0 lunch = 8 worked → no overtime
+// and a late arrival simply has to work the full 8 hours before overtime starts.
 
 /**
  * Plain-language description of the duty rule in force on a date, so the HR
  * attendance forms can never describe a rule other than the one being applied.
  */
-export function dutyHints(date: string, shift: Shift = 'morning'): {
-  dutyStart: string
-  overtime: string
-} {
-  if (usesWinterShifts(date)) {
-    return shift === 'evening'
-      ? { dutyStart: 'Evening shift starts 2:00 PM', overtime: 'Overtime after 10:00 PM' }
-      : { dutyStart: 'Morning shift starts 8:30 AM', overtime: 'Overtime after 5:30 PM (1 hr lunch)' }
-  }
+export function dutyHints(date: string): { dutyStart: string; overtime: string } {
   if (usesClockInAnchor(date)) {
-    return shift === 'evening'
-      ? { dutyStart: '8-hour duty starts at clock-in', overtime: 'Overtime after 8 hours from clock-in (no break)' }
-      : { dutyStart: '8-hour duty starts at clock-in', overtime: 'Overtime after 8 worked hours (1 hr lunch)' }
+    return {
+      dutyStart: '8-hour duty starts at clock-in',
+      overtime: 'Overtime after 8 worked hours (1 hr lunch if working 1–2 PM)',
+    }
   }
   return { dutyStart: 'Standard duty starts 8:30 AM', overtime: 'Overtime after 8 PM' }
 }
@@ -112,7 +85,6 @@ export function calcAttendanceBreakdown(
   checkOut: string,
   isFridayOrHoliday = false,
   date?: string,
-  shift: Shift = 'morning',
 ): AttendanceBreakdown | null {
   if (!checkIn || !checkOut) return null
 
@@ -123,22 +95,15 @@ export function calcAttendanceBreakdown(
   // 24 hours paid a full day of overtime for no work.
   if (outM < inM) outM += 24 * 60
 
-  const winterShift = usesWinterShifts(date)
   const anchored = usesClockInAnchor(date)
 
-  const lunchOverlap = () => {
-    if (inM >= LUNCH_END_M || outM <= LUNCH_START_M) return 0
-    return Math.max(0, Math.min(outM, LUNCH_END_M) - Math.max(inM, LUNCH_START_M))
-  }
-
-  // Lunch (1–2 PM). From 1 Oct 2026 it follows the employee's shift in EVERY
-  // case — summer and winter, ordinary days, Fridays and public holidays alike:
-  // morning shift takes an hour, evening shift works straight through. Before
-  // that date lunch was deducted for everyone, which is preserved so saved
-  // historical records keep the breakdown they were calculated with.
-  const lunchDeduct = anchored
-    ? (shift === 'morning' ? lunchOverlap() : 0)
-    : lunchOverlap()
+  // Lunch (1–2 PM), deducted only when the working window actually covers it.
+  // This is what separates the shifts without any shift field: a morning shift
+  // spans 1–2 PM and loses the hour, an evening shift starting at 2 PM does not.
+  // It applies on every day — summer, winter, Friday and public holiday alike.
+  const lunchDeduct = inM >= LUNCH_END_M || outM <= LUNCH_START_M
+    ? 0
+    : Math.max(0, Math.min(outM, LUNCH_END_M) - Math.max(inM, LUNCH_START_M))
 
   const netMins = outM - inM - lunchDeduct
   const totalHours = Math.round((netMins / 60) * 4) / 4
@@ -159,28 +124,8 @@ export function calcAttendanceBreakdown(
     }
   }
 
-  // Regular day, October–February — fixed shift schedules. Overtime begins at a
-  // fixed clock time (17:30 morning / 22:00 evening) regardless of when the
-  // employee actually clocked in, so arriving late does not move the boundary.
-  if (winterShift) {
-    const otStartM = toMins(winterOtStart(shift))
-    const hoursWorked = Math.max(0, Math.min(totalHours, STANDARD_HOURS))
-    const normalOtActualHrs = outM > otStartM
-      ? Math.round(((outM - otStartM) / 60) * 4) / 4
-      : 0
-    const normalOtPaidHrs = Math.round(normalOtActualHrs * OT_MULTIPLIER * 4) / 4
-    return {
-      hoursWorked,
-      lunchDeducted: lunchDeduct > 0,
-      fixedOtHrs: 0,
-      normalOtActualHrs,
-      normalOtPaidHrs,
-      isFridayOrHoliday: false,
-    }
-  }
-
   // Regular day — from 1 Oct 2026 the 8-hour duty starts at clock-in and
-  // overtime is everything after those 8 clock hours.
+  // overtime is everything beyond 8 WORKED hours (lunch already excluded above).
   if (anchored) {
     const hoursWorked = Math.max(0, Math.min(totalHours, STANDARD_HOURS))
     const normalOtActualHrs = Math.round(Math.max(0, totalHours - STANDARD_HOURS) * 4) / 4

@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
-import { calcAttendanceBreakdown, isFriday, kuwaitISODate, kuwaitTimeHHMM, payableOvertimeHours, normalizeShift } from '@/lib/attendance'
+import { calcAttendanceBreakdown, isFriday, kuwaitISODate, kuwaitTimeHHMM, payableOvertimeHours } from '@/lib/attendance'
 
 async function resolveStaff(userId: string) {
   const admin = createAdminClient() as any
   const { data } = await admin
     .from('staff')
-    .select('id, organization_id, overtime_eligible, friday_ot_amount, shift')
+    .select('id, organization_id, overtime_eligible, friday_ot_amount')
     .eq('user_id', userId)
     .eq('employment_status', 'active')
     .maybeSingle()
-  return data as { id: string; organization_id: string; overtime_eligible: boolean; friday_ot_amount: number | null; shift: string | null } | null
+  return data as { id: string; organization_id: string; overtime_eligible: boolean; friday_ot_amount: number | null } | null
 }
 
 export async function GET() {
@@ -89,10 +89,7 @@ export async function POST(request: NextRequest) {
 
     // A day already flagged as a public holiday follows the same rules as Friday.
     const isHolidayToday = isFriday(today) || Boolean(existing.is_public_holiday)
-    // The employee's own shift decides when overtime starts in Oct–Feb.
-    const breakdown = calcAttendanceBreakdown(
-      existing.check_in, nowTime, isHolidayToday, today, normalizeShift(staff.shift),
-    )
+    const breakdown = calcAttendanceBreakdown(existing.check_in, nowTime, isHolidayToday, today)
 
     // Friday / public-holiday OT is paid to EVERY employee, whether or not they are
     // overtime-eligible — but only on a day they actually worked. On such a day
