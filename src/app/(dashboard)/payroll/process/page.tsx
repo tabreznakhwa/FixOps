@@ -51,12 +51,18 @@ export default async function PayrollProcessPage({
     total_overtime: number; total_deductions: number; total_net: number; processed_at: string
   } | null
 
-  // Staff list
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+  // Staff list — anyone who joined after this month ended was not an employee
+  // yet, so they get no payslip for it at all.
   const { data: staffRaw } = await admin
     .from('staff')
     .select('*')
     .eq('organization_id', orgId)
     .eq('employment_status', 'active')
+    .lte('joining_date', endDate)
     .order('full_name')
 
   const staff = (staffRaw ?? []) as Array<{
@@ -69,9 +75,6 @@ export default async function PayrollProcessPage({
 
   // Attendance for this month — filter by this org's staff IDs
   const staffIds = staff.map(s => s.id)
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-  const lastDay = new Date(year, month, 0).getDate()
-  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
   const { data: attendanceRaw } = staffIds.length > 0
     ? await admin

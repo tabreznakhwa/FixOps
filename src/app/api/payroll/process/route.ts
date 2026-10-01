@@ -41,11 +41,18 @@ export async function POST(request: Request) {
     .maybeSingle()
   if (existingRun) return NextResponse.json({ error: 'Payroll already processed for this month' }, { status: 409 })
 
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+  // Anyone who joined after this month ended was not an employee yet, so they
+  // get no payslip for it at all.
   const { data: staffRaw } = await adminDb
     .from('staff')
     .select('*')
     .eq('organization_id', orgId)
     .eq('employment_status', 'active')
+    .lte('joining_date', endDate)
 
   const staff = (staffRaw ?? []) as Array<{
     id: string; basic_salary: number; housing_allowance: number; transport_allowance: number
@@ -59,10 +66,6 @@ export async function POST(request: Request) {
   // Guard: refuse to process if any active employee has no attendance rows for
   // the month. Absence is derived from attendance rows, so zero rows would be
   // read as zero absence and the employee would be paid full salary silently.
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-  const lastDay = new Date(year, month, 0).getDate()
-  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-
   const { data: attendanceStaffRaw } = await adminDb
     .from('attendance')
     .select('staff_id')
