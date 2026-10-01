@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/audit'
+import { normalizeShift } from '@/lib/attendance'
 
 export async function PATCH(
   request: NextRequest,
@@ -82,6 +83,7 @@ export async function PATCH(
       opening_loan: newOpeningLoan,
       advance_balance: newAdvanceBalance,
       overtime_eligible: Boolean(body.overtime_eligible),
+      shift: normalizeShift(body.shift),
       bank_name: body.bank_name || null,
       iban: body.iban || null,
       employment_status: body.employment_status,

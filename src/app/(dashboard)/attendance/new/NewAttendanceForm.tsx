@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, DUTY_START, DUTY_END } from '@/lib/attendance'
+import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, normalizeShift, dutyHints, DUTY_START, DUTY_END } from '@/lib/attendance'
 
 interface StaffMember {
   id: string
   full_name: string
   designation: string | null
   friday_ot_amount: number
+  shift: string | null
 }
 
 interface Props {
@@ -69,7 +70,10 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
   const anchored = usesClockInAnchor(date)
 
   const showTimes = status === 'present' || status === 'half_day'
-  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut, isFridayOrHoliday, date) : null
+  // Oct–Feb overtime starts at a fixed time that depends on the employee's shift.
+  const shift = normalizeShift(staff.find((s) => s.id === staffId)?.shift)
+  const hints = dutyHints(date, shift)
+  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut, isFridayOrHoliday, date, shift) : null
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -245,7 +249,7 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
                 />
                 {!isFridayOrHoliday && (
                   <p className="text-xs text-slate-400 mt-1">
-                    {anchored ? '8-hour duty starts at clock-in' : 'Standard duty starts 8:30 AM'}
+                    {hints.dutyStart}
                   </p>
                 )}
               </div>
@@ -259,7 +263,7 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
                 />
                 {!isFridayOrHoliday && (
                   <p className="text-xs text-slate-400 mt-1">
-                    {anchored ? 'Overtime after 8 hours from clock-in' : 'Overtime after 8 PM'}
+                    {hints.overtime}
                   </p>
                 )}
               </div>

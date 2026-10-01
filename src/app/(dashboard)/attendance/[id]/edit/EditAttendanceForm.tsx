@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, DUTY_START, DUTY_END } from '@/lib/attendance'
+import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, normalizeShift, dutyHints, DUTY_START, DUTY_END } from '@/lib/attendance'
 
 interface Record {
   id: string; date: string; status: string
@@ -9,7 +9,7 @@ interface Record {
   hours_worked: number; overtime_hours: number
   notes: string | null; is_public_holiday: boolean
   friday_ot_amount: number
-  staff: { full_name: string; friday_ot_amount: number } | null
+  staff: { full_name: string; friday_ot_amount: number; shift: string | null } | null
 }
 
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white'
@@ -34,9 +34,12 @@ export function EditAttendanceForm({ record }: { record: Record }) {
   const isFridayDate = isFriday(date)
   const isFridayOrHoliday = isFridayDate || isPublicHoliday
   const anchored = usesClockInAnchor(date)
+  const hints = dutyHints(date, normalizeShift(record.staff?.shift))
 
   const showTimes = status === 'present' || status === 'half_day'
-  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut, isFridayOrHoliday, date) : null
+  // Oct–Feb overtime starts at a fixed time that depends on the employee's shift.
+  const shift = normalizeShift(record.staff?.shift)
+  const breakdown = showTimes ? calcAttendanceBreakdown(checkIn, checkOut, isFridayOrHoliday, date, shift) : null
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -136,7 +139,7 @@ export function EditAttendanceForm({ record }: { record: Record }) {
                 <input type="time" value={checkIn} onChange={e => setCheckIn(e.target.value)} className={inputClass} />
                 {!isFridayOrHoliday && (
                   <p className="text-xs text-slate-400 mt-1">
-                    {anchored ? '8-hour duty starts at clock-in' : 'Standard duty starts 8:30 AM'}
+                    {hints.dutyStart}
                   </p>
                 )}
               </div>
@@ -145,7 +148,7 @@ export function EditAttendanceForm({ record }: { record: Record }) {
                 <input type="time" value={checkOut} onChange={e => setCheckOut(e.target.value)} className={inputClass} />
                 {!isFridayOrHoliday && (
                   <p className="text-xs text-slate-400 mt-1">
-                    {anchored ? 'Overtime after 8 hours from clock-in' : 'Overtime after 8 PM'}
+                    {hints.overtime}
                   </p>
                 )}
               </div>

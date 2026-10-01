@@ -34,7 +34,7 @@ export default async function NewAttendancePage({
 
   let staffQuery = supabase
     .from('staff')
-    .select('id, full_name, designation, friday_ot_amount')
+    .select('id, full_name, designation, friday_ot_amount, shift')
     .eq('employment_status', 'active')
     .order('full_name')
 
@@ -49,6 +49,7 @@ export default async function NewAttendancePage({
     full_name: string
     designation: string | null
     friday_ot_amount: number
+    shift: string | null
   }>
 
   const dateLockedToToday = !['owner', 'admin', 'hr', 'manager'].includes(userRole)
