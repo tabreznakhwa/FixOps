@@ -49,11 +49,13 @@ export default async function PayslipPage({
 
   const { data: runRaw } = await admin
     .from('salary_runs')
-    .select('salary_month, salary_year, status')
+    .select('salary_month, salary_year, status, processed_at')
     .eq('id', runId)
     .eq('organization_id', viewer.organization_id)
     .single()
-  const run = runRaw as { salary_month: number; salary_year: number; status: string } | null
+  const run = runRaw as {
+    salary_month: number; salary_year: number; status: string; processed_at: string | null
+  } | null
 
   const { data: slipRaw } = await admin
     .from('salary_slips')
@@ -277,7 +279,14 @@ export default async function PayslipPage({
 
           <div className="px-8 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
             <span>This is a computer-generated payslip and does not require a signature.</span>
-            <span>{new Date().toLocaleDateString('en-GB')}</span>
+            {/* The date payroll was processed, not when this page is opened. Using
+                new Date() here stamped every payslip with today, so July's slip
+                printed an October date and changed each time it was reopened. */}
+            <span>
+              {run.processed_at
+                ? `Issued: ${new Date(run.processed_at).toLocaleDateString('en-GB')}`
+                : ''}
+            </span>
           </div>
         </div>
       </div>
