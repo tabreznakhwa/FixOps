@@ -126,16 +126,17 @@ export default async function PayslipPage({
   ].filter((e) => e.amount > 0)
 
   // Advance balance remaining as of THIS slip's own deduction — frozen at
-  // processing time (see migration 041), not the current live balance,
-  // so a later month's deduction can't retroactively change what an
-  // already-issued payslip shows. Slips processed before that migration
-  // have no frozen value; fall back to the live balance for those only.
-  let remainingAdvance = slip.advance_balance_after
-  if (remainingAdvance === null) {
-    const { data: staffBalanceRaw } = await admin
-      .from('staff').select('advance_balance').eq('id', staffId).maybeSingle()
-    remainingAdvance = (staffBalanceRaw as { advance_balance: number | null } | null)?.advance_balance ?? 0
-  }
+  // processing time (see migration 041), not the current live balance, so a
+  // later month's deduction can't retroactively change what an already-issued
+  // payslip shows.
+  //
+  // Slips processed before that migration have no frozen value. This used to
+  // fall back to the live balance, which printed today's number on every past
+  // payslip — so a loan being repaid monthly appeared to never go down. A
+  // payslip is a financial document given to the employee: showing nothing is
+  // better than showing a figure that is confidently wrong, so an unknown
+  // balance is now omitted. Migration 042 backfills the historical slips.
+  const remainingAdvance = slip.advance_balance_after
 
   const deductions = [
     ...(absentDeduction > 0 ? [{
@@ -230,7 +231,7 @@ export default async function PayslipPage({
                 <span className="text-slate-700">Total Deductions</span>
                 <span className="text-red-600">{formatCurrency(totalDeductionsAmt)}</span>
               </div>
-              {slip.advance_deduction > 0 && (
+              {slip.advance_deduction > 0 && remainingAdvance !== null && (
                 <div className="mt-2 flex justify-between text-xs text-slate-500">
                   <span>Advance balance remaining</span>
                   <span className={remainingAdvance > 0 ? 'font-semibold text-amber-600' : 'font-semibold text-green-600'}>
