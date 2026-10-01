@@ -1,64 +1,104 @@
 -- Migration 041 added salary_slips.advance_balance_after (the advance balance
--- frozen as of that slip's own deduction) but only backfilled two slips, for
+-- frozen as of that slip's own deduction) but backfilled only two slips, for
 -- EMP00016. Every other historical slip kept advance_balance_after = NULL, and
 -- the payslip page fell back to the LIVE staff.advance_balance for those — so
--- every past payslip printed today's balance. A loan being repaid monthly
--- therefore showed the same remaining balance on every single payslip, which is
--- what was reported: Dinesh Poojary's July, August and September slips all read
--- 200 although 50 was recovered each month.
+-- every past payslip printed today's figure. A loan repaid monthly appeared to
+-- never go down: Dinesh Poojary's July, August and September slips all read
+-- 200 although 50 was recovered each month, when the truth is 300, 250, 200.
 --
--- The page no longer falls back to the live balance (it omits an unknown
--- balance instead). This migration recovers the real historical values.
+-- The page no longer falls back to the live balance. This migration recovers
+-- the real historical values.
 --
--- Method: walk backwards. Undoing a month's own deduction lands on the balance
--- as it stood after the previous month:
---     after(N) = after(N+1) + deduction(N+1)
--- September 2026 was processed after migration 041 and so already carries a
--- correct frozen value; it anchors the chain.
+-- METHOD — forward reconstruction from first principles, per slip:
 --
--- ASSUMPTION — verify before running: no new advance or loan was ISSUED between
--- two consecutive payroll runs. Issuing one raises staff.advance_balance outside
--- this chain, which would make the walk overstate the earlier months. Check with:
+--   balance_after = opening_advance + opening_loan
+--                 + advances issued   on/before that run's processed_at
+--                 - cash repayments   on/before that run's processed_at
+--                 - payroll deductions for that run and every earlier run
 --
---   select s.full_name, sa.type, sa.amount, sa.issued_date
---   from staff_advances sa join staff s on s.id = sa.staff_id
---   where sa.issued_date >= '2026-07-01'
---   order by s.full_name, sa.issued_date;
+-- An earlier draft walked the chain backwards from the newest slip. That was
+-- wrong: it silently ignored advances issued, and cash repaid, between two
+-- runs. Sher Ali Shaikh (40 repaid) and Rafique Mohimtuley (100 repaid) would
+-- both have been given understated August balances. Reconstructing forwards
+-- from the ledger handles those, because the dates decide what had happened by
+-- the time each run was processed.
 --
--- If that returns rows inside the payroll window, fix those employees by hand
--- instead of trusting the walk for them.
+-- The formula is the same one that reconciles every employee's CURRENT balance
+-- exactly — verified against all 12 staff with advance activity — so it is not
+-- a guess about how the balance is derived.
 --
--- Only fills NULLs, so it never overwrites a value that was frozen correctly at
--- processing time (including EMP00016's hand-corrected slips). Re-running it is
--- harmless.
+-- Only fills NULLs: values frozen correctly at processing time (September, and
+-- EMP00016's hand-corrected slips) are never overwritten, and re-running is
+-- harmless. Run the verification query at the bottom FIRST — it checks this
+-- formula against the slips that already carry a known-good value.
 
-do $$
-declare
-  touched integer;
-begin
-  -- One pass per month-step backwards; 24 covers two years of history.
-  for i in 1..24 loop
-    update salary_slips ss
-    set advance_balance_after = nxt.advance_balance_after + nxt.advance_deduction
-    from salary_slips nxt
-    join salary_runs sr_nxt on sr_nxt.id = nxt.salary_run_id
-    join salary_runs sr_cur on true
-    where ss.advance_balance_after is null
-      and ss.salary_run_id = sr_cur.id
-      and nxt.staff_id = ss.staff_id
-      and nxt.advance_balance_after is not null
-      and (sr_nxt.salary_year * 12 + sr_nxt.salary_month)
-        = (sr_cur.salary_year * 12 + sr_cur.salary_month) + 1;
+with slip_periods as (
+  select
+    ss.id,
+    ss.staff_id,
+    ss.advance_deduction,
+    sr.salary_year * 12 + sr.salary_month as period,
+    sr.processed_at::date                 as processed_on
+  from salary_slips ss
+  join salary_runs sr on sr.id = ss.salary_run_id
+),
+computed as (
+  select
+    sp.id,
+    coalesce(s.opening_advance, 0) + coalesce(s.opening_loan, 0)
+      + coalesce((
+          select sum(sa.amount) from staff_advances sa
+          where sa.staff_id = sp.staff_id and sa.issued_date <= sp.processed_on
+        ), 0)
+      - coalesce((
+          select sum(r.amount) from staff_advance_repayments r
+          where r.staff_id = sp.staff_id and r.repayment_date <= sp.processed_on
+        ), 0)
+      - coalesce((
+          select sum(earlier.advance_deduction) from slip_periods earlier
+          where earlier.staff_id = sp.staff_id and earlier.period <= sp.period
+        ), 0) as balance_after
+  from slip_periods sp
+  join staff s on s.id = sp.staff_id
+)
+update salary_slips ss
+set advance_balance_after = greatest(0, c.balance_after)
+from computed c
+where c.id = ss.id
+  and ss.advance_balance_after is null;
 
-    get diagnostics touched = row_count;
-    exit when touched = 0;
-  end loop;
-end $$;
 
--- Anything still NULL has no later slip to walk back from — report it rather
--- than guessing. These will simply show no remaining-balance line.
--- select s.full_name, sr.salary_year, sr.salary_month
--- from salary_slips ss
--- join salary_runs sr on sr.id = ss.salary_run_id
--- join staff s on s.id = ss.staff_id
--- where ss.advance_balance_after is null and ss.advance_deduction > 0;
+-- ── VERIFICATION — run this BEFORE the update above ────────────────────────
+-- Recomputes the formula for slips that ALREADY hold a trusted frozen value
+-- (September 2026, and EMP00016's corrected July/August). Every row should show
+-- matches = true. If any row differs, do not run the update — the ledger holds
+-- something this formula does not model.
+--
+-- with slip_periods as (
+--   select ss.id, ss.staff_id, ss.advance_deduction, ss.advance_balance_after,
+--          sr.salary_year * 12 + sr.salary_month as period,
+--          sr.processed_at::date as processed_on
+--   from salary_slips ss join salary_runs sr on sr.id = ss.salary_run_id
+-- )
+-- select s.full_name, sp.period, sp.advance_balance_after as stored,
+--   greatest(0,
+--     coalesce(s.opening_advance,0) + coalesce(s.opening_loan,0)
+--     + coalesce((select sum(sa.amount) from staff_advances sa
+--         where sa.staff_id = sp.staff_id and sa.issued_date <= sp.processed_on), 0)
+--     - coalesce((select sum(r.amount) from staff_advance_repayments r
+--         where r.staff_id = sp.staff_id and r.repayment_date <= sp.processed_on), 0)
+--     - coalesce((select sum(e.advance_deduction) from slip_periods e
+--         where e.staff_id = sp.staff_id and e.period <= sp.period), 0)
+--   ) as recomputed,
+--   abs(sp.advance_balance_after - greatest(0,
+--     coalesce(s.opening_advance,0) + coalesce(s.opening_loan,0)
+--     + coalesce((select sum(sa.amount) from staff_advances sa
+--         where sa.staff_id = sp.staff_id and sa.issued_date <= sp.processed_on), 0)
+--     - coalesce((select sum(r.amount) from staff_advance_repayments r
+--         where r.staff_id = sp.staff_id and r.repayment_date <= sp.processed_on), 0)
+--     - coalesce((select sum(e.advance_deduction) from slip_periods e
+--         where e.staff_id = sp.staff_id and e.period <= sp.period), 0)
+--   )) < 0.01 as matches
+-- from slip_periods sp join staff s on s.id = sp.staff_id
+-- where sp.advance_balance_after is not null
+-- order by s.full_name, sp.period;

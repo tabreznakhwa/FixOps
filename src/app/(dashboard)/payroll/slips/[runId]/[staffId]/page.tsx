@@ -233,7 +233,10 @@ export default async function PayslipPage({
                 <span className="text-slate-700">Total Deductions</span>
                 <span className="text-red-600">{formatCurrency(totalDeductionsAmt)}</span>
               </div>
-              {slip.advance_deduction > 0 && remainingAdvance !== null && (
+              {/* Show the outstanding balance whenever there is one, not only in
+                  months where something was recovered — an employee carrying a
+                  loan should see where it stands on every payslip. */}
+              {remainingAdvance !== null && (slip.advance_deduction > 0 || remainingAdvance > 0) && (
                 <div className="mt-2 flex justify-between text-xs text-slate-500">
                   <span>Advance balance remaining</span>
                   <span className={remainingAdvance > 0 ? 'font-semibold text-amber-600' : 'font-semibold text-green-600'}>
