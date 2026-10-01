@@ -21,7 +21,9 @@ const navGroups: Array<{
   label: string
   module: ModuleKey
   icon: ElementType
-  items: { href: string; label: string; icon: ElementType; exact?: boolean; excludeRoles?: string[]; onlyRoles?: string[] }[]
+  // selfService: the item shows the viewer only their own record, so it stays in the
+  // sidebar even when the role has no access to the group's module.
+  items: { href: string; label: string; icon: ElementType; exact?: boolean; excludeRoles?: string[]; onlyRoles?: string[]; selfService?: boolean }[]
 }> = [
   {
     label: 'Operations',
@@ -80,13 +82,13 @@ const navGroups: Array<{
     items: [
       { href: '/staff', label: 'Staff', icon: UserCheck, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/staff/locations', label: 'Technician Locations', icon: MapPin, excludeRoles: ['technician', 'attendance_kiosk'] },
-      { href: '/my-attendance', label: 'My Attendance', icon: Clock },
+      { href: '/my-attendance', label: 'My Attendance', icon: Clock, selfService: true },
       { href: '/attendance', label: 'Attendance', icon: CalendarCheck, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/attendance/friday-rotation', label: 'Friday Rotation', icon: CalendarClock, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/payroll', label: 'Payroll', icon: BarChart3, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/payroll/process', label: 'Payslips', icon: Printer, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/payroll/leave-settlement', label: 'Leave Settlement', icon: Wallet, onlyRoles: ['owner', 'admin', 'manager'] },
-      { href: '/payroll/my-payslips', label: 'My Payslips', icon: Printer, onlyRoles: ['attendance_kiosk', 'technician'] },
+      { href: '/payroll/my-payslips', label: 'My Payslips', icon: Printer, onlyRoles: ['attendance_kiosk', 'technician'], selfService: true },
       { href: '/staff/ledger', label: 'Staff Ledger', icon: FileBarChart, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/staff/performance', label: 'Staff Performance', icon: Trophy, excludeRoles: ['technician', 'attendance_kiosk'] },
     ],
@@ -153,21 +155,27 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
     )
   }
 
-  const visibleGroups = navGroups.filter((g) => (moduleAccess[g.module] ?? 'none') !== 'none')
+  // Items this role may see in a group. Without module access only self-service
+  // items survive, so e.g. a technician keeps "My Attendance" and "My Payslips"
+  // while the rest of HR & Payroll stays hidden.
+  function itemsForGroup(group: typeof navGroups[0]) {
+    const noModuleAccess = (moduleAccess[group.module] ?? 'none') === 'none'
+    return group.items.filter(
+      ({ excludeRoles, onlyRoles, selfService }) =>
+        !excludeRoles?.includes(user.role) &&
+        (!onlyRoles || onlyRoles.includes(user.role)) &&
+        (!noModuleAccess || selfService)
+    )
+  }
+
+  const visibleGroups = navGroups.filter((g) => itemsForGroup(g).length > 0)
 
   function groupPrimaryHref(group: typeof navGroups[0]) {
-    const first = group.items.find(
-      ({ excludeRoles, onlyRoles }) =>
-        !excludeRoles?.includes(user.role) && (!onlyRoles || onlyRoles.includes(user.role))
-    )
-    return first?.href ?? '/dashboard'
+    return itemsForGroup(group)[0]?.href ?? '/dashboard'
   }
 
   const activeGroupData = visibleGroups.find(g => g.label === activeGroup) ?? null
-  const activeGroupItems = activeGroupData?.items.filter(
-    ({ excludeRoles, onlyRoles }) =>
-      !excludeRoles?.includes(user.role) && (!onlyRoles || onlyRoles.includes(user.role))
-  ) ?? []
+  const activeGroupItems = activeGroupData ? itemsForGroup(activeGroupData) : []
 
   return (
     <>
@@ -348,10 +356,7 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
                   </button>
                   {!mobileCollapsed[group.label] && (
                     <div className="mt-1 space-y-0.5">
-                      {group.items
-                        .filter(({ excludeRoles, onlyRoles }) =>
-                          !excludeRoles?.includes(user.role) && (!onlyRoles || onlyRoles.includes(user.role))
-                        )
+                      {itemsForGroup(group)
                         .map(({ href, label, icon: Icon, exact }) => {
                           const active = exact ? pathname === href : (pathname === href || pathname.startsWith(href + '/'))
                           return (
