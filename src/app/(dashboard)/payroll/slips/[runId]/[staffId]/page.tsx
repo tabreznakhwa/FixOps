@@ -1,12 +1,17 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils'
 import { PrintButton } from './PrintButton'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { resolveBack } from '@/lib/backNav'
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December']
+
+// Roles permitted to open any employee's payslip. Everyone else may only open
+// their own, matched through staff.user_id.
+const PAYROLL_VIEWER_ROLES = ['owner', 'admin', 'manager', 'hr', 'accounts']
 
 export default async function PayslipPage({
   params,
@@ -19,10 +24,34 @@ export default async function PayslipPage({
   const { runId, staffId } = await params
   const admin = createAdminClient() as any
 
+  // This page reads through the service-role client, which bypasses RLS, so it
+  // must authorise the caller itself: confirm the session, keep the lookup inside
+  // the caller's own organization, and let non-payroll roles through only for
+  // their own payslip. Without this, any signed-in user could read any
+  // employee's salary, bank details and ID by editing the URL.
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: viewerRaw } = await admin
+    .from('users').select('organization_id, role').eq('id', user.id).single()
+  const viewer = viewerRaw as { organization_id: string; role: string } | null
+  if (!viewer?.organization_id) redirect('/login')
+
+  if (!PAYROLL_VIEWER_ROLES.includes(viewer.role)) {
+    const { data: ownStaffRaw } = await admin
+      .from('staff').select('id').eq('user_id', user.id).maybeSingle()
+    const ownStaffId = (ownStaffRaw as { id: string } | null)?.id
+    if (!ownStaffId || ownStaffId !== staffId) {
+      redirect('/dashboard?error=unauthorized')
+    }
+  }
+
   const { data: runRaw } = await admin
     .from('salary_runs')
     .select('salary_month, salary_year, status')
     .eq('id', runId)
+    .eq('organization_id', viewer.organization_id)
     .single()
   const run = runRaw as { salary_month: number; salary_year: number; status: string } | null
 
@@ -31,6 +60,7 @@ export default async function PayslipPage({
     .select('*')
     .eq('salary_run_id', runId)
     .eq('staff_id', staffId)
+    .eq('organization_id', viewer.organization_id)
     .maybeSingle()
   const slip = slipRaw as {
     basic_salary: number; housing_allowance: number; transport_allowance: number
@@ -46,6 +76,7 @@ export default async function PayslipPage({
     .from('staff')
     .select('staff_code, full_name, designation, department, joining_date, bank_name, iban, emirates_id')
     .eq('id', staffId)
+    .eq('organization_id', viewer.organization_id)
     .maybeSingle()
   const staff = staffRaw as {
     staff_code: string; full_name: string; designation: string | null; department: string | null

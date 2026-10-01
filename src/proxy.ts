@@ -118,10 +118,26 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/login?error=account_disabled', request.url))
     }
 
-    // Technician: block supplier/vendor routes and stock-trial — stock list only
-    if (profile.role === 'technician' && (
+    // Self-service HR pages every employee may open: their own attendance and
+    // their own payslips. /payroll/slips authorises ownership inside the page.
+    const isOwnHrPath =
+      pathname.startsWith('/my-attendance') ||
+      pathname.startsWith('/payroll/my-payslips') ||
+      pathname.startsWith('/payroll/slips')
+
+    // Technician: block supplier/vendor routes, stock-trial, and all of HR/payroll
+    // except their own payslips. The sidebar already hides these links, but that is
+    // cosmetic — without this a technician could open /payroll/process or /staff by
+    // typing the URL and read every employee's salary.
+    if (profile.role === 'technician' && !isOwnHrPath && (
       pathname.startsWith('/suppliers') ||
-      pathname.startsWith('/inventory/stock-trial')
+      pathname.startsWith('/inventory/stock-trial') ||
+      pathname.startsWith('/inventory/purchase-invoices') ||
+      pathname.startsWith('/inventory/opening-stock') ||
+      pathname.startsWith('/inventory/parts-used') ||
+      pathname.startsWith('/payroll') ||
+      pathname.startsWith('/staff') ||
+      pathname.startsWith('/attendance')
     )) {
       return NextResponse.redirect(new URL('/dashboard?error=unauthorized', request.url))
     }
@@ -135,8 +151,10 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/my-attendance', request.url))
     }
 
-    // Skip API routes (enforced at DB/RLS) and locked roles (always full access)
-    if (!pathname.startsWith('/api') && !LOCKED_ROLES.includes(profile.role)) {
+    // Skip API routes (enforced at DB/RLS), locked roles (always full access), and
+    // self-service pages, which are scoped to the caller's own record inside the page
+    // and so must stay reachable even for roles with no HR module access.
+    if (!pathname.startsWith('/api') && !LOCKED_ROLES.includes(profile.role) && !isOwnHrPath) {
       const module = getRouteModule(pathname)
       if (module) {
         // Check DB for org-customised permission, fall back to system default
