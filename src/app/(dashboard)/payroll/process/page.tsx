@@ -89,11 +89,13 @@ export default async function PayrollProcessPage({
 
   const staffRateMap = Object.fromEntries(staff.map(s => [s.id, (s as any).friday_ot_amount ?? 0]))
   const eligibleMap = Object.fromEntries(staff.map(s => [s.id, s.overtime_eligible]))
+  const attendanceStaffIds = new Set<string>()
 
   for (const rec of (attendanceRaw ?? []) as Array<{
     staff_id: string; status: string; overtime_hours: number
     friday_ot_amount: number; date: string; is_public_holiday: boolean
   }>) {
+    attendanceStaffIds.add(rec.staff_id)
     if (rec.status === 'absent') {
       absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 1
     } else if (rec.status === 'half_day') {
@@ -118,6 +120,8 @@ export default async function PayrollProcessPage({
       }
     }
   }
+
+  const staffWithNoAttendance = staff.filter(s => !attendanceStaffIds.has(s.id))
 
   // If run exists, load slips
   let slips: Array<{
@@ -227,6 +231,7 @@ export default async function PayrollProcessPage({
             absentDaysMap={absentDaysMap}
             normalOtPaidHoursMap={normalOtPaidHoursMap}
             fridayOtAmountMap={fridayOtAmountMap}
+            staffWithNoAttendance={staffWithNoAttendance}
           />
         )}
 

@@ -97,12 +97,12 @@ export function calcLeaveSettlement(
 
   const fridayOvertime = inWindow.reduce((s, r) => s + (Number(r.friday_ot_amount) || 0), 0)
 
-  // Fixed OT is gated exactly as the monthly run gates it — eligible staff who
-  // actually worked a Friday or public holiday — then pro-rated for the window.
-  // It is summer-only, so in winter it is simply not paid.
+  // Fixed OT is gated exactly as the monthly run gates it — the eligible staff
+  // member's own monthly allowance — then pro-rated for the window. It is
+  // summer-only, so in winter it is simply not paid.
   const isFixedOtSeason = isFixedOtMonth(Number(monthStart.slice(5, 7)))
   const fixedOtMonthly =
-    isFixedOtSeason && staff.overtime_eligible && fridayOvertime > 0
+    isFixedOtSeason && staff.overtime_eligible
       ? Number(staff.fixed_overtime_monthly) || 0
       : 0
   const fixedOtEarned = fixedOtMonthly * proRataFactor

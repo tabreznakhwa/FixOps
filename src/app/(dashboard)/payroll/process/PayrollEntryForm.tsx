@@ -30,6 +30,7 @@ interface Props {
   absentDaysMap: Record<string, number>
   normalOtPaidHoursMap: Record<string, number>
   fridayOtAmountMap: Record<string, number>  // sum of attendance.friday_ot_amount (KWD)
+  staffWithNoAttendance?: { id: string; full_name: string }[]
 }
 
 interface EntryState {
@@ -37,7 +38,7 @@ interface EntryState {
   advance_deduction: string
 }
 
-export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPaidHoursMap, fridayOtAmountMap }: Props) {
+export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPaidHoursMap, fridayOtAmountMap, staffWithNoAttendance }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -95,10 +96,26 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
   const hasAnyOT = Object.values(normalOtPaidHoursMap).some(h => h > 0)
   const hasAnyFridayOT = Object.values(fridayOtAmountMap).some(a => a > 0)
 
+  const missingAttendance = staffWithNoAttendance ?? []
+  const blockedByMissing = missingAttendance.length > 0
+
   return (
     <div className="space-y-4">
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>
+      )}
+
+      {blockedByMissing && (
+        <div className="bg-red-50 border border-red-300 text-red-800 rounded-xl px-4 py-4 text-sm">
+          <p className="font-semibold mb-1">
+            Cannot process payroll — {missingAttendance.length} employee(s) have no attendance records this month
+          </p>
+          <p className="text-red-700">
+            Mark attendance (present / absent / leave) for:{' '}
+            <strong>{missingAttendance.map(s => s.full_name).join(', ')}</strong>. Without a
+            record they would be paid full salary as if they worked every day.
+          </p>
+        </div>
       )}
 
       <div className="flex gap-3 flex-wrap">
@@ -108,10 +125,10 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
             <span>Absent days detected from attendance. Basic + Allowance + Fixed OT deducted proportionally.</span>
           </div>
         )}
-        {!hasAnyAbsent && !hasAnyOT && (
+        {!hasAnyAbsent && !hasAnyOT && !blockedByMissing && (
           <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 text-slate-600 text-sm rounded-xl px-4 py-2.5">
             <Info className="w-4 h-4 flex-shrink-0" />
-            <span>No attendance records found for this month — full salary will be paid. Mark attendance first to apply OT and deductions.</span>
+            <span>No absences or overtime detected this month — all staff will be paid full salary.</span>
           </div>
         )}
         {hasAnyOT && (
@@ -138,7 +155,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
           </div>
           <button
             onClick={handleProcess}
-            disabled={loading}
+            disabled={loading || blockedByMissing}
             className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg disabled:opacity-60 transition-colors whitespace-nowrap flex-shrink-0"
           >
             {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing…</> : `Process ${staff.length} Payslips`}
@@ -181,7 +198,9 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
                 // only carry Friday/holiday hours beyond the first 8.
                 const normalOT = calcNormalOT(s.basic_salary ?? 0, normalOtPaidHours)
                 const fridayOT = fridayOtAmountMap[s.id] ?? 0
-                const fixedOT = isFixedOtMonth(month) && s.overtime_eligible && fridayOT > 0 ? (s.fixed_overtime_monthly ?? 0) : 0
+                // Fixed OT = the employee's own monthly allowance from their staff
+                // profile, paid Mar–Sep. Not tied to Friday work (that's fridayOT).
+                const fixedOT = isFixedOtMonth(month) && s.overtime_eligible ? (s.fixed_overtime_monthly ?? 0) : 0
 
                 const absentDays = absentDaysMap[s.id] ?? 0
                 const absentDeduct = calcAbsentDeduction(s, absentDays, fixedOT)

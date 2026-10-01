@@ -56,6 +56,31 @@ export async function POST(request: Request) {
 
   if (staff.length === 0) return NextResponse.json({ error: 'No active staff found' }, { status: 400 })
 
+  // Guard: refuse to process if any active employee has no attendance rows for
+  // the month. Absence is derived from attendance rows, so zero rows would be
+  // read as zero absence and the employee would be paid full salary silently.
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+  const { data: attendanceStaffRaw } = await adminDb
+    .from('attendance')
+    .select('staff_id')
+    .eq('organization_id', orgId)
+    .in('staff_id', staff.map(s => s.id))
+    .gte('date', startDate)
+    .lte('date', endDate)
+
+  const staffWithAttendance = new Set((attendanceStaffRaw ?? []).map((r: any) => r.staff_id))
+  const staffMissing = staff.filter(s => !staffWithAttendance.has(s.id))
+
+  if (staffMissing.length > 0) {
+    const names = staffMissing.map(s => (s as any).full_name ?? s.id).join(', ')
+    return NextResponse.json({
+      error: `Cannot process payroll — ${staffMissing.length} employee(s) have no attendance records this month. Mark attendance (present / absent / leave) for: ${names}.`,
+    }, { status: 400 })
+  }
+
   const entryMap = new Map(entries.map((e) => [e.staff_id, e]))
 
   let totalBasic = 0, totalAllowances = 0, totalOvertime = 0, totalDeductions = 0, totalNet = 0
@@ -75,9 +100,10 @@ export async function POST(request: Request) {
     const normalOT = hourlyRate * normalOtPaidHours
     // All staff get Friday/holiday OT; only overtime_eligible staff get daily normal OT
     const fridayOT = entry?.friday_ot_amount ?? 0
-    const hasWorkedFridayOrHoliday = fridayOT > 0
-    // Fixed OT is summer-only (Mar–Sep). In winter it's simply not paid.
-    const fixedOT = isFixedOtMonth(month) && s.overtime_eligible && hasWorkedFridayOrHoliday
+    // Fixed OT is a per-employee monthly allowance set by HR on the staff profile.
+    // It is summer-only (Mar–Sep) and independent of Friday/holiday work — Friday OT
+    // is a separate, attendance-driven payment.
+    const fixedOT = isFixedOtMonth(month) && s.overtime_eligible
       ? (s.fixed_overtime_monthly ?? 0)
       : 0
 
