@@ -112,6 +112,14 @@ export default async function BankBookPage({
     .order('withdrawal_date', { ascending: true })
     .limit(5000)
 
+  const { data: allBonusesRaw } = await (supabase as any)
+    .from('staff_bonuses')
+    .select('bonus_date, amount, payment_mode, notes, staff(full_name)')
+    .in('payment_mode', BANK_MODES)
+    .eq('is_voided', false)
+    .order('bonus_date', { ascending: true })
+    .limit(5000)
+
   type Receipt = { payment_date: string; payment_number: string; amount_received: number; payment_mode: string; reference_number: string | null; customers: { full_name: string } | null }
   type SupplierPay = { payment_date: string; amount_paid: number; payment_mode: string; reference_number: string | null; suppliers: { supplier_name: string } | null }
   type Expense = { expense_date: string; expense_number: string; category: string; description: string; amount: number; payment_method: string; reference_number: string | null }
@@ -121,6 +129,7 @@ export default async function BankBookPage({
   type AmcPay = { payment_date: string; amount: number; payment_mode: string; reference_number: string | null; amc_contracts: { contract_number: string; customers: { full_name: string } | null } | null }
   type Transfer = { transfer_date: string; from_account: string; to_account: string; amount: number; reference_number: string | null; notes: string | null }
   type Withdrawal = { withdrawal_date: string; amount: number; payment_mode: string; purpose: string | null; notes: string | null }
+  type Bonus = { bonus_date: string; amount: number; payment_mode: string; notes: string | null; staff: { full_name: string } | null }
 
   const allReceipts = (allReceiptsRaw ?? []) as Receipt[]
   const allSupplierPayments = (allSupplierPaymentsRaw ?? []) as SupplierPay[]
@@ -131,6 +140,7 @@ export default async function BankBookPage({
   const allAmcPayments = (allAmcPaymentsRaw ?? []) as AmcPay[]
   const allTransfers = (allTransfersRaw ?? []) as Transfer[]
   const allWithdrawals = (allWithdrawalsRaw ?? []) as Withdrawal[]
+  const allBonuses = (allBonusesRaw ?? []) as Bonus[]
 
   // Bank transfers: cash→bank = receipt, bank→cash = payment
   const bankTransfersIn = allTransfers.filter(t => t.to_account === 'bank')
@@ -147,6 +157,7 @@ export default async function BankBookPage({
     + allAdvances.reduce((s, r) => s + r.amount, 0)
     + bankTransfersOut.reduce((s, t) => s + t.amount, 0)
     + allWithdrawals.reduce((s, w) => s + w.amount, 0)
+    + allBonuses.reduce((s, b) => s + b.amount, 0)
   const closingBalance = openingBank + totalBankIn - totalBankOut
 
   // "Opening Balance b/f" for the table = balance at the START of the selected period
@@ -163,6 +174,7 @@ export default async function BankBookPage({
     + allAdvances.filter((a) => a.issued_date < from).reduce((s, a) => s + a.amount, 0)
     + bankTransfersOut.filter((t) => t.transfer_date < from).reduce((s, t) => s + t.amount, 0)
     + allWithdrawals.filter((w) => w.withdrawal_date < from).reduce((s, w) => s + w.amount, 0)
+    + allBonuses.filter((b) => b.bonus_date < from).reduce((s, b) => s + b.amount, 0)
   )
   const periodOpeningBalance = openingBank + prePeriodIn - prePeriodOut
   // Date label for the b/f row: one day before the period start
@@ -246,6 +258,13 @@ export default async function BankBookPage({
       narration: `Owner Withdrawal${w.purpose ? ` — ${w.purpose}` : ''}`,
       mode: MODE_LABELS[w.payment_mode] ?? w.payment_mode,
       receipts: 0, payments: w.amount,
+      ref: '—',
+    })),
+    ...allBonuses.filter((b) => inPeriod(b.bonus_date)).map((b) => ({
+      date: b.bonus_date,
+      narration: `Bonus — ${b.staff?.full_name ?? 'Staff'}${b.notes ? ` (${b.notes})` : ''}`,
+      mode: MODE_LABELS[b.payment_mode] ?? b.payment_mode,
+      receipts: 0, payments: b.amount,
       ref: '—',
     })),
   ].sort((a, b) => a.date.localeCompare(b.date))

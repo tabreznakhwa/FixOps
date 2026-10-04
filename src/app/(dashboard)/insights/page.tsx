@@ -140,14 +140,14 @@ export default async function InsightsPage() {
           <div className="px-5 py-4 border-b border-slate-100">
             <h3 className="font-semibold text-slate-900">Monthly Trend</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Net profit = revenue − parts cost − expenses − payroll
+              Net profit = revenue − parts cost − expenses − payroll − bonuses
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px]">
+            <table className="w-full min-w-[820px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {['Month', 'Revenue', 'Collected', 'Parts Cost', 'Expenses', 'Payroll', 'Net Profit'].map((h, i) => (
+                  {['Month', 'Revenue', 'Collected', 'Parts Cost', 'Expenses', 'Payroll', 'Bonuses', 'Net Profit'].map((h, i) => (
                     <th key={h} className={`text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 ${i === 0 ? 'text-left' : 'text-right'}`}>
                       {h}
                     </th>
@@ -163,6 +163,7 @@ export default async function InsightsPage() {
                     <td className="px-4 py-3 text-right text-sm text-slate-600">{formatCurrency(m.cogs)}</td>
                     <td className="px-4 py-3 text-right text-sm text-slate-600">{formatCurrency(m.expenses)}</td>
                     <td className="px-4 py-3 text-right text-sm text-slate-600">{formatCurrency(m.payroll)}</td>
+                    <td className="px-4 py-3 text-right text-sm text-slate-600">{formatCurrency(m.bonuses)}</td>
                     <td className={`px-4 py-3 text-right text-sm font-bold ${m.netProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                       {formatCurrency(m.netProfit)}
                     </td>

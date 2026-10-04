@@ -7,6 +7,7 @@ import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency, formatDate, daysUntil } from '@/lib/utils'
 import { StaffEditForm } from './StaffEditForm'
 import { StaffAdvancePanel } from './StaffAdvancePanel'
+import { StaffBonusPanel } from './StaffBonusPanel'
 import { StaffLoginLink } from './StaffLoginLink'
 
 export const metadata = { title: 'Staff Profile' }
@@ -38,8 +39,9 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
 
   // Login accounts available to link — same org, not already linked to a different staff record
   const { data: { user: authUser } } = await supabase.auth.getUser()
-  const { data: myProfileRaw } = await (supabase as any).from('users').select('organization_id').eq('id', authUser?.id).single()
-  const orgId = (myProfileRaw as { organization_id: string } | null)?.organization_id
+  const { data: myProfileRaw } = await (supabase as any).from('users').select('organization_id, role').eq('id', authUser?.id).single()
+  const orgId = (myProfileRaw as { organization_id: string; role: string } | null)?.organization_id
+  const canEdit = ['owner', 'admin', 'hr', 'manager'].includes((myProfileRaw as { role: string } | null)?.role ?? '')
 
   const { data: candidateUsersRaw } = await (supabase as any)
     .from('users')
@@ -84,6 +86,16 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
     .order('repayment_date', { ascending: false })
   const repayments = (repaymentsRaw ?? []) as Array<{
     id: string; amount: number; repayment_date: string; payment_method: string | null; notes: string | null
+  }>
+
+  const { data: bonusesRaw } = await (supabase as any)
+    .from('staff_bonuses')
+    .select('id, bonus_date, amount, payment_mode, notes')
+    .eq('staff_id', id)
+    .eq('is_voided', false)
+    .order('bonus_date', { ascending: false })
+  const bonuses = (bonusesRaw ?? []) as Array<{
+    id: string; bonus_date: string; amount: number; payment_mode: string; notes: string | null
   }>
 
   const visaDays = daysUntil(s.visa_expiry_date)
@@ -285,6 +297,12 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
               currentBalance={s.advance_balance ?? 0}
               advances={advances}
               repayments={repayments}
+            />
+
+            <StaffBonusPanel
+              staffId={s.id}
+              bonuses={bonuses}
+              canEdit={canEdit}
             />
 
             {s.notes && (

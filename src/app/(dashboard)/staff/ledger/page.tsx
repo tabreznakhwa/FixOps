@@ -74,6 +74,9 @@ export default async function StaffLedgerPage({
     id: string; amount: number; repayment_date: string
     payment_method: string | null; notes: string | null
   }
+  type StaffBonus = {
+    id: string; bonus_date: string; amount: number; payment_mode: string; notes: string | null
+  }
   type StaffInfo = {
     full_name: string; staff_code: string; designation: string | null
     department: string | null; advance_balance: number
@@ -83,9 +86,10 @@ export default async function StaffLedgerPage({
   let allSlips: SalarySlip[] = []
   let allAdvances: StaffAdvance[] = []
   let allRepayments: StaffRepayment[] = []
+  let allBonuses: StaffBonus[] = []
 
   if (staffId && canView) {
-    const [{ data: si }, { data: runsRaw }, { data: slipsRaw }, { data: advRaw }, { data: repayRaw }] = await Promise.all([
+    const [{ data: si }, { data: runsRaw }, { data: slipsRaw }, { data: advRaw }, { data: repayRaw }, { data: bonusRaw }] = await Promise.all([
       admin.from('staff').select('full_name, staff_code, designation, department, advance_balance').eq('id', staffId).single(),
       admin.from('salary_runs').select('id, salary_month, salary_year, status').eq('organization_id', orgId),
       admin.from('salary_slips')
@@ -99,6 +103,11 @@ export default async function StaffLedgerPage({
         .select('id, amount, repayment_date, payment_method, notes')
         .eq('staff_id', staffId)
         .order('repayment_date', { ascending: true }),
+      admin.from('staff_bonuses')
+        .select('id, bonus_date, amount, payment_mode, notes')
+        .eq('staff_id', staffId)
+        .eq('is_voided', false)
+        .order('bonus_date', { ascending: true }),
     ])
 
     staffInfo = si as StaffInfo | null
@@ -121,6 +130,7 @@ export default async function StaffLedgerPage({
 
     allAdvances = (advRaw ?? []) as StaffAdvance[]
     allRepayments = (repayRaw ?? []) as StaffRepayment[]
+    allBonuses = (bonusRaw ?? []) as StaffBonus[]
   }
 
   // Apply date filters
@@ -143,6 +153,13 @@ export default async function StaffLedgerPage({
     if (!fromDate && !toDate) return true
     if (fromDate && r.repayment_date < fromDate) return false
     if (toDate && r.repayment_date > toDate) return false
+    return true
+  })
+
+  const filteredBonuses = allBonuses.filter((b) => {
+    if (!fromDate && !toDate) return true
+    if (fromDate && b.bonus_date < fromDate) return false
+    if (toDate && b.bonus_date > toDate) return false
     return true
   })
 
@@ -209,6 +226,7 @@ export default async function StaffLedgerPage({
   const totalAdvIssued = filteredAdvances.reduce((s, a) => s + a.amount, 0)
   const totalRecovered = filteredSlips.reduce((s, sl) => s + (sl.advance_deduction ?? 0), 0)
   const totalAbsent = filteredSlips.reduce((s, sl) => s + (sl.absent_deduction ?? 0) + (sl.food_deduction ?? 0), 0)
+  const totalBonus = filteredBonuses.reduce((s, b) => s + b.amount, 0)
   const currentAdvBalance = staffInfo?.advance_balance ?? 0
 
   return (
@@ -294,6 +312,13 @@ export default async function StaffLedgerPage({
                       color: 'text-green-700',
                       bg: 'bg-white border-slate-200',
                     },
+                    {
+                      label: 'Bonuses Paid',
+                      value: formatCurrency(totalBonus),
+                      note: `${filteredBonuses.length} bonus${filteredBonuses.length !== 1 ? 'es' : ''}`,
+                      color: 'text-purple-700',
+                      bg: 'bg-white border-slate-200',
+                    },
                   ].map(({ label, value, note, color, bg }) => (
                     <div key={label} className={`rounded-xl border p-4 ${bg}`}>
                       <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">{label}</p>
@@ -372,6 +397,53 @@ export default async function StaffLedgerPage({
                                 ? 'Cleared'
                                 : formatCurrency(Math.abs(advanceLedger[advanceLedger.length - 1]?.balance ?? 0))}
                             </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bonuses */}
+                <div>
+                  <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+                    Bonuses
+                  </h2>
+                  {filteredBonuses.length === 0 ? (
+                    <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
+                      <p className="text-slate-400 text-sm">
+                        No bonuses recorded{fromDate || toDate ? ' in this date range' : ''}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-100">
+                            <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Date</th>
+                            <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Reason / Notes</th>
+                            <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Via</th>
+                            <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {filteredBonuses.map((b) => (
+                            <tr key={b.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">{formatDate(b.bonus_date)}</td>
+                              <td className="px-4 py-3.5 text-slate-800">{b.notes ?? '—'}</td>
+                              <td className="px-4 py-3.5">
+                                <span className="text-xs font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md capitalize">
+                                  {(b.payment_mode ?? '').replace('_', ' ')}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 text-right font-semibold text-red-600">{formatCurrency(b.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-slate-200 bg-slate-50">
+                            <td colSpan={3} className="px-5 py-3.5 text-sm font-bold text-slate-700">Total</td>
+                            <td className="px-5 py-3.5 text-right text-sm font-bold text-red-600">{formatCurrency(totalBonus)}</td>
                           </tr>
                         </tfoot>
                       </table>

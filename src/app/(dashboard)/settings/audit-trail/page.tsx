@@ -102,7 +102,7 @@ export default async function AuditTrailPage({
             <select name="entity" defaultValue={sp.entity ?? ''}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">All modules</option>
-              {['customer', 'complaint', 'work_order', 'invoice', 'payment', 'staff', 'user', 'inventory', 'supplier'].map((e) => (
+              {['customer', 'complaint', 'work_order', 'invoice', 'payment', 'staff', 'staff_bonus', 'user', 'inventory', 'supplier'].map((e) => (
                 <option key={e} value={e}>{e.replace('_', ' ')}</option>
               ))}
             </select>

@@ -31,10 +31,11 @@ export interface MonthMetrics {
   expenses: number
   purchases: number
   payroll: number
+  bonuses: number
   invoiceCount: number
   avgInvoiceValue: number
   grossProfit: number    // revenue - cogs
-  netProfit: number      // revenue - cogs - expenses - payroll
+  netProfit: number      // revenue - cogs - expenses - payroll - bonuses
 }
 
 export interface StockItem {
@@ -59,6 +60,7 @@ export interface BusinessMetrics {
     expenses: number
     purchases: number
     payroll: number
+    bonuses: number
     grossProfit: number
     netProfit: number
   }
@@ -146,7 +148,7 @@ export async function buildBusinessMetrics(
   }
 
   const [
-    invoices, payments, expenses, purchases, salarySlips,
+    invoices, payments, expenses, purchases, salarySlips, bonuses,
     stockTxns, items, openInvoices, workOrders, quotations,
   ] = await Promise.all([
     safeRows('invoices', failures, () =>
@@ -174,6 +176,12 @@ export async function buildBusinessMetrics(
       admin.from('salary_slips')
         .select('net_salary, salary_runs(salary_month, salary_year)')
         .eq('organization_id', orgId).limit(5000)),
+
+    safeRows('staff_bonuses', failures, () =>
+      admin.from('staff_bonuses')
+        .select('bonus_date, amount')
+        .eq('organization_id', orgId).eq('is_voided', false)
+        .gte('bonus_date', periodFrom).limit(5000)),
 
     safeRows('inventory_transactions', failures, () =>
       admin.from('inventory_transactions')
@@ -204,7 +212,7 @@ export async function buildBusinessMetrics(
 
   // ---- monthly series -----------------------------------------------------
   const blank = (): Omit<MonthMetrics, 'key' | 'label'> => ({
-    revenue: 0, collected: 0, cogs: 0, expenses: 0, purchases: 0, payroll: 0,
+    revenue: 0, collected: 0, cogs: 0, expenses: 0, purchases: 0, payroll: 0, bonuses: 0,
     invoiceCount: 0, avgInvoiceValue: 0, grossProfit: 0, netProfit: 0,
   })
   const acc = new Map(monthKeys.map(m => [m.key, blank()]))
@@ -247,6 +255,11 @@ export async function buildBusinessMetrics(
     bump(key, m => { m.payroll += num(slip.net_salary) })
   }
 
+  for (const b of bonuses) {
+    if (!b.bonus_date) continue
+    bump(monthKey(b.bonus_date), m => { m.bonuses += num(b.amount) })
+  }
+
   // Stock issued to jobs is the closest thing to true COGS in this schema.
   const lastIssued = new Map<string, string>()
   const issuedQty = new Map<string, { qty: number; value: number }>()
@@ -270,7 +283,7 @@ export async function buildBusinessMetrics(
       key, label, ...m,
       avgInvoiceValue: m.invoiceCount > 0 ? m.revenue / m.invoiceCount : 0,
       grossProfit: m.revenue - m.cogs,
-      netProfit: m.revenue - m.cogs - m.expenses - m.payroll,
+      netProfit: m.revenue - m.cogs - m.expenses - m.payroll - m.bonuses,
     }
   })
 
@@ -281,6 +294,7 @@ export async function buildBusinessMetrics(
     expenses: sum(m => m.expenses),
     purchases: sum(m => m.purchases),
     payroll: sum(m => m.payroll),
+    bonuses: sum(m => m.bonuses),
     grossProfit: sum(m => m.grossProfit),
     netProfit: sum(m => m.netProfit),
   }
@@ -394,17 +408,17 @@ export function metricsToPrompt(m: BusinessMetrics): string {
   L.push(`PERIOD: ${m.periodFrom} to ${m.periodTo} (currency: KWD)`)
   L.push('')
   L.push('MONTHLY TRADING')
-  L.push('month | revenue | collected | cogs | expenses | payroll | gross profit | net profit | invoices')
+  L.push('month | revenue | collected | cogs | expenses | payroll | bonuses | gross profit | net profit | invoices')
   for (const x of m.months) {
     L.push([
       x.label, kwd(x.revenue), kwd(x.collected), kwd(x.cogs), kwd(x.expenses),
-      kwd(x.payroll), kwd(x.grossProfit), kwd(x.netProfit), String(x.invoiceCount),
+      kwd(x.payroll), kwd(x.bonuses), kwd(x.grossProfit), kwd(x.netProfit), String(x.invoiceCount),
     ].join(' | '))
   }
 
   L.push('')
   L.push('PERIOD TOTALS')
-  L.push(`revenue=${kwd(m.totals.revenue)} collected=${kwd(m.totals.collected)} expenses=${kwd(m.totals.expenses)} purchases=${kwd(m.totals.purchases)} payroll=${kwd(m.totals.payroll)} grossProfit=${kwd(m.totals.grossProfit)} netProfit=${kwd(m.totals.netProfit)}`)
+  L.push(`revenue=${kwd(m.totals.revenue)} collected=${kwd(m.totals.collected)} expenses=${kwd(m.totals.expenses)} purchases=${kwd(m.totals.purchases)} payroll=${kwd(m.totals.payroll)} bonuses=${kwd(m.totals.bonuses)} grossProfit=${kwd(m.totals.grossProfit)} netProfit=${kwd(m.totals.netProfit)}`)
 
   L.push('')
   L.push('RECEIVABLES (as of today)')
