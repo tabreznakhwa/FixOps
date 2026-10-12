@@ -251,11 +251,11 @@ export default function UserGuidePage() {
         <Section id="s12" title="12. Attendance">
           <Sub title="Marking Attendance">
             <Step n={1}>Go to <strong>Attendance</strong> → <strong>Mark Attendance</strong>.</Step>
-            <Step n={2}>Select the staff member, date, and status: Present, Absent, Half Day, or Leave.</Step>
+            <Step n={2}>Select the staff member, date, and status: Present, Absent, Half Day, Leave, or Sick Leave.</Step>
             <Step n={3}>For Present/Half Day, enter Check In and Check Out times. The system calculates regular hours (the first 8 hours from clock-in) and overtime (any time after those 8 hours, paid at 1.25×).</Step>            <Step n={4}>Click <strong>Save Attendance</strong>.</Step>
           </Sub>
           <Sub title="Viewing Records">
-            <p>The main Attendance page shows all records for the current month. Use the month selector and staff filter to drill down. Summary cards show total Present, Absent, Half Day, and Leave counts.</p>
+            <p>The main Attendance page shows all records for the current month. Use the month selector and staff filter to drill down. Summary cards show total Present, Absent, Half Day, Leave, and Sick Leave counts.</p>
           </Sub>
           <Tip>From 1 October 2026, the 8-hour duty starts from the employee's clock-in time — clocking in at 12 PM means the duty runs until 8 PM, and anything worked after that is overtime. Fixed overtime (the flat monthly amount) is a summer-only benefit paid from March to September; in winter the time past the 8-hour duty is paid as normal overtime.</Tip>
         </Section>

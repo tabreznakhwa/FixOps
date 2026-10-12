@@ -30,6 +30,7 @@ const STATUS_COLOR: Record<string, string> = {
   absent: 'bg-red-100 text-red-700',
   half_day: 'bg-amber-100 text-amber-700',
   leave: 'bg-blue-100 text-blue-700',
+  sick_leave: 'bg-teal-100 text-teal-700',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -37,6 +38,7 @@ const STATUS_LABEL: Record<string, string> = {
   absent: 'Absent',
   half_day: 'Half Day',
   leave: 'Leave',
+  sick_leave: 'Sick Leave',
 }
 
 export function MyAttendanceDashboard({

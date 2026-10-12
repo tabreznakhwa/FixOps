@@ -2,9 +2,11 @@
 
 import { useState } from 'react'
 import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, dutyHints, DUTY_START, DUTY_END } from '@/lib/attendance'
+import { SickLeaveUsageNote } from '@/components/attendance/SickLeaveUsageNote'
 
 interface Record {
   id: string; date: string; status: string
+  staff_id: string
   check_in: string | null; check_out: string | null
   hours_worked: number; overtime_hours: number
   notes: string | null; is_public_holiday: boolean
@@ -118,6 +120,7 @@ export function EditAttendanceForm({ record }: { record: Record }) {
               { value: 'absent', label: 'Absent' },
               { value: 'half_day', label: 'Half Day' },
               { value: 'leave', label: 'Leave' },
+              { value: 'sick_leave', label: 'Sick Leave' },
             ].map(({ value, label }) => (
               <label key={value}
                 className={`flex items-center gap-2.5 cursor-pointer px-3 py-2.5 rounded-lg border transition-colors ${status === value ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}>
@@ -128,6 +131,10 @@ export function EditAttendanceForm({ record }: { record: Record }) {
             ))}
           </div>
         </div>
+
+        {status === 'sick_leave' && (
+          <SickLeaveUsageNote staffId={record.staff_id || null} year={date ? Number(date.slice(0, 4)) : null} />
+        )}
 
         {showTimes && (
           <>

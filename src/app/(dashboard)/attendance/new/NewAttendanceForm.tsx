@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, dutyHints, DUTY_START, DUTY_END } from '@/lib/attendance'
+import { SickLeaveUsageNote } from '@/components/attendance/SickLeaveUsageNote'
 
 interface StaffMember {
   id: string
@@ -212,6 +213,7 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
               { value: 'absent', label: 'Absent' },
               { value: 'half_day', label: 'Half Day' },
               { value: 'leave', label: 'Leave' },
+              { value: 'sick_leave', label: 'Sick Leave' },
             ].map(({ value, label }) => (
               <label
                 key={value}
@@ -232,6 +234,10 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
             ))}
           </div>
         </div>
+
+        {status === 'sick_leave' && (
+          <SickLeaveUsageNote staffId={staffId || null} year={date ? Number(date.slice(0, 4)) : null} />
+        )}
 
         {showTimes && (
           <>

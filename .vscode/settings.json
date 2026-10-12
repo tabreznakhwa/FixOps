@@ -1,0 +1,34 @@
+{
+  // npm is this project's package manager — package-lock.json is the committed
+  // lockfile and the one Vercel builds from. Pinning this stops VS Code asking
+  // which manager to use if another lockfile ever reappears.
+  "npm.packageManager": "npm",
+
+  // The file watcher is what stalls this project on open: node_modules holds
+  // both an npm tree and a leftover pnpm (.pnpm) symlink tree, which is far too
+  // many paths to watch. Excluding build output and generated folders keeps the
+  // editor responsive. These affect the editor only — never the build.
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.next/**": true,
+    "**/graphify-out/**": true,
+    "**/supabase/.temp/**": true,
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true
+  },
+
+  // Keep these out of search results and quick-open too, so Ctrl+P and
+  // find-in-files stay fast. src/ and supabase/migrations stay searchable.
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/graphify-out": true,
+    "**/supabase/.temp": true,
+    "**/package-lock.json": true
+  },
+
+  // TypeScript is heavy in a Next.js app this size; give the language server
+  // room so IntelliSense doesn't time out while the project loads.
+  "typescript.tsserver.maxTsServerMemory": 4096,
+  "typescript.tsdk": "node_modules/typescript/lib"
+}

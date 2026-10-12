@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
-import { Plus, CalendarCheck, UserCheck, XCircle, Clock, Pencil } from 'lucide-react'
+import { Plus, CalendarCheck, UserCheck, XCircle, Clock, Pencil, HeartPulse } from 'lucide-react'
 import { DeleteAttendanceButton } from './DeleteAttendanceButton'
 import { formatDate } from '@/lib/utils'
 import { isFriday } from '@/lib/attendance'
@@ -44,6 +44,7 @@ const STATUS_COLOR: Record<string, string> = {
   absent: 'bg-red-100 text-red-700',
   half_day: 'bg-amber-100 text-amber-700',
   leave: 'bg-blue-100 text-blue-700',
+  sick_leave: 'bg-teal-100 text-teal-700',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -51,6 +52,7 @@ const STATUS_LABEL: Record<string, string> = {
   absent: 'Absent',
   half_day: 'Half Day',
   leave: 'Leave',
+  sick_leave: 'Sick Leave',
 }
 
 export default async function AttendancePage({
@@ -227,6 +229,7 @@ export default async function AttendancePage({
     absent: summaryRows.filter((r) => r.status === 'absent').length,
     half_day: summaryRows.filter((r) => r.status === 'half_day').length,
     leave: summaryRows.filter((r) => r.status === 'leave').length,
+    sickLeave: summaryRows.filter((r) => r.status === 'sick_leave').length,
     overtime: summaryRows.reduce((s, r) => s + (r.overtime_hours ?? 0), 0),
     fridayOt: summaryRows.reduce((s, r) => s + (r.friday_ot_amount ?? 0), 0),
   }
@@ -391,12 +394,13 @@ export default async function AttendancePage({
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             { label: 'Present', value: summary.present, icon: UserCheck, color: 'text-green-600', bg: 'bg-green-50' },
             { label: 'Absent', value: summary.absent, icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
             { label: 'Half Day', value: summary.half_day, icon: CalendarCheck, color: 'text-amber-600', bg: 'bg-amber-50' },
             { label: 'Leave', value: summary.leave, icon: CalendarCheck, color: 'text-blue-600', bg: 'bg-blue-50' },
+            { label: 'Sick Leave', value: summary.sickLeave, icon: HeartPulse, color: 'text-teal-600', bg: 'bg-teal-50' },
             { label: 'Fri/Hol OT', value: `KWD ${summary.fridayOt.toFixed(3)}`, icon: Clock, color: 'text-purple-600', bg: 'bg-purple-50' },
             { label: 'Add. OT Hrs', value: summary.overtime.toFixed(1), icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
           ].map(({ label, value, icon: Icon, color, bg }) => (
