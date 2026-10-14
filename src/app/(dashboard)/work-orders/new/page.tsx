@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
@@ -14,6 +14,10 @@ export default async function NewWorkOrderPage({
 }) {
   const params = await searchParams
   const supabase = await createClient()
+  // The staff table contains payroll and identity data, so migration 054 limits
+  // direct browser-role reads. This server-rendered page exposes only the three
+  // non-sensitive assignment fields after proxy authorization.
+  const admin = createAdminClient()
 
   const [customerRows, usersRes, staffRes, complaintsRes] = await Promise.all([
     fetchAllCustomers(supabase, 'id, full_name, mobile_number, company_name'),
@@ -23,7 +27,7 @@ export default async function NewWorkOrderPage({
       .in('role', ['technician', 'admin', 'manager'])
       .eq('status', 'active')
       .order('full_name'),
-    supabase
+    admin
       .from('staff')
       .select('id, full_name, designation')
       .eq('employment_status', 'active')

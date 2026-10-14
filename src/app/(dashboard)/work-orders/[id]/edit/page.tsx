@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -10,6 +10,8 @@ export const metadata = { title: 'Edit Work Order' }
 export default async function EditWorkOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
+  // Only non-sensitive staff directory fields cross this server boundary.
+  const admin = createAdminClient()
 
   const [woRes, usersRes, staffRes] = await Promise.all([
     (supabase as any)
@@ -18,7 +20,7 @@ export default async function EditWorkOrderPage({ params }: { params: Promise<{ 
       .eq('id', id)
       .single(),
     supabase.from('users').select('id, full_name, role').in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
-    supabase.from('staff').select('id, full_name, designation').eq('employment_status', 'active'),
+    admin.from('staff').select('id, full_name, designation').eq('employment_status', 'active'),
   ])
 
   if (!woRes.data) notFound()

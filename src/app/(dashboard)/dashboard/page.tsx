@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { getAuthedProfile } from '@/lib/auth/session'
 import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
@@ -15,6 +15,9 @@ export const metadata = { title: 'Dashboard' }
 
 export default async function DashboardPage() {
   const supabase = await createClient()
+  // Staff RLS protects salary and identity fields from direct browser reads;
+  // this server query returns only the directory fields needed for workload.
+  const admin = createAdminClient()
 
   const { profile } = await getAuthedProfile()
   const role = profile?.role ?? 'technician'
@@ -48,7 +51,7 @@ export default async function DashboardPage() {
     supabase.rpc('get_complaint_status_counts'),
     supabase.from('complaints').select('id, complaint_number, description, priority, status, created_at, customers(full_name)').order('created_at', { ascending: false }).limit(8),
     supabase.from('users').select('id, full_name').eq('role', 'technician').eq('status', 'active'),
-    supabase.from('staff').select('id, full_name').eq('employment_status', 'active'),
+    admin.from('staff').select('id, full_name').eq('employment_status', 'active'),
     supabase.from('inventory_items').select('id, item_name, current_stock, minimum_stock_level, unit_of_measure').eq('is_active', true).limit(500),
     isTechnician
       ? Promise.resolve({ data: [] })

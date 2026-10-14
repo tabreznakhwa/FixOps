@@ -45,11 +45,16 @@ migration 048 was already known to be absent from history. Do not run
 `db push --include-all` just to make the histories match — it would replay
 already-applied DDL.
 
-Migration 051 was manually applied by the user on 14 Oct 2026. Migration 053
-was manually applied by the user on 14 Oct 2026; its production effects have not
-yet been independently verified. Migration 052 (company asset register) still
-requires manual application before the asset feature can be used. Migration
-051's two unique indexes and five `SECURITY DEFINER` functions were verified in production;
+Migration 051 was manually applied by the user on 14 Oct 2026. Migrations
+052 (company asset register), 053 (kiosk self-service restoration), and 054
+(employee self-service RLS hardening) were manually applied by the user on
+14 Oct 2026. Migration 052's and 053's production effects have not yet been
+independently verified. Migration 054 needs to be rerun from its latest file:
+the first run happened before the legacy `attendance.org_isolation` policy and
+broad production table grants were discovered and added to the migration.
+Migration
+051's two unique indexes and five
+`SECURITY DEFINER` functions were verified in production;
 `service_role` alone has execute access to those functions. It restores the
 unique attendance key `(organization_id, staff_id, date)` required by leave
 approval's `ON CONFLICT`, enforces one salary slip per employee/run, corrects
@@ -131,10 +136,11 @@ self-service login: it can clock only its own attendance, view only its own
 attendance history and payslips, and manage only its own leave applications.
 The proxy confines that role to those self-service pages and an explicit
 API/method allowlist; each allowed page/API also enforces organization and
-linked-staff ownership. The database part of this restoration is migration
-053 and must be applied before kiosk leave submission works; it also enforces
-one non-null `staff.user_id` link per login so self-service identity is
-unambiguous.
+linked-staff ownership. Migration 053 was manually applied on 14 Oct 2026 and
+enforces one non-null `staff.user_id` link per login so self-service identity is
+unambiguous. Migration 054 was first run on 14 Oct 2026 to enforce the same
+own-record boundary against direct authenticated Supabase reads; its latest
+resumable file still must be rerun before release.
 
 ### Company assets
 Owner/admin manage the register; manager is view-only. Recording an asset
@@ -142,8 +148,8 @@ atomically creates one linked `asset_purchase` expense, and generic expense
 create/edit/delete paths cannot mutate those capital purchases. Straight-line
 depreciation is calculated on demand. Disposal is terminal; positive proceeds
 require a cash/bank receipt method and feed the corresponding Cash or Bank Book
-from the disposed asset record. Migration 052 must be applied before this feature
-is deployed or used.
+from the disposed asset record. Migration 052 was manually applied on 14 Oct
+2026; its production effects still need independent verification.
 
 Not clocking in creates **no row at all** — absence only exists if written. A
 nightly job (`/api/attendance/auto-absent`, Vercel cron 00:00 UTC = 03:00 Kuwait)

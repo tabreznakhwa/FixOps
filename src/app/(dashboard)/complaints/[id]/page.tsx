@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -32,6 +32,8 @@ export default async function ComplaintDetailPage({
   const back = resolveBack((await searchParams).return_to, '/complaints', 'All Complaints')
   const { id } = await params
   const supabase = await createClient()
+  // Only non-sensitive staff directory fields cross this authorized server page.
+  const admin = createAdminClient()
 
   const { data: raw } = await supabase
     .from('complaints')
@@ -55,7 +57,7 @@ export default async function ComplaintDetailPage({
 
   const [usersRes, staffRes, workOrdersRes, internalNotesRes, currentUserRes] = await Promise.all([
     supabase.from('users').select('id, full_name, role').in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
-    supabase.from('staff').select('id, full_name, designation').eq('employment_status', 'active'),
+    admin.from('staff').select('id, full_name, designation').eq('employment_status', 'active'),
     supabase.from('work_orders').select('id, work_order_number, status').eq('complaint_id', id).order('created_at', { ascending: false }),
     supabase.from('complaint_internal_notes').select('id, note, author_name, created_at, created_by, updated_at').eq('complaint_id', id).order('created_at', { ascending: false }),
     authUser
