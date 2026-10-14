@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { LogIn, LogOut, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
+import { LogIn, CheckCircle2, Clock, AlertCircle, UserCheck } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
 interface AttendanceRecord {
@@ -43,11 +43,13 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function MyAttendanceDashboard({
   staffLinked,
+  isKiosk,
   initialAttendance,
   recentRecords,
   today,
 }: {
   staffLinked: boolean
+  isKiosk: boolean
   initialAttendance: AttendanceRecord | null
   recentRecords: HistoryRecord[]
   today: string
@@ -84,6 +86,24 @@ export function MyAttendanceDashboard({
     }
   }
 
+  if (isKiosk) {
+    return (
+      <div className="p-6">
+        <div className="max-w-lg bg-white border border-slate-200 rounded-2xl px-6 py-8 text-center">
+          <UserCheck className="w-10 h-10 text-blue-600 mx-auto mb-3" />
+          <p className="font-semibold text-slate-900 mb-2">Shared Attendance Kiosk</p>
+          <p className="text-sm text-slate-600 mb-5">Select an employee on this shared device to record today&apos;s attendance. Personal history is never shown here.</p>
+          <a
+            href="/attendance/new"
+            className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            Mark Employee Attendance
+          </a>
+        </div>
+      </div>
+    )
+  }
+
   if (!staffLinked) {
     return (
       <div className="p-6">
@@ -112,12 +132,28 @@ export function MyAttendanceDashboard({
             </div>
           )}
 
-          {!attendance?.check_in ? (
+          {attendance && ['leave', 'sick_leave'].includes(attendance.status) ? (
+            <>
+              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 className="w-10 h-10 text-blue-600" />
+              </div>
+              <p className="font-bold text-slate-900 text-lg mb-1">{attendance.status === 'sick_leave' ? 'Approved Sick Leave' : 'Approved Leave'}</p>
+              <p className="text-slate-500 text-sm">Contact an administrator if your plans change and you need to work today.</p>
+            </>
+          ) : attendance?.status === 'absent' && !attendance.check_in ? (
+            <>
+              <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-10 h-10 text-red-600" />
+              </div>
+              <p className="font-bold text-slate-900 text-lg mb-1">Marked Absent</p>
+              <p className="text-slate-500 text-sm">Contact an administrator before trying to clock in.</p>
+            </>
+          ) : !attendance?.check_in ? (
             <>
               <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <LogIn className="w-10 h-10 text-green-600" />
               </div>
-              <p className="text-slate-500 mb-6">You haven't clocked in today yet.</p>
+              <p className="text-slate-500 mb-6">You haven&apos;t clocked in today yet.</p>
               <button
                 onClick={() => clockAction('clock_in')}
                 disabled={loading}

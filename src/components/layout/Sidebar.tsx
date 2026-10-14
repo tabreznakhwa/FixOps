@@ -8,7 +8,7 @@ import {
   Wrench, ChevronDown, LogOut, Menu, X, FileBarChart, ShieldCheck,
   Building2, Hammer, CalendarCheck, Banknote, Landmark, AlertCircle,
   ShoppingCart, TrendingDown, Layers, Printer, BookOpen, Receipt, MapPin,
-  ArrowLeftRight, Wallet, Clock, Trophy, Sparkles, CalendarClock, Gift
+  ArrowLeftRight, Wallet, Clock, Trophy, Sparkles, CalendarClock, Gift, CalendarDays
 } from 'lucide-react'
 import { useState, useRef, type ElementType } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -83,13 +83,15 @@ const navGroups: Array<{
       { href: '/staff', label: 'Staff', icon: UserCheck, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/staff/locations', label: 'Technician Locations', icon: MapPin, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/my-attendance', label: 'My Attendance', icon: Clock, selfService: true },
+      { href: '/my-leave', label: 'My Leave', icon: CalendarDays, excludeRoles: ['attendance_kiosk'], selfService: true },
+      { href: '/leave-applications', label: 'Leave Approvals', icon: CalendarCheck, onlyRoles: ['owner', 'admin'] },
       { href: '/attendance', label: 'Attendance', icon: CalendarCheck, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/attendance/friday-rotation', label: 'Friday Rotation', icon: CalendarClock, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/payroll', label: 'Payroll', icon: BarChart3, excludeRoles: ['technician', 'attendance_kiosk'] },
-      { href: '/payroll/process', label: 'Payslips', icon: Printer, excludeRoles: ['technician', 'attendance_kiosk'] },
+      { href: '/payroll/process', label: 'Payslips', icon: Printer, excludeRoles: ['technician', 'attendance_kiosk', 'hr'] },
       { href: '/payroll/leave-settlement', label: 'Leave Settlement', icon: Wallet, onlyRoles: ['owner', 'admin', 'manager'] },
       { href: '/payroll/bonuses', label: 'Bonuses', icon: Gift, excludeRoles: ['technician', 'attendance_kiosk'] },
-      { href: '/payroll/my-payslips', label: 'My Payslips', icon: Printer, onlyRoles: ['attendance_kiosk', 'technician'], selfService: true },
+      { href: '/payroll/my-payslips', label: 'My Payslips', icon: Printer, onlyRoles: ['technician'], selfService: true },
       { href: '/staff/ledger', label: 'Staff Ledger', icon: FileBarChart, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/staff/performance', label: 'Staff Performance', icon: Trophy, excludeRoles: ['technician', 'attendance_kiosk'] },
     ],

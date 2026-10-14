@@ -6,6 +6,28 @@ import { kuwaitISODate } from '@/lib/attendance'
 
 /** Written into the note so auto-created rows are identifiable and correctable. */
 const AUTO_NOTE = 'Auto-marked absent — no clock-in recorded'
+const PAGE_SIZE = 1000
+const INSERT_BATCH_SIZE = 500
+
+type ActiveStaff = {
+  id: string
+  full_name: string
+  joining_date: string | null
+}
+
+type AttendanceMarker = {
+  staff_id: string
+  is_public_holiday: boolean | null
+}
+
+function isValidISODate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const [year, month, day] = value.split('-').map(Number)
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+  return parsed.getUTCFullYear() === year
+    && parsed.getUTCMonth() === month - 1
+    && parsed.getUTCDate() === day
+}
 
 function yesterdayKuwait(): string {
   const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuwait' }))
@@ -14,30 +36,45 @@ function yesterdayKuwait(): string {
   return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`
 }
 
+async function fetchAllPages<T>(
+  loadPage: (from: number, to: number) => Promise<{
+    data: T[] | null
+    error: { message: string } | null
+  }>
+): Promise<T[]> {
+  const rows: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await loadPage(from, from + PAGE_SIZE - 1)
+    if (error) throw new Error(error.message)
+    const page = data ?? []
+    rows.push(...page)
+    if (page.length < PAGE_SIZE) return rows
+  }
+}
+
 async function run(orgId: string, date: string, userId: string | null) {
   const admin = createAdminClient() as any
-
-  const [{ data: staffRaw }, { data: existingRaw }] = await Promise.all([
-    admin
+  const [activeStaff, existing] = await Promise.all([
+    fetchAllPages<ActiveStaff>((from, to) => admin
       .from('staff')
       .select('id, full_name, joining_date')
       .eq('organization_id', orgId)
       .eq('employment_status', 'active')
-      .limit(1000),
-    admin
+      .order('id')
+      .range(from, to)),
+    fetchAllPages<AttendanceMarker>((from, to) => admin
       .from('attendance')
       .select('staff_id, is_public_holiday')
       .eq('organization_id', orgId)
       .eq('date', date)
-      .limit(1000),
+      .order('id')
+      .range(from, to)),
   ])
-
-  const existing = (existingRaw ?? []) as Array<{ staff_id: string; is_public_holiday: boolean | null }>
 
   const decision = decideAutoAbsent({
     date,
     today: kuwaitISODate(),
-    activeStaff: (staffRaw ?? []) as any,
+    activeStaff,
     alreadyRecorded: existing.map(e => e.staff_id),
     // A holiday is only knowable from someone having flagged it on that date.
     isPublicHoliday: existing.some(e => e.is_public_holiday === true),
@@ -59,13 +96,25 @@ async function run(orgId: string, date: string, userId: string | null) {
     notes: AUTO_NOTE,
     created_by: userId,
   }))
-
-  const { error } = await admin.from('attendance').insert(rows)
-  if (error) throw new Error(error.message)
+  let marked = 0
+  for (let from = 0; from < rows.length; from += INSERT_BATCH_SIZE) {
+    const batch = rows.slice(from, from + INSERT_BATCH_SIZE)
+    // Once migration 051 supplies the unique key, concurrent manual/cron runs
+    // safely leave any attendance that won the race untouched.
+    const { data, error } = await admin
+      .from('attendance')
+      .upsert(batch, {
+        onConflict: 'organization_id,staff_id,date',
+        ignoreDuplicates: true,
+      })
+      .select('staff_id')
+    if (error) throw new Error(error.message)
+    marked += data?.length ?? 0
+  }
 
   return {
     date,
-    marked: rows.length,
+    marked,
     skippedReason: null,
     names: decision.toMark.map(s => s.full_name),
   }
@@ -85,11 +134,15 @@ export async function GET(request: NextRequest) {
 
   try {
     const admin = createAdminClient() as any
-    const { data: orgs } = await admin.from('organizations').select('id').limit(100)
+    const orgs = await fetchAllPages<{ id: string }>((from, to) => admin
+      .from('organizations')
+      .select('id')
+      .order('id')
+      .range(from, to))
     const date = yesterdayKuwait()
 
     const results = []
-    for (const org of (orgs ?? []) as Array<{ id: string }>) {
+    for (const org of orgs) {
       results.push(await run(org.id, date, null))
     }
     return NextResponse.json({ success: true, results })
@@ -119,7 +172,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}))
     const date = (body as { date?: string }).date || yesterdayKuwait()
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    if (!isValidISODate(date)) {
       return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
     }
 

@@ -1,7 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils'
 import { PrintButton } from './PrintButton'
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { resolveBack } from '@/lib/backNav'
@@ -22,6 +21,8 @@ export default async function PayslipPage({
 }) {
   const back = resolveBack((await searchParams).return_to, '/payroll/process', 'Back to Payslips')
   const { runId, staffId } = await params
+  // Payroll tables still trail the generated Database type.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any
 
   // This page reads through the service-role client, which bypasses RLS, so it
@@ -34,13 +35,24 @@ export default async function PayslipPage({
   if (!user) redirect('/login')
 
   const { data: viewerRaw } = await admin
-    .from('users').select('organization_id, role').eq('id', user.id).single()
-  const viewer = viewerRaw as { organization_id: string; role: string } | null
-  if (!viewer?.organization_id) redirect('/login')
+    .from('users')
+    .select('organization_id, role, status')
+    .eq('id', user.id)
+    .single()
+  const viewer = viewerRaw as {
+    organization_id: string
+    role: string
+    status: string
+  } | null
+  if (!viewer?.organization_id || viewer.status !== 'active') redirect('/login')
 
   if (!PAYROLL_VIEWER_ROLES.includes(viewer.role)) {
     const { data: ownStaffRaw } = await admin
-      .from('staff').select('id').eq('user_id', user.id).maybeSingle()
+      .from('staff')
+      .select('id')
+      .eq('organization_id', viewer.organization_id)
+      .eq('user_id', user.id)
+      .maybeSingle()
     const ownStaffId = (ownStaffRaw as { id: string } | null)?.id
     if (!ownStaffId || ownStaffId !== staffId) {
       redirect('/dashboard?error=unauthorized')
@@ -106,7 +118,8 @@ export default async function PayslipPage({
   const { data: orgRaw } = await admin
     .from('organizations')
     .select('name, address, phone, email')
-    .limit(1).single()
+    .eq('id', viewer.organization_id)
+    .single()
   const org = (orgRaw ?? {}) as { name: string; address: string | null; phone: string | null; email: string | null }
 
   const monthLabel = `${MONTHS[run.salary_month - 1]} ${run.salary_year}`

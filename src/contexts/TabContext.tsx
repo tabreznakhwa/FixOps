@@ -54,6 +54,8 @@ const LABEL_MAP: Record<string, string> = {
   '/staff/locations': 'Tech Locations',
   '/staff/ledger': 'Staff Ledger',
   '/my-attendance': 'My Attendance',
+  '/my-leave': 'My Leave',
+  '/leave-applications': 'Leave Approvals',
   '/attendance': 'Attendance',
   '/payroll': 'Payroll',
   '/payroll/process': 'Payslips',

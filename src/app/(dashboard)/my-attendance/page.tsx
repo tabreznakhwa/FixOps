@@ -11,14 +11,27 @@ export default async function MyAttendancePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // The generated Database type does not yet include attendance.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any
 
-  const { data: staffRecord } = await admin
-    .from('staff')
-    .select('id, full_name, organization_id')
-    .eq('user_id', user.id)
-    .eq('employment_status', 'active')
+  const { data: profile } = await admin
+    .from('users')
+    .select('organization_id, role, status')
+    .eq('id', user.id)
     .maybeSingle()
+  if (!profile || profile.status !== 'active' || !profile.organization_id) redirect('/login')
+
+  const isKiosk = profile.role === 'attendance_kiosk'
+  const { data: staffRecord } = isKiosk
+    ? { data: null }
+    : await admin
+        .from('staff')
+        .select('id, full_name, organization_id')
+        .eq('organization_id', profile.organization_id)
+        .eq('user_id', user.id)
+        .eq('employment_status', 'active')
+        .maybeSingle()
 
   const today = kuwaitISODate()
   let todayAttendance = null
@@ -32,6 +45,7 @@ export default async function MyAttendancePage() {
     const { data: todayRec } = await admin
       .from('attendance')
       .select('id, check_in, check_out, hours_worked, overtime_hours, status')
+      .eq('organization_id', profile.organization_id)
       .eq('staff_id', staffRecord.id)
       .eq('date', today)
       .maybeSingle()
@@ -44,6 +58,7 @@ export default async function MyAttendancePage() {
     const { data: records } = await admin
       .from('attendance')
       .select('id, date, check_in, check_out, hours_worked, overtime_hours, friday_ot_amount, is_public_holiday, status')
+      .eq('organization_id', profile.organization_id)
       .eq('staff_id', staffRecord.id)
       .gte('date', fromDate)
       .order('date', { ascending: false })
@@ -56,6 +71,7 @@ export default async function MyAttendancePage() {
       <Header title="My Attendance" subtitle="Clock in and out to record your hours" />
       <MyAttendanceDashboard
         staffLinked={!!staffRecord}
+        isKiosk={isKiosk}
         initialAttendance={todayAttendance}
         recentRecords={recentRecords}
         today={today}

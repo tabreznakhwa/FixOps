@@ -13,19 +13,29 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    // Staff profile tables and RPCs trail the hand-maintained Database relationships.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: profileRaw } = await (supabase as any)
       .from('users')
-      .select('organization_id, full_name, role')
+      .select('organization_id, full_name, role, status')
       .eq('id', user.id)
       .single()
-    const profile = profileRaw as { organization_id: string; full_name: string; role: string } | null
-    if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const profile = profileRaw as {
+      organization_id: string
+      full_name: string
+      role: string
+      status: string
+    } | null
+    if (!profile?.organization_id || profile.status !== 'active') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     if (!['owner', 'admin', 'hr', 'manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any
 
     // Verify staff belongs to same org and get current opening balances for delta calculation
@@ -46,17 +56,21 @@ export async function PATCH(
           return NextResponse.json({ error: 'That login is already linked to another staff member' }, { status: 400 })
         }
       }
-      const { error: linkError } = await admin.from('staff').update({ user_id: body.user_id || null }).eq('id', staffId)
+      const { error: linkError } = await admin
+        .from('staff')
+        .update({ user_id: body.user_id || null })
+        .eq('id', staffId)
+        .eq('organization_id', profile.organization_id)
       if (linkError) throw linkError
       return NextResponse.json({ success: true })
     }
 
-    // Adjust advance_balance by the change in opening amounts
     const newOpeningAdvance = Number(body.opening_advance ?? 0)
     const newOpeningLoan = Number(body.opening_loan ?? 0)
-    const openingDelta = (newOpeningAdvance - (existing.opening_advance ?? 0))
-      + (newOpeningLoan - (existing.opening_loan ?? 0))
-    const newAdvanceBalance = Math.max(0, (existing.advance_balance ?? 0) + openingDelta)
+    if (!Number.isFinite(newOpeningAdvance) || newOpeningAdvance < 0
+      || !Number.isFinite(newOpeningLoan) || newOpeningLoan < 0) {
+      return NextResponse.json({ error: 'Opening advance and loan cannot be negative' }, { status: 400 })
+    }
 
     const updates = {
       full_name: body.full_name,
@@ -80,7 +94,6 @@ export async function PATCH(
       friday_ot_amount: Number(body.friday_ot_amount ?? 0),
       opening_advance: newOpeningAdvance,
       opening_loan: newOpeningLoan,
-      advance_balance: newAdvanceBalance,
       overtime_eligible: Boolean(body.overtime_eligible),
       bank_name: body.bank_name || null,
       iban: body.iban || null,
@@ -88,8 +101,21 @@ export async function PATCH(
       notes: body.notes || null,
     }
 
-    const { error } = await admin.from('staff').update(updates).eq('id', staffId)
-    if (error) throw error
+    const { error } = await admin.rpc('update_staff_profile_with_opening_balance', {
+      p_org_id: profile.organization_id,
+      p_updated_by: user.id,
+      p_staff_id: staffId,
+      p_expected_opening_advance: Number(existing.opening_advance ?? 0),
+      p_expected_opening_loan: Number(existing.opening_loan ?? 0),
+      p_updates: updates,
+    })
+    if (error) {
+      const message = error.message?.replace(/^Error:\s*/, '') ?? ''
+      if (message.includes('opening balance changed')) {
+        return NextResponse.json({ error: message }, { status: 409 })
+      }
+      throw error
+    }
 
     await logAudit({
       orgId: profile.organization_id,

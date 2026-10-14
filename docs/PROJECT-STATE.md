@@ -1,7 +1,7 @@
 # FixOps — current state
 
 Read this first. It exists so a new session does not have to rediscover the app
-by exploration. Last updated 9 Sept 2026.
+by exploration. Last updated 14 Oct 2026.
 
 **Note:** commits `fccbb1d`…`2ca13b6` (Pay Salaries modal portal/zoom fixes, a
 Vercel function-invocation-spike fix replacing `force-dynamic` with ISR
@@ -35,9 +35,29 @@ unmarked absences from the day before appear without anyone clicking "Mark all
 absent" by hand, it worked. If not, re-check the env var is on the Production
 environment and that a redeploy happened after it was added.
 
-Migrations **028, 029, 030 have been run.** Physical stock count applied 11 Aug
-(26 of 27 items exact); a further reconciliation is dated 2 Sept per commit
-`62f7e5d` (see note above — not independently re-verified here).
+Migrations **028, 029, 030, 046 and 047 have been run.** Migration 047 was
+applied directly through the Supabase Management API on 12 Oct 2026 and only
+version 047 was added to `supabase_migrations.schema_migrations`; the older
+001–046 history is still incomplete. Migrations 048, 049 and 050 were manually
+applied by the user on 13 Oct 2026, and their physical schema/function effects
+were verified that day. Their migration-history entries were not verified;
+migration 048 was already known to be absent from history. Do not run
+`db push --include-all` just to make the histories match — it would replay
+already-applied DDL.
+
+Migration 051 was manually applied by the user on 14 Oct 2026. Its two unique
+indexes and five `SECURITY DEFINER` functions were verified in production;
+`service_role` alone has execute access to those functions. It restores the
+unique attendance key `(organization_id, staff_id, date)` required by leave
+approval's `ON CONFLICT`, enforces one salary slip per employee/run, corrects
+payroll allowance itemization, requires complete working-day attendance before
+payroll, makes payroll payment/reset safer, makes leave settlement atomic with
+payroll, and applies staff opening-balance edits under a row lock. Its migration-
+history entry was not verified; do not use `db push --include-all` to reconcile
+history.
+Physical stock
+count applied 11 Aug (26 of 27 items exact); a further reconciliation is dated
+2 Sept per commit `62f7e5d` (see note above — not independently re-verified here).
 
 ---
 
@@ -111,6 +131,29 @@ anyone not yet joined. Friday/holiday OT is paid to **everyone**;
 `UNIQUE(org, month, year)` — one run per month, which is why leave settlement is
 paid as an advance (`staff.advance_balance` auto-recovers at month end) rather
 than an off-cycle run.
+
+### Leave applications
+Every active employee login linked through `staff.user_id` can use `/my-leave`
+to request annual, sick or compensation leave; the shared `attendance_kiosk`
+login is deliberately excluded. Owner/admin review happens at
+`/leave-applications`. Approval is atomic through `review_leave_application`:
+it creates paid attendance (`leave`, or `sick_leave` for sick requests), skips
+Fridays and known public holidays, and refuses to overwrite worked/manual
+attendance. Only pristine rows carrying the exact auto-absence note may be
+converted. Attendance rows linked to approved leave cannot be edited or deleted
+directly; there is currently no approved-leave revocation workflow. Migration
+048 adds the database-enforced version of those guards, revokes direct
+`authenticated` attendance mutation, and serializes approval against attendance
+and holiday changes. Migration 049 removes duplicate PostgREST FK paths
+introduced by 048 and fixes review lock ordering. Migration 050 rejects requests
+for dates in a processed payroll month, serializes leave with payroll, derives
+payroll attendance inside the database, and makes payroll process/reset atomic.
+Those three migrations are physically applied. Migration 051 was applied and
+verified on 14 Oct 2026; it supplies the attendance unique index required by
+approval's `ON CONFLICT` and finalizes transactional salary payment/reset,
+atomic leave settlement, attendance completeness checks and payroll allowance
+itemization. Sick leave retains the informational 15-day annual counter rather
+than a hard database cap.
 
 ### Audit logging
 `logAudit()` swallows all errors by design. It wrote to columns that did not

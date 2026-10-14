@@ -38,7 +38,23 @@ export async function POST(request: NextRequest) {
     if (!settlement_date || !/^\d{4}-\d{2}-\d{2}$/.test(settlement_date)) {
       return NextResponse.json({ error: 'A valid settlement date is required' }, { status: 400 })
     }
+    const [settlementYear, settlementMonth, settlementDay] = settlement_date.split('-').map(Number)
+    const parsedSettlementDate = new Date(Date.UTC(settlementYear, settlementMonth - 1, settlementDay))
+    if (parsedSettlementDate.getUTCFullYear() !== settlementYear
+      || parsedSettlementDate.getUTCMonth() !== settlementMonth - 1
+      || parsedSettlementDate.getUTCDate() !== settlementDay) {
+      return NextResponse.json({ error: 'A valid settlement date is required' }, { status: 400 })
+    }
+    const allowedPaymentMethods = ['cash', 'bank_transfer', 'cheque']
+    if (payment_method !== undefined && !allowedPaymentMethods.includes(payment_method)) {
+      return NextResponse.json({ error: 'Select a valid payment method' }, { status: 400 })
+    }
+    if (notes !== undefined && (typeof notes !== 'string' || notes.trim().length > 1000)) {
+      return NextResponse.json({ error: 'Notes cannot exceed 1,000 characters' }, { status: 400 })
+    }
 
+    // The hand-maintained Database type lacks generated relationship metadata,
+    // so Supabase cannot infer all migrated tables and RPC arguments.
     const admin = createAdminClient() as any
 
     const { data: staff } = await admin
@@ -56,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     // Refuse to settle a month that has already been run — the salary would be
     // paid twice, once here and once by the completed monthly run.
-    const [year, month] = [Number(settlement_date.slice(0, 4)), Number(settlement_date.slice(5, 7))]
+    const [year, month] = [settlementYear, settlementMonth]
     const { data: existingRun } = await admin
       .from('salary_runs')
       .select('id, status')
@@ -74,10 +90,10 @@ export async function POST(request: NextRequest) {
     const { data: attendanceRaw } = await admin
       .from('attendance')
       .select('date, status, overtime_hours, friday_ot_amount, is_public_holiday')
+      .eq('organization_id', profile.organization_id)
       .eq('staff_id', staff_id)
       .gte('date', monthStart)
       .lte('date', settlement_date)
-      .limit(200)
 
     const result = calcLeaveSettlement(
       staff,
@@ -102,30 +118,36 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Recorded as an advance so the monthly run recovers it automatically.
-    const { error: insertError } = await admin.from('staff_advances').insert({
-      organization_id: profile.organization_id,
-      staff_id,
-      type: 'advance',
-      amount: result.netPayable,
-      issued_date: today,
-      payment_method: payment_method ?? 'cash',
-      notes: notes?.trim()
-        || `Leave settlement to ${settlement_date} (${result.daysCovered} days)`,
-      created_by: user.id,
+    // The RPC rechecks the payroll run under the organization/month lock, then
+    // records the advance and updates the balance in one transaction.
+    const settlementNotes = notes?.trim()
+      || `Leave settlement to ${settlement_date} (${result.daysCovered} days)`
+    const { data: settlementRows, error: settlementError } = await admin.rpc('settle_leave_salary', {
+      p_org_id: profile.organization_id,
+      p_paid_by: user.id,
+      p_staff_id: staff_id,
+      p_settlement_date: settlement_date,
+      p_amount: result.netPayable,
+      p_expected_balance: result.outstandingAdvance,
+      p_payment_method: payment_method ?? 'cash',
+      p_notes: settlementNotes,
     })
-    if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 })
+    if (settlementError) {
+      const message = settlementError.message?.replace(/^Error:\s*/, '') ?? ''
+      if (message.includes('Payroll for this month has already been processed')
+        || message.includes('advance balance changed')) {
+        return NextResponse.json({ error: message }, { status: 409 })
+      }
+      console.error('Leave settlement RPC error:', settlementError)
+      return NextResponse.json({ error: 'Unable to record leave settlement' }, { status: 500 })
+    }
 
-    const newBalance = (Number(staff.advance_balance) || 0) + result.netPayable
-    const { error: updateError } = await admin
-      .from('staff').update({ advance_balance: newBalance }).eq('id', staff_id)
-    if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
-
+    const settlement = Array.isArray(settlementRows) ? settlementRows[0] : settlementRows
     return NextResponse.json({
       success: true,
       staffName: staff.full_name,
       ...result,
-      advance_balance: newBalance,
+      advance_balance: settlement?.balance_after,
     })
   } catch (err) {
     console.error('Leave settlement error:', err)

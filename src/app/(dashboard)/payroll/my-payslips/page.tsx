@@ -21,16 +21,22 @@ export default async function MyPayslipsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Payroll tables trail the hand-maintained Database type.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: profileRaw } = await (supabase as any)
     .from('users').select('organization_id, role').eq('id', user.id).single()
   const profile = profileRaw as { organization_id: string; role: string } | null
-  const selfServiceRoles = ['attendance_kiosk', 'technician']
-  if (!profile || !selfServiceRoles.includes(profile.role)) redirect('/dashboard')
+  if (!profile || profile.role !== 'technician') redirect('/dashboard')
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any
 
   const { data: staffRaw } = await admin
-    .from('staff').select('id, full_name, staff_code, designation').eq('user_id', user.id).maybeSingle()
+    .from('staff')
+    .select('id, full_name, staff_code, designation')
+    .eq('organization_id', profile.organization_id)
+    .eq('user_id', user.id)
+    .maybeSingle()
   const staff = staffRaw as { id: string; full_name: string; staff_code: string; designation: string | null } | null
 
   if (!staff) {
@@ -51,14 +57,16 @@ export default async function MyPayslipsPage() {
   // Get all salary slips for this staff member with their run info
   const { data: slipsRaw } = await admin
     .from('salary_slips')
-    .select('id, salary_run_id, net_salary, gross_salary, payment_status, basic_salary, overtime_amount, normal_overtime, friday_overtime, absent_days, absent_deduction, advance_deduction')
+    .select('id, salary_run_id, net_salary, gross_salary, payment_status, basic_salary, overtime_amount, normal_overtime, friday_overtime, absent_days, absent_deduction, food_deduction, advance_deduction')
+    .eq('organization_id', profile.organization_id)
     .eq('staff_id', staff.id)
 
   const slips = (slipsRaw ?? []) as Array<{
     id: string; salary_run_id: string; net_salary: number; gross_salary: number
     payment_status: string; basic_salary: number; overtime_amount: number | null
     normal_overtime: number | null; friday_overtime: number | null
-    absent_days: number | null; absent_deduction: number | null; advance_deduction: number | null
+    absent_days: number | null; absent_deduction: number | null; food_deduction: number | null
+    advance_deduction: number | null
   }>
 
   // Get run info for each slip
@@ -125,7 +133,9 @@ export default async function MyPayslipsPage() {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {sortedSlips.map((s) => {
-                  const totalDeductions = (s.absent_deduction ?? 0) + (s.advance_deduction ?? 0)
+                  const totalDeductions = (s.absent_deduction ?? 0)
+                    + (s.food_deduction ?? 0)
+                    + (s.advance_deduction ?? 0)
                   return (
                     <tr key={s.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-5 py-3.5">

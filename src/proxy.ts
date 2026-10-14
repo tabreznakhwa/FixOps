@@ -118,10 +118,11 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/login?error=account_disabled', request.url))
     }
 
-    // Self-service HR pages every employee may open: their own attendance and
-    // their own payslips. /payroll/slips authorises ownership inside the page.
+    // Self-service HR pages every employee may open: their own attendance,
+    // leave applications and payslips. /payroll/slips authorises ownership inside the page.
     const isOwnHrPath =
       pathname.startsWith('/my-attendance') ||
+      pathname.startsWith('/my-leave') ||
       pathname.startsWith('/payroll/my-payslips') ||
       pathname.startsWith('/payroll/slips')
 
@@ -142,11 +143,11 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard?error=unauthorized', request.url))
     }
 
-    // Attendance kiosk: self-clock and own payslips only
+    // Attendance kiosk: shared-device attendance entry only. It must never expose
+    // personal leave, salary, history or identity pages.
     if (profile.role === 'attendance_kiosk' &&
       !pathname.startsWith('/my-attendance') &&
-      !pathname.startsWith('/payroll/my-payslips') &&
-      !pathname.startsWith('/payroll/slips') &&
+      !pathname.startsWith('/attendance/new') &&
       !pathname.startsWith('/api')) {
       return NextResponse.redirect(new URL('/my-attendance', request.url))
     }
@@ -154,19 +155,25 @@ export async function proxy(request: NextRequest) {
     // Skip API routes (enforced at DB/RLS), locked roles (always full access), and
     // self-service pages, which are scoped to the caller's own record inside the page
     // and so must stay reachable even for roles with no HR module access.
-    if (!pathname.startsWith('/api') && !LOCKED_ROLES.includes(profile.role) && !isOwnHrPath) {
-      const module = getRouteModule(pathname)
-      if (module) {
+    if (!pathname.startsWith('/api') &&
+      !LOCKED_ROLES.includes(profile.role) &&
+      !isOwnHrPath &&
+      !(profile.role === 'attendance_kiosk' && pathname.startsWith('/attendance/new'))) {
+      const routeModule = getRouteModule(pathname)
+      if (routeModule) {
         // Check DB for org-customised permission, fall back to system default
         const { data: permRow } = await supabase
+          // The generated Database type does not include role_permissions yet.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           .from('role_permissions' as any)
           .select('permission')
           .eq('organization_id', profile.organization_id)
           .eq('role', profile.role)
-          .eq('module', module)
+          .eq('module', routeModule)
           .maybeSingle()
 
-        const permission = (permRow as any)?.permission ?? getDefaultPermission(profile.role, module)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const permission = (permRow as any)?.permission ?? getDefaultPermission(profile.role, routeModule)
         if (permission === 'none') {
           return NextResponse.redirect(new URL('/dashboard?error=unauthorized', request.url))
         }

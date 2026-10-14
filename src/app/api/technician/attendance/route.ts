@@ -2,11 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { calcAttendanceBreakdown, isFriday, kuwaitISODate, kuwaitTimeHHMM, payableOvertimeHours } from '@/lib/attendance'
 
+// Attendance is not yet represented in the manually maintained Database type.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 async function resolveStaff(userId: string) {
   const admin = createAdminClient() as any
+  const { data: profile } = await admin
+    .from('users')
+    .select('organization_id, role, status')
+    .eq('id', userId)
+    .maybeSingle()
+  if (!profile || profile.status !== 'active' || !profile.organization_id
+    || profile.role === 'attendance_kiosk') return null
+
   const { data } = await admin
     .from('staff')
     .select('id, organization_id, overtime_eligible, friday_ot_amount')
+    .eq('organization_id', profile.organization_id)
     .eq('user_id', userId)
     .eq('employment_status', 'active')
     .maybeSingle()
@@ -24,7 +36,8 @@ export async function GET() {
   const admin = createAdminClient() as any
   const { data: record } = await admin
     .from('attendance')
-    .select('id, check_in, check_out, hours_worked, overtime_hours')
+    .select('id, check_in, check_out, hours_worked, overtime_hours, status')
+    .eq('organization_id', staff.organization_id)
     .eq('staff_id', staff.id)
     .eq('date', kuwaitISODate())
     .maybeSingle()
@@ -55,12 +68,19 @@ export async function POST(request: NextRequest) {
 
     const { data: existing } = await admin
       .from('attendance')
-      .select('id, check_in, check_out, is_public_holiday')
+      .select('id, check_in, check_out, is_public_holiday, status')
+      .eq('organization_id', staff.organization_id)
       .eq('staff_id', staff.id)
       .eq('date', today)
       .maybeSingle()
 
     if (action === 'clock_in') {
+      if (existing && ['leave', 'sick_leave'].includes(existing.status)) {
+        return NextResponse.json({ error: 'You have approved leave today. Contact an administrator if you need to work.' }, { status: 409 })
+      }
+      if (existing?.status === 'absent' && !existing.check_in) {
+        return NextResponse.json({ error: 'You are marked absent today. Contact an administrator before clocking in.' }, { status: 409 })
+      }
       if (existing) return NextResponse.json({ record: existing }) // already clocked in — idempotent
       const { data: record, error } = await admin
         .from('attendance')
@@ -73,9 +93,14 @@ export async function POST(request: NextRequest) {
           created_by: user.id,
           ...(hasCoords ? { check_in_lat: lat, check_in_lng: lng } : {}),
         })
-        .select('id, check_in, check_out, hours_worked, overtime_hours, friday_ot_amount')
+        .select('id, check_in, check_out, hours_worked, overtime_hours, friday_ot_amount, status')
         .single()
-      if (error) throw error
+      if (error) {
+        if (error.code === '23505') {
+          return NextResponse.json({ error: 'Attendance changed while clocking in. Reload and try again.' }, { status: 409 })
+        }
+        throw error
+      }
       return NextResponse.json({ record })
     }
 
@@ -113,13 +138,17 @@ export async function POST(request: NextRequest) {
         ...(hasCoords ? { check_out_lat: lat, check_out_lng: lng } : {}),
       })
       .eq('id', existing.id)
-      .select('id, check_in, check_out, hours_worked, overtime_hours, friday_ot_amount')
-      .single()
+      .eq('organization_id', staff.organization_id)
+      .is('leave_application_id', null)
+      .select('id, check_in, check_out, hours_worked, overtime_hours, friday_ot_amount, status')
+      .maybeSingle()
     if (error) throw error
+    if (!record) {
+      return NextResponse.json({ error: 'Attendance changed while clocking out. Reload and try again.' }, { status: 409 })
+    }
     return NextResponse.json({ record })
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : JSON.stringify(err)
     console.error('Technician attendance error:', err)
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return NextResponse.json({ error: 'Unable to update attendance' }, { status: 500 })
   }
 }

@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { NewAttendanceForm } from './NewAttendanceForm'
+import { redirect } from 'next/navigation'
 
 export const metadata = { title: 'Mark Attendance' }
 
@@ -14,35 +14,46 @@ export default async function NewAttendancePage({
   const params = await searchParams
   const supabase = await createClient()
 
-  // Check role server-side — kiosk always sees only their own staff record
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileRaw } = await (supabase as any)
-    .from('users').select('role').eq('id', user!.id).single()
-  const userRole = (profileRaw as { role: string } | null)?.role ?? ''
+  if (!user) redirect('/login')
+
+  // Staff and attendance still trail the hand-maintained Database type.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any
+  const { data: profileRaw } = await admin
+    .from('users')
+    .select('organization_id, role, status')
+    .eq('id', user.id)
+    .maybeSingle()
+  const profile = profileRaw as {
+    organization_id: string
+    role: string
+    status: string
+  } | null
+  if (!profile?.organization_id || profile.status !== 'active') redirect('/login')
+
+  const userRole = profile.role
   const isKiosk = userRole === 'attendance_kiosk'
-
-  let lockedStaffId: string | null = null
-
-  if (isKiosk) {
-    // Ignore URL param — always look up their linked staff record
-    const { data: kioskStaff } = await (supabase as any)
-      .from('staff').select('id').eq('user_id', user!.id).maybeSingle()
-    lockedStaffId = (kioskStaff as { id: string } | null)?.id ?? null
-  } else {
-    lockedStaffId = params.locked_staff_id ?? null
+  if (!isKiosk && !['owner', 'admin', 'hr', 'manager'].includes(userRole)) {
+    redirect('/my-attendance')
   }
 
-  let staffQuery = supabase
+  // A kiosk is a shared device, so it may choose any active employee in its
+  // own organization. Administrators can optionally arrive with one locked.
+  const lockedStaffId = isKiosk ? null : params.locked_staff_id ?? null
+  let staffQuery = admin
     .from('staff')
     .select('id, full_name, designation, friday_ot_amount')
+    .eq('organization_id', profile.organization_id)
     .eq('employment_status', 'active')
     .order('full_name')
 
   if (lockedStaffId) {
-    staffQuery = (staffQuery as any).eq('id', lockedStaffId)
+    staffQuery = staffQuery.eq('id', lockedStaffId)
   }
 
-  const { data: staffRaw } = await staffQuery
+  const { data: staffRaw, error: staffError } = await staffQuery
+  if (staffError) throw new Error(staffError.message)
 
   const staff = (staffRaw ?? []) as Array<{
     id: string
@@ -59,7 +70,7 @@ export default async function NewAttendancePage({
         title="Mark Attendance"
         subtitle="Record attendance for a staff member"
         actions={
-          <BackButton fallbackHref="/attendance" label="Back" />
+          <BackButton fallbackHref={isKiosk ? '/my-attendance' : '/attendance'} label="Back" />
         }
       />
       <div className="p-6">

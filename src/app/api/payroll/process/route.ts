@@ -1,12 +1,9 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { isFixedOtMonth } from '@/lib/attendance'
+import { logAudit } from '@/lib/audit'
 
-interface StaffEntry {
+interface ManualPayrollEntry {
   staff_id: string
-  normal_ot_paid_hours: number  // sum of attendance.overtime_hours (already ×1.25)
-  friday_ot_amount: number      // sum of attendance.friday_ot_amount (KWD)
-  absent_days: number
   food_deduction: number
   advance_deduction: number
 }
@@ -16,181 +13,127 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
-  const { month, year, entries = [] } = await request.json() as {
-    month: number; year: number; entries: StaffEntry[]
+  let body: {
+    month?: unknown
+    year?: unknown
+    entries?: unknown
   }
-  if (!month || !year) return NextResponse.json({ error: 'Month and year are required' }, { status: 400 })
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+  const month = Number(body.month)
+  const year = Number(body.year)
+  const entries = body.entries
 
-  const { data: profileRaw } = await supabase.from('users').select('organization_id, role').eq('id', user.id).single()
-  const profile = profileRaw as unknown as { organization_id: string; role: string } | null
-  if (!profile?.organization_id) return NextResponse.json({ error: 'No organization found' }, { status: 400 })
+  if (!Number.isInteger(month) || month < 1 || month > 12
+    || !Number.isInteger(year) || year < 2000 || year > 2100) {
+    return NextResponse.json({ error: 'Enter a valid payroll month and year' }, { status: 400 })
+  }
+  if (!Array.isArray(entries)) {
+    return NextResponse.json({ error: 'Invalid payroll entries' }, { status: 400 })
+  }
+
+  const manualEntries: ManualPayrollEntry[] = []
+  for (const rawEntry of entries) {
+    if (!rawEntry || typeof rawEntry !== 'object') {
+      return NextResponse.json({ error: 'Invalid payroll entry' }, { status: 400 })
+    }
+
+    const entry = rawEntry as Record<string, unknown>
+    const normalized = {
+      staff_id: typeof entry.staff_id === 'string' ? entry.staff_id : '',
+      food_deduction: entry.food_deduction,
+      advance_deduction: entry.advance_deduction,
+    }
+    if (!normalized.staff_id
+      || typeof normalized.food_deduction !== 'number'
+      || typeof normalized.advance_deduction !== 'number'
+      || !Number.isFinite(normalized.food_deduction)
+      || normalized.food_deduction < 0
+      || !Number.isFinite(normalized.advance_deduction)
+      || normalized.advance_deduction < 0) {
+      return NextResponse.json({ error: 'Payroll entries must contain non-negative numbers' }, { status: 400 })
+    }
+    manualEntries.push({
+      staff_id: normalized.staff_id,
+      food_deduction: normalized.food_deduction,
+      advance_deduction: normalized.advance_deduction,
+    })
+  }
+
+  const { data: profileRaw } = await supabase
+    .from('users')
+    .select('organization_id, role, status, full_name')
+    .eq('id', user.id)
+    .single()
+  const profile = profileRaw as unknown as {
+    organization_id: string
+    role: string
+    status: string
+    full_name: string
+  } | null
+  if (!profile?.organization_id || profile.status !== 'active') {
+    return NextResponse.json({ error: 'No active organization profile found' }, { status: 403 })
+  }
   if (!['owner', 'admin', 'manager'].includes(profile.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  const orgId = profile.organization_id
 
   const admin = createAdminClient()
+  // The hand-maintained Database type does not include generated relationship
+  // metadata, so Supabase cannot infer RPC arguments from it.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adminDb = admin as any
-
-  const { data: existingRun } = await adminDb
-    .from('salary_runs')
-    .select('id')
-    .eq('organization_id', orgId)
-    .eq('salary_month', month)
-    .eq('salary_year', year)
-    .maybeSingle()
-  if (existingRun) return NextResponse.json({ error: 'Payroll already processed for this month' }, { status: 409 })
-
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-  const lastDay = new Date(year, month, 0).getDate()
-  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-
-  // Anyone who joined after this month ended was not an employee yet, so they
-  // get no payslip for it at all.
-  const { data: staffRaw } = await adminDb
-    .from('staff')
-    .select('*')
-    .eq('organization_id', orgId)
-    .eq('employment_status', 'active')
-    .lte('joining_date', endDate)
-
-  const staff = (staffRaw ?? []) as Array<{
-    id: string; basic_salary: number; housing_allowance: number; transport_allowance: number
-    food_allowance: number | null; other_allowance: number; allowance_name: string | null
-    fixed_overtime_monthly: number | null; overtime_eligible: boolean
-    advance_balance: number | null
-  }>
-
-  if (staff.length === 0) return NextResponse.json({ error: 'No active staff found' }, { status: 400 })
-
-  // Guard: refuse to process if any active employee has no attendance rows for
-  // the month. Absence is derived from attendance rows, so zero rows would be
-  // read as zero absence and the employee would be paid full salary silently.
-  const { data: attendanceStaffRaw } = await adminDb
-    .from('attendance')
-    .select('staff_id')
-    .eq('organization_id', orgId)
-    .in('staff_id', staff.map(s => s.id))
-    .gte('date', startDate)
-    .lte('date', endDate)
-
-  const staffWithAttendance = new Set((attendanceStaffRaw ?? []).map((r: any) => r.staff_id))
-  const staffMissing = staff.filter(s => !staffWithAttendance.has(s.id))
-
-  if (staffMissing.length > 0) {
-    const names = staffMissing.map(s => (s as any).full_name ?? s.id).join(', ')
-    return NextResponse.json({
-      error: `Cannot process payroll — ${staffMissing.length} employee(s) have no attendance records this month. Mark attendance (present / absent / leave) for: ${names}.`,
-    }, { status: 400 })
-  }
-
-  const entryMap = new Map(entries.map((e) => [e.staff_id, e]))
-
-  let totalBasic = 0, totalAllowances = 0, totalOvertime = 0, totalDeductions = 0, totalNet = 0
-
-  const slips = staff.map((s) => {
-    const entry = entryMap.get(s.id)
-    const basic = s.basic_salary ?? 0
-    // housing/transport kept at 0; use other_allowance only
-    const allowance = (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + (s.other_allowance ?? 0)
-    const food = s.food_allowance ?? 0
-    const allowanceName = s.allowance_name ?? 'Allowance'
-
-    // Already filtered per day when the hours were aggregated: ordinary daily OT
-    // only for eligible staff, Friday/holiday hours beyond the first 8 for everyone.
-    const normalOtPaidHours = entry?.normal_ot_paid_hours ?? 0
-    const hourlyRate = basic / 30 / 8
-    const normalOT = hourlyRate * normalOtPaidHours
-    // All staff get Friday/holiday OT; only overtime_eligible staff get daily normal OT
-    const fridayOT = entry?.friday_ot_amount ?? 0
-    // Fixed OT is a per-employee monthly allowance set by HR on the staff profile.
-    // It is summer-only (Mar–Sep) and independent of Friday/holiday work — Friday OT
-    // is a separate, attendance-driven payment.
-    const fixedOT = isFixedOtMonth(month) && s.overtime_eligible
-      ? (s.fixed_overtime_monthly ?? 0)
-      : 0
-
-    const advDeduct = Math.min(entry?.advance_deduction ?? 0, s.advance_balance ?? 0)
-    // Freeze what the balance actually is right after THIS month's own
-    // deduction — the payslip page reads this instead of live-fetching
-    // staff.advance_balance, so a later month's deduction can no longer
-    // retroactively change what an already-issued payslip displays.
-    const advBalanceAfter = Math.max(0, (s.advance_balance ?? 0) - advDeduct)
-
-    const absentDays = entry?.absent_days ?? 0
-    const absentDeduction = absentDays > 0
-      ? ((basic + allowance + fixedOT) / 30) * absentDays
-      : 0
-
-    const foodDeduction = entry?.food_deduction ?? 0
-
-    const totalAllowance = allowance + food
-    const totalOT = fixedOT + normalOT + fridayOT
-    const gross = basic + totalAllowance + totalOT
-    const totalAbsenceDeduction = absentDeduction + foodDeduction
-    const net = gross - advDeduct - totalAbsenceDeduction
-
-    totalBasic += basic
-    totalAllowances += totalAllowance
-    totalOvertime += totalOT
-    totalDeductions += advDeduct + totalAbsenceDeduction
-    totalNet += net
-
-    return {
-      organization_id: orgId,
-      staff_id: s.id,
-      basic_salary: basic,
-      housing_allowance: 0,
-      transport_allowance: 0,
-      food_allowance: food,
-      other_allowance: s.other_allowance ?? 0,
-      allowance_name: allowanceName,
-      overtime_amount: fixedOT,       // Fixed OT from profile
-      normal_overtime: normalOT,      // Normal OT (after 8 PM on weekdays)
-      friday_overtime: fridayOT,      // Friday/Holiday OT from attendance records
-      gross_salary: gross,
-      absent_days: absentDays,
-      absent_deduction: absentDeduction,
-      food_deduction: foodDeduction,
-      deductions: totalAbsenceDeduction,
-      advance_deduction: advDeduct,
-      advance_balance_after: advBalanceAfter,
-      net_salary: net,
-      payment_status: 'pending',
-    }
+  const { data: runId, error } = await adminDb.rpc('process_payroll', {
+    p_org_id: profile.organization_id,
+    p_processed_by: user.id,
+    p_month: month,
+    p_year: year,
+    p_manual_entries: manualEntries,
   })
 
-  const { data: runData, error: runError } = await adminDb
-    .from('salary_runs')
-    .insert({
-      organization_id: orgId,
-      salary_month: month,
-      salary_year: year,
-      status: 'draft',
-      total_basic: totalBasic,
-      total_allowances: totalAllowances,
-      total_overtime: totalOvertime,
-      total_deductions: totalDeductions,
-      total_net: totalNet,
-      processed_by: user.id,
-      processed_at: new Date().toISOString(),
-    })
-    .select('id')
-    .single()
+  if (error) {
+    const rawMessage = error.message?.replace(/^Error:\s*/, '') ?? ''
+    const knownMessage = [
+      'Enter a valid payroll month and year',
+      'Invalid payroll entries',
+      'Invalid payroll entry',
+      'No active staff found',
+      'Payroll entries are incomplete or duplicated',
+      'A payroll entry does not belong to an active employee in this organization',
+      'Cannot process payroll because attendance is incomplete for',
+      'Cannot process payroll while pending leave applications overlap this month',
+      'Payroll already processed for this month',
+      'The active employee list changed while payroll was being prepared',
+      'Advance deduction exceeds the outstanding balance for',
+      'Deductions exceed gross salary for',
+    ].find((message) => rawMessage.includes(message))
+    if (!knownMessage) {
+      console.error('Process payroll RPC error:', error)
+      return NextResponse.json({ error: 'Unable to process payroll' }, { status: 500 })
+    }
 
-  if (runError) return NextResponse.json({ error: runError.message }, { status: 500 })
-
-  const slipsWithRun = slips.map((sl) => ({ ...sl, salary_run_id: runData.id }))
-  const { error: slipError } = await adminDb.from('salary_slips').insert(slipsWithRun)
-  if (slipError) return NextResponse.json({ error: slipError.message }, { status: 500 })
-
-  // Decrement advance_balance for staff who had deductions — written from
-  // the same frozen advance_balance_after just stored on their slip, so the
-  // live balance and the payslip's snapshot can never disagree.
-  const deductionUpdates = slips.filter((sl) => sl.advance_deduction > 0)
-  for (const sl of deductionUpdates) {
-    await adminDb.from('staff').update({ advance_balance: sl.advance_balance_after }).eq('id', sl.staff_id)
+    const status = knownMessage.includes('already processed')
+      || knownMessage.includes('pending leave')
+      || knownMessage.includes('incomplete or duplicated')
+      || knownMessage.includes('active employee list changed')
+      ? 409
+      : 400
+    return NextResponse.json({ error: rawMessage }, { status })
   }
 
-  return NextResponse.json({ success: true, runId: runData.id })
+  await logAudit({
+    orgId: profile.organization_id,
+    userId: user.id,
+    userName: profile.full_name,
+    action: 'process_payroll',
+    entityType: 'salary_run',
+    entityId: runId,
+    entityLabel: `Payroll ${String(month).padStart(2, '0')}/${year}`,
+    changes: { month, year, employees: manualEntries.length },
+  })
+
+  return NextResponse.json({ success: true, runId })
 }

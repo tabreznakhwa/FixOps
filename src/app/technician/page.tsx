@@ -30,6 +30,8 @@ export default async function TechnicianPage() {
 
   const jobs = (jobsRaw as unknown as Parameters<typeof TechnicianDashboard>[0]['jobs']) ?? []
 
+  // Attendance and some staff columns trail the hand-maintained Database type.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: staffRaw } = await (supabase as any)
     .from('staff')
     .select('id')
@@ -38,11 +40,12 @@ export default async function TechnicianPage() {
     .maybeSingle()
   const staffId = (staffRaw as { id: string } | null)?.id ?? null
 
-  let todayAttendance: { check_in: string | null; check_out: string | null } | null = null
+  let todayAttendance: { check_in: string | null; check_out: string | null; status: string } | null = null
   if (staffId) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: attRaw } = await (supabase as any)
       .from('attendance')
-      .select('check_in, check_out')
+      .select('check_in, check_out, status')
       .eq('staff_id', staffId)
       .eq('date', kuwaitISODate())
       .maybeSingle()

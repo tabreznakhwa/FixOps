@@ -31,6 +31,8 @@ const LABELS: [string, string][] = [
   ['/suppliers/vendor-payments', 'Vendor Payments'],
   ['/suppliers/advances', 'Supplier Advances'],
   ['/payroll/my-payslips', 'My Payslips'],
+  ['/leave-applications', 'Leave Approvals'],
+  ['/my-leave', 'My Leave'],
   ['/payroll/process', 'Payslips'],
   ['/staff/ledger', 'Staff Ledger'],
   ['/work-orders', 'Work Orders'],

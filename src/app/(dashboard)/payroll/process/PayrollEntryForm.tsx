@@ -46,7 +46,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
   const [entries, setEntries] = useState<Record<string, EntryState>>(
     Object.fromEntries(staff.map((s) => [s.id, {
       food_deduction: '',
-      advance_deduction: '',
+      advance_deduction: (s.advance_balance ?? 0) > 0 ? String(s.advance_balance) : '',
     }]))
   )
 
@@ -70,9 +70,6 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
     try {
       const entriesArray = staff.map((s) => ({
         staff_id: s.id,
-        normal_ot_paid_hours: normalOtPaidHoursMap[s.id] ?? 0,
-        friday_ot_amount: fridayOtAmountMap[s.id] ?? 0,
-        absent_days: absentDaysMap[s.id] ?? 0,
         food_deduction: parseFloat(entries[s.id]?.food_deduction || '0') || 0,
         advance_deduction: parseFloat(entries[s.id]?.advance_deduction || '0') || 0,
       }))
@@ -150,7 +147,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
           <div>
             <h3 className="font-semibold text-slate-900">Review Payroll — {staff.length} Employees</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              All OT values are auto-calculated. Only Food Deduction{hasAdvances ? ' and Advance/Loan Recovery' : ''} require manual entry.
+              All OT values are auto-calculated. Food Deduction is manual{hasAdvances ? '; Advance/Loan Recovery is prefilled from the outstanding balance and can be adjusted' : ''}.
             </p>
           </div>
           <button
@@ -296,7 +293,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, normalOtPa
                     )}
                     <td className="px-5 py-3 text-right">
                       <span className={`text-sm font-bold ${net < 0 ? 'text-red-600' : 'text-slate-900'}`}>
-                        {formatCurrency(Math.max(0, net))}
+                        {formatCurrency(net)}
                       </span>
                       {(absentDeduct + foodDeduct) > 0 && (
                         <p className="text-xs text-red-400 mt-0.5">−{formatCurrency(absentDeduct + foodDeduct)} deducted</p>

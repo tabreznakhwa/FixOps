@@ -9,6 +9,7 @@ import { PaySalariesButton } from './PaySalariesButton'
 import { ResetRunButton } from './ResetRunButton'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
+import { redirect } from 'next/navigation'
 
 export const metadata = { title: 'Payslips' }
 
@@ -16,6 +17,53 @@ const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ]
+const PAGE_SIZE = 1000
+const IN_FILTER_BATCH_SIZE = 200
+
+type PayrollStaff = {
+  id: string
+  staff_code: string
+  full_name: string
+  designation: string | null
+  department: string | null
+  basic_salary: number
+  housing_allowance: number
+  transport_allowance: number
+  food_allowance: number | null
+  other_allowance: number
+  allowance_name: string | null
+  fixed_overtime_monthly: number | null
+  friday_ot_amount: number | null
+  advance_balance: number | null
+  overtime_eligible: boolean
+  bank_name: string | null
+  iban: string | null
+}
+
+type PayrollAttendance = {
+  staff_id: string
+  status: string
+  overtime_hours: number
+  friday_ot_amount: number
+  date: string
+  is_public_holiday: boolean
+}
+
+async function fetchAllPages<T>(
+  loadPage: (from: number, to: number) => Promise<{
+    data: T[] | null
+    error: { message: string } | null
+  }>
+): Promise<T[]> {
+  const rows: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await loadPage(from, from + PAGE_SIZE - 1)
+    if (error) throw new Error(error.message)
+    const page = data ?? []
+    rows.push(...page)
+    if (page.length < PAGE_SIZE) return rows
+  }
+}
 
 export default async function PayrollProcessPage({
   searchParams,
@@ -29,13 +77,31 @@ export default async function PayrollProcessPage({
   const year = parseInt(params.year ?? String(now.getFullYear()))
 
   const supabase = await createClient()
+  // Payroll and attendance still trail the generated Database type.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileRaw } = await admin.from('users').select('organization_id, role').eq('id', user!.id).single()
-  const profile = profileRaw as { organization_id: string; role: string } | null
-  const orgId = profile?.organization_id
-  const canResetRun = ['owner', 'admin'].includes(profile?.role ?? '')
+  if (!user) redirect('/login')
+
+  const { data: profileRaw } = await admin
+    .from('users')
+    .select('organization_id, role, status')
+    .eq('id', user.id)
+    .single()
+  const profile = profileRaw as {
+    organization_id: string
+    role: string
+    status: string
+  } | null
+  if (!profile?.organization_id || profile.status !== 'active') redirect('/login')
+  if (!['owner', 'admin', 'manager', 'accounts'].includes(profile.role)) {
+    redirect('/dashboard?error=unauthorized')
+  }
+
+  const orgId = profile.organization_id
+  const canProcessRun = ['owner', 'admin', 'manager'].includes(profile.role)
+  const canResetRun = ['owner', 'admin'].includes(profile.role)
 
   // Check if a run exists for this month/year
   const { data: runRaw } = await admin
@@ -57,47 +123,45 @@ export default async function PayrollProcessPage({
 
   // Staff list — anyone who joined after this month ended was not an employee
   // yet, so they get no payslip for it at all.
-  const { data: staffRaw } = await admin
+  const staff = await fetchAllPages<PayrollStaff>((from, to) => admin
     .from('staff')
-    .select('*')
+    .select('id, staff_code, full_name, designation, department, basic_salary, housing_allowance, transport_allowance, food_allowance, other_allowance, allowance_name, fixed_overtime_monthly, friday_ot_amount, advance_balance, overtime_eligible, bank_name, iban')
     .eq('organization_id', orgId)
     .eq('employment_status', 'active')
     .lte('joining_date', endDate)
     .order('full_name')
+    .order('id')
+    .range(from, to))
 
-  const staff = (staffRaw ?? []) as Array<{
-    id: string; staff_code: string; full_name: string; designation: string | null; department: string | null
-    basic_salary: number; housing_allowance: number; transport_allowance: number
-    food_allowance: number | null; other_allowance: number; allowance_name: string | null
-    fixed_overtime_monthly: number | null; advance_balance: number | null
-    overtime_eligible: boolean; bank_name: string | null; iban: string | null
-  }>
-
-  // Attendance for this month — filter by this org's staff IDs
+  // Page each bounded staff-ID batch independently. This avoids both
+  // PostgREST's 1,000-row cap and oversized `in` URLs for larger organizations.
   const staffIds = staff.map(s => s.id)
-
-  const { data: attendanceRaw } = staffIds.length > 0
-    ? await admin
-        .from('attendance')
-        .select('staff_id, status, overtime_hours, friday_ot_amount, date, is_public_holiday')
-        .in('staff_id', staffIds)
-        .gte('date', startDate)
-        .lte('date', endDate)
-    : { data: [] }
+  const attendance: PayrollAttendance[] = []
+  for (let batchStart = 0; batchStart < staffIds.length; batchStart += IN_FILTER_BATCH_SIZE) {
+    const batchIds = staffIds.slice(batchStart, batchStart + IN_FILTER_BATCH_SIZE)
+    const batch = await fetchAllPages<PayrollAttendance>((from, to) => admin
+      .from('attendance')
+      .select('staff_id, status, overtime_hours, friday_ot_amount, date, is_public_holiday')
+      .eq('organization_id', orgId)
+      .in('staff_id', batchIds)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date')
+      .order('staff_id')
+      .range(from, to))
+    attendance.push(...batch)
+  }
 
   // Build attendance maps per staff
   const absentDaysMap: Record<string, number> = {}
   const normalOtPaidHoursMap: Record<string, number> = {}
   const fridayOtAmountMap: Record<string, number> = {}
 
-  const staffRateMap = Object.fromEntries(staff.map(s => [s.id, (s as any).friday_ot_amount ?? 0]))
+  const staffRateMap = Object.fromEntries(staff.map(s => [s.id, s.friday_ot_amount ?? 0]))
   const eligibleMap = Object.fromEntries(staff.map(s => [s.id, s.overtime_eligible]))
   const attendanceStaffIds = new Set<string>()
 
-  for (const rec of (attendanceRaw ?? []) as Array<{
-    staff_id: string; status: string; overtime_hours: number
-    friday_ot_amount: number; date: string; is_public_holiday: boolean
-  }>) {
+  for (const rec of attendance) {
     attendanceStaffIds.add(rec.staff_id)
     if (rec.status === 'absent') {
       absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 1
@@ -131,15 +195,18 @@ export default async function PayrollProcessPage({
     id: string; staff_id: string; basic_salary: number; housing_allowance: number
     transport_allowance: number; other_allowance: number; overtime_amount: number
     gross_salary: number; deductions: number; advance_deduction: number; net_salary: number
-    payment_status: string; normal_overtime: number | null
+    payment_status: string; normal_overtime: number | null; friday_overtime: number | null
+    food_allowance: number | null
   }> = []
 
   if (run) {
-    const { data: slipsRaw } = await admin
+    slips = await fetchAllPages((from, to) => admin
       .from('salary_slips')
       .select('*')
+      .eq('organization_id', orgId)
       .eq('salary_run_id', run.id)
-    slips = slipsRaw ?? []
+      .order('staff_id')
+      .range(from, to))
   }
 
   // Build per-employee pending slip details for the Pay modal
@@ -149,27 +216,54 @@ export default async function PayrollProcessPage({
       const s = staff.find(s => s.id === sl.staff_id)
       return {
         slipId: sl.id,
-        staffName: s?.full_name ?? 'Unknown',
+        staffName: s?.full_name ?? 'Former employee',
         netSalary: sl.net_salary,
         hasIban: Boolean(s?.iban),
       }
     })
 
-  // Build preview rows
-  const rows = staff.map((s) => {
-    const slip = slips.find((sl) => sl.staff_id === s.id)
-    const allowances = (s.housing_allowance ?? 0) + (s.transport_allowance ?? 0) + (s.food_allowance ?? 0) + (s.other_allowance ?? 0)
-    const overtime = (slip?.overtime_amount ?? 0) + (slip?.normal_overtime ?? 0)
-    const gross = (s.basic_salary ?? 0) + allowances + overtime
-    return {
-      ...s,
-      slip,
-      allowances,
-      overtime,
-      gross,
-      net: slip?.net_salary ?? gross,
-    }
-  })
+  // Build preview rows. Once a run exists, use its immutable slip values rather
+  // than mutable staff salary fields. Include former employees whose frozen slip
+  // remains part of the run.
+  const rows = run
+    ? slips.map((slip) => {
+        const currentStaff = staff.find((employee) => employee.id === slip.staff_id)
+        const allowances = (slip.housing_allowance ?? 0)
+          + (slip.transport_allowance ?? 0)
+          + (slip.food_allowance ?? 0)
+          + (slip.other_allowance ?? 0)
+        const overtime = (slip.overtime_amount ?? 0)
+          + (slip.normal_overtime ?? 0)
+          + (slip.friday_overtime ?? 0)
+        return {
+          id: slip.staff_id,
+          full_name: currentStaff?.full_name ?? 'Former employee',
+          designation: currentStaff?.designation ?? null,
+          department: currentStaff?.department ?? null,
+          staff_code: currentStaff?.staff_code ?? '—',
+          basic_salary: slip.basic_salary,
+          slip,
+          allowances,
+          overtime,
+          gross: slip.gross_salary,
+          net: slip.net_salary,
+        }
+      })
+    : staff.map((employee) => {
+        const allowances = (employee.housing_allowance ?? 0)
+          + (employee.transport_allowance ?? 0)
+          + (employee.food_allowance ?? 0)
+          + (employee.other_allowance ?? 0)
+        const gross = (employee.basic_salary ?? 0) + allowances
+        return {
+          ...employee,
+          slip: undefined,
+          allowances,
+          overtime: 0,
+          gross,
+          net: gross,
+        }
+      })
 
   const totalNet = rows.reduce((s, r) => s + r.net, 0)
   const years = Array.from({ length: 3 }, (_, i) => now.getFullYear() - i)
@@ -226,7 +320,7 @@ export default async function PayrollProcessPage({
           )}
         </form>
 
-        {!run && (
+        {!run && canProcessRun && (
           <PayrollEntryForm
             month={month}
             year={year}
@@ -236,6 +330,12 @@ export default async function PayrollProcessPage({
             fridayOtAmountMap={fridayOtAmountMap}
             staffWithNoAttendance={staffWithNoAttendance}
           />
+        )}
+
+        {!run && !canProcessRun && (
+          <div className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
+            Payroll has not been processed for this month. An owner, admin or manager must process it before payment.
+          </div>
         )}
 
         {run && (
@@ -258,7 +358,7 @@ export default async function PayrollProcessPage({
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <h3 className="font-semibold text-slate-900">Employee Payslips — {MONTHS[month - 1]} {year}</h3>
-            <span className="text-xs text-slate-500">{staff.length} employees · Total {formatCurrency(totalNet)}</span>
+            <span className="text-xs text-slate-500">{rows.length} employees · Total {formatCurrency(totalNet)}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px]">

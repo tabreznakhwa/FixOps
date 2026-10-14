@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { isFriday, payableOvertimeHours } from '@/lib/attendance'
 
+// Attendance is not yet represented in the manually maintained Database type.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
@@ -30,7 +33,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // Non-eligible staff get no daily OT, but they do get Friday/holiday OT —
     // including the additional hours beyond the first 8 on such a day.
     const { data: attRec } = await admin
-      .from('attendance').select('staff_id').eq('id', id).single()
+      .from('attendance')
+      .select('staff_id, leave_application_id')
+      .eq('id', id)
+      .eq('organization_id', profile.organization_id)
+      .maybeSingle()
+    if (!attRec) return NextResponse.json({ error: 'Attendance record not found' }, { status: 404 })
+    if (attRec.leave_application_id) {
+      return NextResponse.json({ error: 'Approved leave attendance cannot be edited directly. Resolve the leave application first.' }, { status: 409 })
+    }
     let isOtEligible = true
     if (attRec?.staff_id) {
       const { data: staffData } = await admin
@@ -39,7 +50,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     const isHoliday = isFriday(date) || Boolean(is_public_holiday)
 
-    const { error } = await admin
+    const { data: updated, error } = await admin
       .from('attendance')
       .update({
         date,
@@ -57,8 +68,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       })
       .eq('id', id)
       .eq('organization_id', profile.organization_id)
+      .is('leave_application_id', null)
+      .select('id')
+      .maybeSingle()
 
     if (error) throw error
+    if (!updated) {
+      return NextResponse.json({ error: 'Attendance changed while saving. Reload and try again.' }, { status: 409 })
+    }
     return NextResponse.json({ success: true })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : JSON.stringify(err)
@@ -83,13 +100,30 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     }
 
     const admin = createAdminClient() as any
-    const { error } = await admin
+    const { data: existing } = await admin
+      .from('attendance')
+      .select('leave_application_id')
+      .eq('id', id)
+      .eq('organization_id', profile.organization_id)
+      .maybeSingle()
+    if (!existing) return NextResponse.json({ error: 'Attendance record not found' }, { status: 404 })
+    if (existing.leave_application_id) {
+      return NextResponse.json({ error: 'Approved leave attendance cannot be deleted directly. Resolve the leave application first.' }, { status: 409 })
+    }
+
+    const { data: deleted, error } = await admin
       .from('attendance')
       .delete()
       .eq('id', id)
       .eq('organization_id', profile.organization_id)
+      .is('leave_application_id', null)
+      .select('id')
+      .maybeSingle()
 
     if (error) throw error
+    if (!deleted) {
+      return NextResponse.json({ error: 'Attendance changed while deleting. Reload and try again.' }, { status: 409 })
+    }
     return NextResponse.json({ success: true })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : JSON.stringify(err)

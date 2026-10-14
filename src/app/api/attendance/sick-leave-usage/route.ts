@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 
 const SICK_LEAVE_ANNUAL_LIMIT = 15
 
@@ -20,9 +20,27 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data, error } = await (supabase as any)
+  // Resolve the requested employee in the caller's organization. Employees may
+  // read only their own usage; attendance administrators may read anyone's.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any
+  const [{ data: profile }, { data: staff }] = await Promise.all([
+    admin.from('users').select('organization_id, role, status').eq('id', user.id).single(),
+    admin.from('staff').select('id, organization_id, user_id').eq('id', staffId).maybeSingle(),
+  ])
+
+  if (!profile || profile.status !== 'active' || !staff || staff.organization_id !== profile.organization_id) {
+    return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
+  }
+  const canReadAny = ['owner', 'admin', 'hr', 'manager'].includes(profile.role)
+  if (!canReadAny && staff.user_id !== user.id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const { count, error } = await admin
     .from('attendance')
-    .select('id')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', profile.organization_id)
     .eq('staff_id', staffId)
     .eq('status', 'sick_leave')
     .gte('date', `${year}-01-01`)
@@ -30,7 +48,7 @@ export async function GET(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const used = (data ?? []).length
+  const used = count ?? 0
   return NextResponse.json({
     used,
     limit: SICK_LEAVE_ANNUAL_LIMIT,

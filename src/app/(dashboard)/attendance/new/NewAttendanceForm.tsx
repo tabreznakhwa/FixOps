@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, dutyHints, DUTY_START, DUTY_END } from '@/lib/attendance'
 import { SickLeaveUsageNote } from '@/components/attendance/SickLeaveUsageNote'
 
@@ -27,6 +28,7 @@ function fmtHrs(h: number): string {
 }
 
 export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToToday }: Props) {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('present')
@@ -110,27 +112,11 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
         setLoading(false)
         return
       }
-      window.location.href = '/attendance'
+      router.replace(isKiosk ? '/my-attendance' : '/attendance')
     } catch {
       setError('Network error. Please try again.')
       setLoading(false)
     }
-  }
-
-  // Kiosk with no linked staff — show a clear message instead of blank form
-  if (isKiosk && !lockedStaffId) {
-    return (
-      <div className="max-w-xl bg-amber-50 border border-amber-200 rounded-xl px-6 py-8 text-center">
-        <p className="text-sm font-semibold text-amber-800 mb-2">Staff record not linked</p>
-        <p className="text-sm text-amber-700">
-          Your login is not linked to a staff profile. Please ask your HR administrator to link your account
-          in Staff → Login Account before you can mark attendance.
-        </p>
-        <a href="/attendance" className="mt-4 inline-block text-sm font-semibold text-blue-600 hover:underline">
-          ← Back to Attendance
-        </a>
-      </div>
-    )
   }
 
   return (
@@ -190,30 +176,34 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
         </div>
 
         {/* Public Holiday toggle */}
-        <label className="flex items-center gap-3 cursor-pointer select-none">
-          <div className="relative">
-            <input
-              type="checkbox"
-              className="sr-only peer"
-              checked={isPublicHoliday}
-              onChange={(e) => handlePublicHolidayToggle(e.target.checked)}
-            />
-            <div className="w-10 h-5 bg-slate-200 rounded-full peer peer-checked:bg-purple-600 transition-colors" />
-            <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-all peer-checked:translate-x-5" />
-          </div>
-          <span className="text-sm font-medium text-slate-700">Public Holiday</span>
-          {isPublicHoliday && <span className="text-xs text-purple-600 font-semibold">(overtime rules apply)</span>}
-        </label>
+        {!isKiosk && (
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <div className="relative">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={isPublicHoliday}
+                onChange={(e) => handlePublicHolidayToggle(e.target.checked)}
+              />
+              <div className="w-10 h-5 bg-slate-200 rounded-full peer peer-checked:bg-purple-600 transition-colors" />
+              <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-all peer-checked:translate-x-5" />
+            </div>
+            <span className="text-sm font-medium text-slate-700">Public Holiday</span>
+            {isPublicHoliday && <span className="text-xs text-purple-600 font-semibold">(overtime rules apply)</span>}
+          </label>
+        )}
 
         <div>
           <label className={labelClass}>Status <span className="text-red-500">*</span></label>
           <div className="grid grid-cols-2 gap-2">
             {[
               { value: 'present', label: 'Present' },
-              { value: 'absent', label: 'Absent' },
               { value: 'half_day', label: 'Half Day' },
-              { value: 'leave', label: 'Leave' },
-              { value: 'sick_leave', label: 'Sick Leave' },
+              ...(!isKiosk ? [
+                { value: 'absent', label: 'Absent' },
+                { value: 'leave', label: 'Leave' },
+                { value: 'sick_leave', label: 'Sick Leave' },
+              ] : []),
             ].map(({ value, label }) => (
               <label
                 key={value}
@@ -426,7 +416,7 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
         >
           {loading ? 'Saving…' : 'Save Attendance'}
         </button>
-        <a href="/attendance" className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors">
+        <a href={isKiosk ? '/my-attendance' : '/attendance'} className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors">
           Cancel
         </a>
       </div>

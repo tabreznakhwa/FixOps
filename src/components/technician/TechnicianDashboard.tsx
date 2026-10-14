@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getPriorityColor, getStatusColor, formatStatus, formatDate } from '@/lib/utils'
-import { Wrench, MapPin, Phone, Clock, CheckCircle2, PlayCircle, Navigation, Package, LogOut, ChevronRight, LogIn, AlertCircle } from 'lucide-react'
+import { Wrench, MapPin, Phone, Clock, CheckCircle2, Navigation, LogOut, ChevronRight, LogIn, AlertCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface Job {
@@ -23,16 +23,10 @@ interface Job {
   } | null
 }
 
-const TECHNICIAN_STATUSES = [
-  { key: 'accepted', label: 'Accept Job', color: 'bg-blue-600', next: 'on_the_way' },
-  { key: 'on_the_way', label: 'On the Way', color: 'bg-cyan-600', next: 'work_started' },
-  { key: 'work_started', label: 'Start Work', color: 'bg-teal-600', next: 'completed' },
-  { key: 'completed', label: 'Mark Complete', color: 'bg-green-600', next: null },
-]
-
 interface Attendance {
   check_in: string | null
   check_out: string | null
+  status: string
 }
 
 export function TechnicianDashboard({
@@ -108,6 +102,8 @@ export function TechnicianDashboard({
 
   async function updateStatus(jobId: string, newStatus: string) {
     setUpdating(true)
+    // The generated Database type does not yet include work_orders.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any)
       .from('work_orders')
       .update({ status: newStatus, updated_at: new Date().toISOString() })
@@ -165,7 +161,7 @@ export function TechnicianDashboard({
         {/* Compact status bar in header */}
         {staffLinked === false ? (
           <div className="mt-3 flex items-center gap-2 bg-amber-900/30 border border-amber-700/50 rounded-xl px-3 py-2 text-xs text-amber-300">
-            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" /> Your login isn't linked to a staff profile — ask HR to link it so your hours count toward salary.
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" /> Your login isn&apos;t linked to a staff profile — ask HR to link it so your hours count toward salary.
           </div>
         ) : attendance?.check_out ? (
           <div className="mt-3 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl">
@@ -290,7 +286,21 @@ export function TechnicianDashboard({
         /* Job List */
         <div className="p-4 space-y-6 max-w-lg mx-auto">
           {/* Big Clock-In CTA when technician hasn't started their day */}
-          {staffLinked !== false && !attendance?.check_in && (
+          {staffLinked !== false && attendance && ['leave', 'sick_leave'].includes(attendance.status) ? (
+            <div className="bg-blue-950 border border-blue-700/50 rounded-2xl p-6 text-center">
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 className="w-8 h-8 text-white" />
+              </div>
+              <h2 className="text-lg font-bold text-white mb-1">{attendance.status === 'sick_leave' ? 'Approved Sick Leave' : 'Approved Leave'}</h2>
+              <p className="text-sm text-slate-400">Contact an administrator if your plans change and you need to work today.</p>
+            </div>
+          ) : staffLinked !== false && attendance?.status === 'absent' && !attendance.check_in ? (
+            <div className="bg-red-950 border border-red-700/50 rounded-2xl p-6 text-center">
+              <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+              <h2 className="text-lg font-bold text-white mb-1">Marked Absent</h2>
+              <p className="text-sm text-slate-400">Contact an administrator before trying to clock in.</p>
+            </div>
+          ) : staffLinked !== false && !attendance?.check_in ? (
             <div className="bg-green-950 border border-green-700/50 rounded-2xl p-6 text-center">
               <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <LogIn className="w-8 h-8 text-white" />
@@ -308,7 +318,7 @@ export function TechnicianDashboard({
               </button>
               {attendanceError && <p className="text-xs text-red-400 mt-3">{attendanceError}</p>}
             </div>
-          )}
+          ) : null}
 
           {/* Clock-Out reminder when on duty */}
           {staffLinked !== false && attendance?.check_in && !attendance.check_out && (
@@ -335,7 +345,7 @@ export function TechnicianDashboard({
             <div>
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-blue-500" />
-                Today's Jobs ({todayJobs.length})
+                Today&apos;s Jobs ({todayJobs.length})
               </h2>
               <div className="space-y-3">
                 {todayJobs.map((job) => <JobCard key={job.id} job={job} onSelect={() => setSelectedJob(job)} onUpdateStatus={updateStatus} updating={updating} />)}

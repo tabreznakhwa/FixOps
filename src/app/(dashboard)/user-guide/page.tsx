@@ -72,7 +72,7 @@ export default function UserGuidePage() {
             ['9', 'Suppliers & Purchase Orders'],
             ['10', 'Vendor Payments'],
             ['11', 'HR — Staff Management'],
-            ['12', 'Attendance'],
+            ['12', 'Attendance & Leave Applications'],
             ['13', 'Payroll & Payslips'],
             ['14', 'Reports'],
             ['15', 'Settings'],
@@ -163,7 +163,7 @@ export default function UserGuidePage() {
             <p>Shows all outstanding invoices — what customers owe you. Colour-coded by payment status: green (current), amber (partial), red (overdue).</p>
           </Sub>
           <Sub title="Customer Ledger">
-            <p>Full account statement per customer — every invoice and payment in chronological order with a running balance. Use the customer filter to view a single customer's history.</p>
+            <p>Full account statement per customer — every invoice and payment in chronological order with a running balance. Use the customer filter to view a single customer&apos;s history.</p>
           </Sub>
           <Sub title="Bill-wise Outstanding">
             <p>A consolidated view of unpaid invoices grouped by customer. Useful for collections follow-up.</p>
@@ -213,7 +213,7 @@ export default function UserGuidePage() {
           <Sub title="Receiving Goods">
             <Step n={1}>Open the PO → click <strong>Receive Goods</strong>.</Step>
             <Step n={2}>Enter the quantity received for each item and click <strong>Confirm Receipt</strong>.</Step>
-            <Step n={3}>Inventory automatically updates. If the item doesn't exist in inventory, it is created automatically.</Step>
+            <Step n={3}>Inventory automatically updates. If the item doesn&apos;t exist in inventory, it is created automatically.</Step>
           </Sub>
           <Sub title="Purchase Register">
             <p>Go to <strong>Purchase Register</strong> to see all POs with their totals, amount paid, and outstanding balance.</p>
@@ -228,7 +228,7 @@ export default function UserGuidePage() {
             <Step n={3}>Enter the amount, payment mode, reference/cheque number, and date. Click <strong>Record Payment</strong>.</Step>
             <Step n={4}>The PO balance updates automatically and the payment appears in the Bank Book or Cash Book depending on the payment mode.</Step>
           </Sub>
-          <Tip>You can also record a payment directly from the PO detail page using the "Record Vendor Payment" button.</Tip>
+          <Tip>You can also record a payment directly from the PO detail page using the &quot;Record Vendor Payment&quot; button.</Tip>
         </Section>
 
         {/* 11. HR — Staff */}
@@ -248,7 +248,7 @@ export default function UserGuidePage() {
         </Section>
 
         {/* 12. Attendance */}
-        <Section id="s12" title="12. Attendance">
+        <Section id="s12" title="12. Attendance & Leave Applications">
           <Sub title="Marking Attendance">
             <Step n={1}>Go to <strong>Attendance</strong> → <strong>Mark Attendance</strong>.</Step>
             <Step n={2}>Select the staff member, date, and status: Present, Absent, Half Day, Leave, or Sick Leave.</Step>
@@ -257,7 +257,18 @@ export default function UserGuidePage() {
           <Sub title="Viewing Records">
             <p>The main Attendance page shows all records for the current month. Use the month selector and staff filter to drill down. Summary cards show total Present, Absent, Half Day, Leave, and Sick Leave counts.</p>
           </Sub>
-          <Tip>From 1 October 2026, the 8-hour duty starts from the employee's clock-in time — clocking in at 12 PM means the duty runs until 8 PM, and anything worked after that is overtime. Fixed overtime (the flat monthly amount) is a summer-only benefit paid from March to September; in winter the time past the 8-hour duty is paid as normal overtime.</Tip>
+          <Sub title="Applying for Leave">
+            <Step n={1}>Open <strong>My Leave</strong> under HR &amp; Payroll, then click <strong>Apply for Leave</strong>.</Step>
+            <Step n={2}>Choose Annual Leave, Sick Leave, or Compensation Leave. Select the dates and enter the reason.</Step>
+            <Step n={3}>Submit the application. Fridays and known public holidays are not counted as leave days.</Step>
+            <Step n={4}>Track the request on My Leave. A pending request may be cancelled before it is reviewed.</Step>
+          </Sub>
+          <Sub title="Approving Leave (Owner/Admin)">
+            <Step n={1}>Open <strong>Leave Approvals</strong> under HR &amp; Payroll.</Step>
+            <Step n={2}>Review the employee, leave type, dates, working-day count, and reason.</Step>
+            <Step n={3}>Approve to add paid leave to attendance, or reject and enter a reason for the employee.</Step>
+          </Sub>
+          <Tip>Approved leave cannot overwrite worked or manually entered attendance. From 1 October 2026, the 8-hour duty starts from the employee&apos;s clock-in time — clocking in at 12 PM means the duty runs until 8 PM, and anything worked after that is overtime. Fixed overtime is a summer-only benefit paid from March to September.</Tip>
         </Section>
 
         {/* 13. Payroll */}

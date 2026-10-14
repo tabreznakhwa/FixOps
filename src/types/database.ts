@@ -1,6 +1,8 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
-export type UserRole = 'owner' | 'admin' | 'manager' | 'call_center' | 'technician' | 'accounts' | 'hr' | 'store'
+export type UserRole = 'owner' | 'admin' | 'manager' | 'call_center' | 'technician' | 'accounts' | 'hr' | 'store' | 'attendance_kiosk'
+export type LeaveType = 'annual_leave' | 'sick_leave' | 'compensation_leave'
+export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
 export type UserStatus = 'pending' | 'active' | 'inactive' | 'rejected'
 export type CustomerType = 'individual' | 'company' | 'amc' | 'one_time' | 'credit'
 export type ComplaintStatus = 'new' | 'under_review' | 'assigned' | 'accepted' | 'on_the_way' | 'work_started' | 'waiting_parts' | 'waiting_approval' | 'completed' | 'verified' | 'invoiced' | 'paid' | 'cancelled' | 'reopened'
@@ -337,6 +339,35 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['staff']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['staff']['Insert']>
       }
+      leave_applications: {
+        Row: {
+          id: string
+          organization_id: string
+          staff_id: string
+          leave_type: LeaveType
+          start_date: string
+          end_date: string
+          requested_days: number
+          reason: string
+          status: LeaveStatus
+          idempotency_key: string | null
+          active_period: string | null
+          submitted_by: string
+          reviewed_by: string | null
+          reviewed_at: string | null
+          review_note: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['leave_applications']['Row'], 'id' | 'status' | 'idempotency_key' | 'active_period' | 'reviewed_by' | 'reviewed_at' | 'review_note' | 'created_at' | 'updated_at'> & {
+          status?: LeaveStatus
+          idempotency_key?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          review_note?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['leave_applications']['Insert']>
+      }
       customer_ledger_entries: {
         Row: {
           id: string
@@ -388,6 +419,98 @@ export interface Database {
       get_user_role: {
         Args: Record<string, never>
         Returns: string
+      }
+      count_leave_working_days: {
+        Args: {
+          p_org_id: string
+          p_start_date: string
+          p_end_date: string
+        }
+        Returns: number
+      }
+      submit_leave_application: {
+        Args: {
+          p_org_id: string
+          p_staff_id: string
+          p_submitter_id: string
+          p_leave_type: LeaveType
+          p_start_date: string
+          p_end_date: string
+          p_reason: string
+          p_idempotency_key?: string | null
+        }
+        Returns: Array<{
+          application: Database['public']['Tables']['leave_applications']['Row']
+          created: boolean
+        }>
+      }
+      review_leave_application: {
+        Args: {
+          p_application_id: string
+          p_org_id: string
+          p_reviewer_id: string
+          p_decision: 'approved' | 'rejected'
+          p_review_note?: string | null
+        }
+        Returns: Array<{
+          application: Database['public']['Tables']['leave_applications']['Row']
+          changed: boolean
+        }>
+      }
+      settle_leave_salary: {
+        Args: {
+          p_org_id: string
+          p_paid_by: string
+          p_staff_id: string
+          p_settlement_date: string
+          p_amount: number
+          p_expected_balance: number
+          p_payment_method?: string
+          p_notes?: string | null
+        }
+        Returns: Array<{
+          advance_id: string
+          balance_after: number
+        }>
+      }
+      update_staff_profile_with_opening_balance: {
+        Args: {
+          p_org_id: string
+          p_updated_by: string
+          p_staff_id: string
+          p_expected_opening_advance: number
+          p_expected_opening_loan: number
+          p_updates: Json
+        }
+        Returns: undefined
+      }
+      process_payroll: {
+        Args: {
+          p_org_id: string
+          p_processed_by: string
+          p_month: number
+          p_year: number
+          p_manual_entries?: Json
+        }
+        Returns: string
+      }
+      reset_payroll_run: {
+        Args: {
+          p_org_id: string
+          p_reset_by: string
+          p_run_id: string
+        }
+        Returns: undefined
+      }
+      pay_salary_run: {
+        Args: {
+          p_org_id: string
+          p_paid_by: string
+          p_run_id: string
+          p_payment_date: string
+          p_entries: Json
+        }
+        Returns: undefined
       }
     }
     Enums: Record<string, never>

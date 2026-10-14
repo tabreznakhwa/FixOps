@@ -34,6 +34,7 @@ export const ROUTE_MODULE: [string, ModuleKey][] = [
   ['/finance/quotations', 'finance'],
   ['/finance', 'finance'],
   ['/amc', 'finance'],
+  ['/leave-applications', 'hr'],
   ['/staff', 'hr'],
   ['/attendance', 'hr'],
   ['/payroll', 'hr'],

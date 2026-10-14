@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Plus, CalendarCheck, UserCheck, XCircle, Clock, Pencil, HeartPulse } from 'lucide-react'
 import { DeleteAttendanceButton } from './DeleteAttendanceButton'
 import { formatDate } from '@/lib/utils'
-import { isFriday } from '@/lib/attendance'
+import { isFriday, nowInKuwait } from '@/lib/attendance'
 import { StaffFilterSelect } from './StaffFilterSelect'
 import { MarkAbsentButton } from './MarkAbsentButton'
 import { redirect } from 'next/navigation'
@@ -64,7 +64,7 @@ export default async function AttendancePage({
   }>
 }) {
   const params = await searchParams
-  const today = new Date()
+  const today = nowInKuwait()
   const pad = (n: number) => String(n).padStart(2, '0')
   const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
   const currentMonth =
@@ -79,29 +79,20 @@ export default async function AttendancePage({
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
-  const userRole = (profileRaw as { role: string } | null)?.role ?? ''
+  if (!user) redirect('/login')
+  const { data: profileRaw } = await supabase
+    .from('users')
+    .select('role, status')
+    .eq('id', user.id)
+    .single()
+  const profile = profileRaw as { role: string; status: string } | null
+  if (!profile || profile.status !== 'active') redirect('/login')
+  const userRole = profile.role
 
   // Non-admin staff have their own self-service page — block access to the full staff list
   if (userRole === 'technician' || userRole === 'attendance_kiosk') redirect('/my-attendance')
 
-  const isKiosk = userRole === 'attendance_kiosk'
   const canEdit = ['owner', 'admin', 'hr', 'manager'].includes(userRole)
-
-  // Kiosk users see only their own records — look up their linked staff record
-  let kioskStaffId: string | null = null
-  let kioskTodayMarked = false
-  if (isKiosk) {
-    const { data: kioskStaff } = await (supabase as any)
-      .from('staff').select('id').eq('user_id', user!.id).maybeSingle()
-    kioskStaffId = (kioskStaff as { id: string } | null)?.id ?? null
-    if (kioskStaffId) {
-      const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
-      const { data: todayRec } = await (supabase as any)
-        .from('attendance').select('id').eq('staff_id', kioskStaffId).eq('date', todayISO).maybeSingle()
-      kioskTodayMarked = !!todayRec
-    }
-  }
 
   const { data: staffRaw } = await supabase
     .from('staff')
@@ -162,10 +153,12 @@ export default async function AttendancePage({
   // no way to reach the earlier days.
   const PAGE_SIZE = 200
 
+  // Attendance is not represented in the hand-maintained Database type.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from('attendance')
     .select(
-      'id, staff_id, date, check_in, check_out, hours_worked, overtime_hours, status, notes, is_public_holiday, friday_ot_amount, staff(full_name)',
+      'id, staff_id, date, check_in, check_out, hours_worked, overtime_hours, status, notes, is_public_holiday, friday_ot_amount, leave_application_id, staff(full_name)',
       { count: 'exact' }
     )
     .gte('date', startDate)
@@ -173,11 +166,7 @@ export default async function AttendancePage({
     .order('date', { ascending: false })
     .order('staff_id', { ascending: true })
 
-  // Kiosk: always force-filter to their own staff_id (ignore URL param)
-  // If staff not yet linked, use an impossible UUID so zero records show
-  if (isKiosk) {
-    query = query.eq('staff_id', kioskStaffId ?? '00000000-0000-0000-0000-000000000000')
-  } else if (selectedStaffId) {
+  if (selectedStaffId) {
     query = query.eq('staff_id', selectedStaffId)
   }
 
@@ -199,6 +188,7 @@ export default async function AttendancePage({
     notes: string | null
     is_public_holiday: boolean
     friday_ot_amount: number
+    leave_application_id: string | null
     staff: { full_name: string } | null
   }>
 
@@ -206,18 +196,18 @@ export default async function AttendancePage({
   // three fields it needs across every row in range.
   type SummaryRow = { staff_id: string; status: string; overtime_hours: number | null; friday_ot_amount: number | null }
   const summaryRows: SummaryRow[] = []
-  for (let offset = 0; offset < 20_000; offset += 1000) {
+  for (let offset = 0; ; offset += 1000) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let sq = (supabase as any)
       .from('attendance')
       .select('staff_id, status, overtime_hours, friday_ot_amount')
       .gte('date', startDate)
       .lte('date', endDate)
       .order('date', { ascending: false })
-    if (isKiosk) sq = sq.eq('staff_id', kioskStaffId ?? '00000000-0000-0000-0000-000000000000')
-    else if (selectedStaffId) sq = sq.eq('staff_id', selectedStaffId)
+    if (selectedStaffId) sq = sq.eq('staff_id', selectedStaffId)
 
     const { data: chunk, error: chunkError } = await sq.range(offset, offset + 999)
-    if (chunkError) break
+    if (chunkError) throw new Error(chunkError.message)
     const rows = (chunk ?? []) as SummaryRow[]
     summaryRows.push(...rows)
     if (rows.length < 1000) break
@@ -292,18 +282,12 @@ export default async function AttendancePage({
         actions={
           <div className="flex items-center gap-2">
             <RefreshButton />
-            {isKiosk && kioskTodayMarked ? (
-              <span className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 text-sm font-semibold rounded-lg">
-                <CalendarCheck className="w-4 h-4" /> Today Already Marked
-              </span>
-            ) : (
-              <Link
-                href={isKiosk && kioskStaffId ? `/attendance/new?locked_staff_id=${kioskStaffId}` : '/attendance/new'}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" /> Mark Attendance
-              </Link>
-            )}
+            <Link
+              href="/attendance/new"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Mark Attendance
+            </Link>
           </div>
         }
       />
@@ -390,7 +374,7 @@ export default async function AttendancePage({
             </Link>
           </div>
 
-          {!isKiosk && <StaffFilterSelect staffList={staffList} selectedStaffId={selectedStaffId} currentMonth={currentMonth} />}
+          <StaffFilterSelect staffList={staffList} selectedStaffId={selectedStaffId} currentMonth={currentMonth} />
         </div>
 
         {/* Summary Cards */}
@@ -466,9 +450,9 @@ export default async function AttendancePage({
             ) : (
               <p className="text-slate-500 font-medium">No attendance records for {periodLabel ?? getMonthLabel(currentMonth)}</p>
             )}
-            {totalRecords === 0 && !(isKiosk && kioskTodayMarked) && (
+            {totalRecords === 0 && (
               <Link
-                href={isKiosk && kioskStaffId ? `/attendance/new?locked_staff_id=${kioskStaffId}` : '/attendance/new'}
+                href="/attendance/new"
                 className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Plus className="w-4 h-4" /> Mark Attendance
@@ -539,13 +523,17 @@ export default async function AttendancePage({
                     </td>
                     {canEdit && (
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <Link href={`/attendance/${r.id}/edit`}
-                            className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
-                            <Pencil className="w-3.5 h-3.5" /> Edit
-                          </Link>
-                          <DeleteAttendanceButton id={r.id} />
-                        </div>
+                        {r.leave_application_id ? (
+                          <span className="text-xs font-medium text-slate-400" title="This row is controlled by an approved leave application">Managed leave</span>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <Link href={`/attendance/${r.id}/edit`}
+                              className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
+                              <Pencil className="w-3.5 h-3.5" /> Edit
+                            </Link>
+                            <DeleteAttendanceButton id={r.id} />
+                          </div>
+                        )}
                       </td>
                     )}
                   </tr>
