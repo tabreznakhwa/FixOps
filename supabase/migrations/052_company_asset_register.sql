@@ -70,8 +70,13 @@ alter table public.expenses
     references public.assets(id) on delete restrict;
 
 -- One-to-one: an expense is a capital asset purchase if and only if it points
--- at an asset. NOT VALID so any stray pre-existing `asset_purchase` rows do not
--- block the migration; the constraint still governs every new/updated row.
+-- at an asset. Replace the managed constraint so this migration can safely
+-- resume after a partially applied or earlier 052 revision. NOT VALID means any
+-- stray pre-existing `asset_purchase` rows do not block the migration; the
+-- constraint still governs every new/updated row.
+alter table public.expenses
+  drop constraint if exists expenses_asset_category_check;
+
 alter table public.expenses
   add constraint expenses_asset_category_check
   check ((asset_id is null) = (category is distinct from 'asset_purchase'))
@@ -129,6 +134,30 @@ create index if not exists idx_assets_org_custodian
 -- 5. Business constraints (NOT VALID: enforced for new/updated rows only, so
 --    any incomplete pre-existing rows cannot block application)
 -- ---------------------------------------------------------------------------
+
+-- Replace constraints managed by this migration. PostgreSQL has no
+-- ADD CONSTRAINT IF NOT EXISTS, and an earlier 052 revision may already have
+-- installed them. Replacing them also ensures the latest disposal rules win.
+alter table public.assets
+  drop constraint if exists chk_assets_name,
+  drop constraint if exists chk_assets_category,
+  drop constraint if exists chk_assets_cost,
+  drop constraint if exists chk_assets_payment_method,
+  drop constraint if exists chk_assets_useful_life,
+  drop constraint if exists chk_assets_salvage,
+  drop constraint if exists chk_assets_depr_date,
+  drop constraint if exists chk_assets_warranty_date,
+  drop constraint if exists chk_assets_service_date,
+  drop constraint if exists chk_assets_disposal_date,
+  drop constraint if exists chk_assets_disposal_proceeds,
+  drop constraint if exists chk_assets_disposal_payment_method,
+  drop constraint if exists chk_assets_disposal_reference,
+  drop constraint if exists chk_assets_disposal_method,
+  drop constraint if exists chk_assets_assigned_custodian,
+  drop constraint if exists chk_assets_disposed_fields,
+  drop constraint if exists chk_assets_disposed_no_custodian,
+  drop constraint if exists chk_assets_nondisposed_no_disposal,
+  drop constraint if exists chk_assets_required_acquisition;
 
 alter table public.assets
   add constraint chk_assets_name
@@ -210,6 +239,8 @@ alter table public.assets
 -- ---------------------------------------------------------------------------
 
 drop policy if exists "assets_org" on public.assets;
+drop policy if exists "assets_select_owner_admin_manager" on public.assets;
+drop policy if exists "asset_events_select_owner_admin_manager" on public.asset_events;
 
 create policy "assets_select_owner_admin_manager" on public.assets
   for select
@@ -556,6 +587,15 @@ grant execute on function public.create_asset_with_expense(
 -- ---------------------------------------------------------------------------
 -- 9. Update an asset and, where purchase fields changed, its linked expense
 -- ---------------------------------------------------------------------------
+
+-- An earlier 052 revision had three fewer disposal-receipt arguments. PostgreSQL
+-- treats that as a different overload rather than replacing it, so remove the
+-- obsolete signature when resuming a partially applied migration.
+drop function if exists public.update_asset(
+  uuid, uuid, uuid, timestamptz, text, text, date, numeric, text, integer, date,
+  numeric, text, uuid, text, text, uuid, date, date, text, text, text, date,
+  text, numeric, text
+);
 
 create or replace function public.update_asset(
   p_org_id uuid,
