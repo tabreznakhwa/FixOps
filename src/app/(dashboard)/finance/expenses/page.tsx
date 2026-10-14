@@ -27,6 +27,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   insurance: 'Insurance',
   professional_services: 'Professional Services',
   food_entertainment: 'Food & Refreshments',
+  asset_purchase: 'Capital Asset Purchase',
   other: 'Miscellaneous / Other',
 }
 
@@ -45,6 +46,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   insurance: 'bg-green-100 text-green-700',
   professional_services: 'bg-violet-100 text-violet-700',
   food_entertainment: 'bg-rose-100 text-rose-700',
+  asset_purchase: 'bg-blue-100 text-blue-700',
   other: 'bg-gray-100 text-gray-700',
 }
 
@@ -58,7 +60,9 @@ export default async function ExpensesPage({
 
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
-  const canEditDelete = ['owner', 'admin', 'hr', 'manager'].includes((profileRaw as { role: string } | null)?.role ?? '')
+  const role = (profileRaw as { role: string } | null)?.role ?? ''
+  const canEditDelete = ['owner', 'admin', 'hr', 'manager'].includes(role)
+  const canViewAssets = ['owner', 'admin', 'manager'].includes(role)
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
   const firstOfMonth = today.slice(0, 7) + '-01'
@@ -67,7 +71,7 @@ export default async function ExpensesPage({
 
   let query = (supabase as any)
     .from('expenses')
-    .select('id, expense_number, expense_date, category, description, amount, payment_method, reference_number, notes')
+    .select('id, expense_number, expense_date, category, description, amount, payment_method, reference_number, notes, asset_id')
     .gte('expense_date', from)
     .lte('expense_date', to)
     .order('expense_date', { ascending: false })
@@ -83,7 +87,7 @@ export default async function ExpensesPage({
   const expenses = (rawExpenses ?? []) as Array<{
     id: string; expense_number: string; expense_date: string; category: string
     description: string; amount: number; payment_method: string
-    reference_number: string | null; notes: string | null
+    reference_number: string | null; notes: string | null; asset_id: string | null
   }>
 
   const customCategories = (customCategoriesRaw ?? []) as { value: string; label: string }[]
@@ -222,16 +226,32 @@ export default async function ExpensesPage({
                       </td>
                       {canEditDelete && (
                         <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Link
-                              href={`/finance/expenses/${e.id}/edit`}
-                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Edit"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </Link>
-                            <DeleteExpenseButton id={e.id} />
-                          </div>
+                          {e.asset_id ? (
+                            canViewAssets ? (
+                              <Link
+                                href={`/inventory/assets/${e.asset_id}`}
+                                className="text-xs font-semibold text-blue-600 hover:text-blue-700 whitespace-nowrap"
+                                title="Open linked asset"
+                              >
+                                View asset →
+                              </Link>
+                            ) : (
+                              <span className="text-xs font-medium text-slate-400 whitespace-nowrap" title="Managed in Company Assets">
+                                Linked asset
+                              </span>
+                            )
+                          ) : (
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Link
+                                href={`/finance/expenses/${e.id}/edit`}
+                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Link>
+                              <DeleteExpenseButton id={e.id} />
+                            </div>
+                          )}
                         </td>
                       )}
                     </tr>

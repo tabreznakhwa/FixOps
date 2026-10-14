@@ -21,7 +21,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   vehicle_maintenance: 'Vehicle Maintenance', tools_equipment: 'Tools & Equipment',
   marketing: 'Marketing', bank_charges: 'Bank Charges', insurance: 'Insurance',
   professional_services: 'Professional Services', food_entertainment: 'Food & Refreshments',
-  travel: 'Travel Expense', other: 'Miscellaneous',
+  travel: 'Travel Expense', asset_purchase: 'Capital Asset Purchase', other: 'Miscellaneous',
 }
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 

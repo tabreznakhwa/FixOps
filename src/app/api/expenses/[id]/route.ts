@@ -24,8 +24,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  if (category === 'asset_purchase') {
+    return NextResponse.json({ error: 'Record capital purchases in the Company Assets register' }, { status: 400 })
+  }
+  if (Number(amount) <= 0) {
+    return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 })
+  }
+
   const admin = createAdminClient() as any
-  const { error } = await admin.from('expenses').update({
+  const { data: existing } = await admin.from('expenses')
+    .select('asset_id')
+    .eq('id', id)
+    .eq('organization_id', profile.organization_id)
+    .maybeSingle()
+
+  if (!existing) return NextResponse.json({ error: 'Expense not found' }, { status: 404 })
+  if (existing.asset_id) {
+    return NextResponse.json({ error: 'Asset purchase expenses can only be changed from the Company Assets register' }, { status: 409 })
+  }
+
+  const { data: updated, error } = await admin.from('expenses').update({
     expense_date,
     category,
     description: description.trim(),
@@ -33,9 +51,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     payment_method,
     reference_number: reference_number?.trim() || null,
     notes: notes?.trim() || null,
-  }).eq('id', id).eq('organization_id', profile.organization_id)
+  }).eq('id', id).eq('organization_id', profile.organization_id).is('asset_id', null).select('id').maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!updated) return NextResponse.json({ error: 'Expense not found' }, { status: 404 })
   return NextResponse.json({ success: true })
 }
 
@@ -48,9 +67,21 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   }
 
   const admin = createAdminClient() as any
-  const { error } = await admin.from('expenses').delete()
-    .eq('id', id).eq('organization_id', profile.organization_id)
+  const { data: existing } = await admin.from('expenses')
+    .select('asset_id')
+    .eq('id', id)
+    .eq('organization_id', profile.organization_id)
+    .maybeSingle()
+
+  if (!existing) return NextResponse.json({ error: 'Expense not found' }, { status: 404 })
+  if (existing.asset_id) {
+    return NextResponse.json({ error: 'Asset purchase expenses cannot be deleted; dispose of the asset from the Company Assets register' }, { status: 409 })
+  }
+
+  const { data: deleted, error } = await admin.from('expenses').delete()
+    .eq('id', id).eq('organization_id', profile.organization_id).is('asset_id', null).select('id').maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!deleted) return NextResponse.json({ error: 'Expense not found' }, { status: 404 })
   return NextResponse.json({ success: true })
 }

@@ -22,16 +22,13 @@ export default async function MyAttendancePage() {
     .maybeSingle()
   if (!profile || profile.status !== 'active' || !profile.organization_id) redirect('/login')
 
-  const isKiosk = profile.role === 'attendance_kiosk'
-  const { data: staffRecord } = isKiosk
-    ? { data: null }
-    : await admin
-        .from('staff')
-        .select('id, full_name, organization_id')
-        .eq('organization_id', profile.organization_id)
-        .eq('user_id', user.id)
-        .eq('employment_status', 'active')
-        .maybeSingle()
+  const { data: staffRecord } = await admin
+    .from('staff')
+    .select('id, full_name, organization_id')
+    .eq('organization_id', profile.organization_id)
+    .eq('user_id', user.id)
+    .eq('employment_status', 'active')
+    .maybeSingle()
 
   const today = kuwaitISODate()
   let todayAttendance = null
@@ -71,7 +68,6 @@ export default async function MyAttendancePage() {
       <Header title="My Attendance" subtitle="Clock in and out to record your hours" />
       <MyAttendanceDashboard
         staffLinked={!!staffRecord}
-        isKiosk={isKiosk}
         initialAttendance={todayAttendance}
         recentRecords={recentRecords}
         today={today}

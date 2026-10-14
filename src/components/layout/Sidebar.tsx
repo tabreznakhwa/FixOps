@@ -23,7 +23,9 @@ const navGroups: Array<{
   icon: ElementType
   // selfService: the item shows the viewer only their own record, so it stays in the
   // sidebar even when the role has no access to the group's module.
-  items: { href: string; label: string; icon: ElementType; exact?: boolean; excludeRoles?: string[]; onlyRoles?: string[]; selfService?: boolean }[]
+  // fixedAccess is reserved for a route whose authorization is intentionally
+  // independent of configurable module permissions.
+  items: { href: string; label: string; icon: ElementType; exact?: boolean; excludeRoles?: string[]; onlyRoles?: string[]; selfService?: boolean; fixedAccess?: boolean }[]
 }> = [
   {
     label: 'Operations',
@@ -62,6 +64,7 @@ const navGroups: Array<{
     icon: Package,
     items: [
       { href: '/inventory', label: 'Inventory', icon: Package, exact: true },
+      { href: '/inventory/assets', label: 'Company Assets', icon: Building2, onlyRoles: ['owner', 'admin', 'manager'], fixedAccess: true },
       { href: '/inventory/purchase-invoices', label: 'Purchase Invoices', icon: ShoppingCart, excludeRoles: ['technician'] },
       { href: '/inventory/opening-stock', label: 'Opening Stock', icon: Layers, excludeRoles: ['technician'] },
       { href: '/inventory/stock-trial', label: 'Stock Trial', icon: Layers, excludeRoles: ['technician'] },
@@ -83,7 +86,7 @@ const navGroups: Array<{
       { href: '/staff', label: 'Staff', icon: UserCheck, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/staff/locations', label: 'Technician Locations', icon: MapPin, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/my-attendance', label: 'My Attendance', icon: Clock, selfService: true },
-      { href: '/my-leave', label: 'My Leave', icon: CalendarDays, excludeRoles: ['attendance_kiosk'], selfService: true },
+      { href: '/my-leave', label: 'My Leave', icon: CalendarDays, selfService: true },
       { href: '/leave-applications', label: 'Leave Approvals', icon: CalendarCheck, onlyRoles: ['owner', 'admin'] },
       { href: '/attendance', label: 'Attendance', icon: CalendarCheck, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/attendance/friday-rotation', label: 'Friday Rotation', icon: CalendarClock, excludeRoles: ['technician', 'attendance_kiosk'] },
@@ -91,7 +94,7 @@ const navGroups: Array<{
       { href: '/payroll/process', label: 'Payslips', icon: Printer, excludeRoles: ['technician', 'attendance_kiosk', 'hr'] },
       { href: '/payroll/leave-settlement', label: 'Leave Settlement', icon: Wallet, onlyRoles: ['owner', 'admin', 'manager'] },
       { href: '/payroll/bonuses', label: 'Bonuses', icon: Gift, excludeRoles: ['technician', 'attendance_kiosk'] },
-      { href: '/payroll/my-payslips', label: 'My Payslips', icon: Printer, onlyRoles: ['technician'], selfService: true },
+      { href: '/payroll/my-payslips', label: 'My Payslips', icon: Printer, onlyRoles: ['technician', 'attendance_kiosk'], selfService: true },
       { href: '/staff/ledger', label: 'Staff Ledger', icon: FileBarChart, excludeRoles: ['technician', 'attendance_kiosk'] },
       { href: '/staff/performance', label: 'Staff Performance', icon: Trophy, excludeRoles: ['technician', 'attendance_kiosk'] },
     ],
@@ -164,10 +167,10 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
   function itemsForGroup(group: typeof navGroups[0]) {
     const noModuleAccess = (moduleAccess[group.module] ?? 'none') === 'none'
     return group.items.filter(
-      ({ excludeRoles, onlyRoles, selfService }) =>
+      ({ excludeRoles, onlyRoles, selfService, fixedAccess }) =>
         !excludeRoles?.includes(user.role) &&
         (!onlyRoles || onlyRoles.includes(user.role)) &&
-        (!noModuleAccess || selfService)
+        (!noModuleAccess || selfService || fixedAccess)
     )
   }
 

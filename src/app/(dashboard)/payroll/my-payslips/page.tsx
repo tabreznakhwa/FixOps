@@ -24,9 +24,10 @@ export default async function MyPayslipsPage() {
   // Payroll tables trail the hand-maintained Database type.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: profileRaw } = await (supabase as any)
-    .from('users').select('organization_id, role').eq('id', user.id).single()
-  const profile = profileRaw as { organization_id: string; role: string } | null
-  if (!profile || profile.role !== 'technician') redirect('/dashboard')
+    .from('users').select('organization_id, role, status').eq('id', user.id).single()
+  const profile = profileRaw as { organization_id: string; role: string; status: string } | null
+  if (!profile || profile.status !== 'active' || !profile.organization_id) redirect('/login')
+  if (!['technician', 'attendance_kiosk'].includes(profile.role)) redirect('/dashboard')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any
@@ -36,6 +37,7 @@ export default async function MyPayslipsPage() {
     .select('id, full_name, staff_code, designation')
     .eq('organization_id', profile.organization_id)
     .eq('user_id', user.id)
+    .eq('employment_status', 'active')
     .maybeSingle()
   const staff = staffRaw as { id: string; full_name: string; staff_code: string; designation: string | null } | null
 

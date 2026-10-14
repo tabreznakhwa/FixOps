@@ -52,6 +52,7 @@ export default async function PayslipPage({
       .select('id')
       .eq('organization_id', viewer.organization_id)
       .eq('user_id', user.id)
+      .eq('employment_status', 'active')
       .maybeSingle()
     const ownStaffId = (ownStaffRaw as { id: string } | null)?.id
     if (!ownStaffId || ownStaffId !== staffId) {

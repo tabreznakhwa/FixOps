@@ -143,13 +143,34 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard?error=unauthorized', request.url))
     }
 
-    // Attendance kiosk: shared-device attendance entry only. It must never expose
-    // personal leave, salary, history or identity pages.
-    if (profile.role === 'attendance_kiosk' &&
-      !pathname.startsWith('/my-attendance') &&
-      !pathname.startsWith('/attendance/new') &&
-      !pathname.startsWith('/api')) {
-      return NextResponse.redirect(new URL('/my-attendance', request.url))
+    // Company assets have fixed access independent of configurable Inventory
+    // module permissions: owner/admin manage, manager view. API routes enforce
+    // the same rule internally; this block protects page URLs.
+    if (pathname.startsWith('/inventory/assets') && !pathname.startsWith('/api')) {
+      const canViewAssets = ['owner', 'admin', 'manager'].includes(profile.role)
+      const isAssetWritePage = pathname === '/inventory/assets/new' || pathname.endsWith('/edit')
+      const canEditAssets = ['owner', 'admin'].includes(profile.role)
+      if (!canViewAssets || (isAssetWritePage && !canEditAssets)) {
+        return NextResponse.redirect(new URL('/dashboard?error=unauthorized', request.url))
+      }
+    }
+
+    // Attendance-kiosk logins are employee self-service accounts when linked to
+    // staff.user_id. Keep them confined to their own attendance, leave and
+    // payslips; the allowed APIs additionally enforce organization + ownership.
+    if (profile.role === 'attendance_kiosk') {
+      const isKioskSelfServiceApi =
+        (pathname === '/api/technician/attendance' && ['GET', 'POST'].includes(method)) ||
+        (pathname === '/api/attendance/sick-leave-usage' && method === 'GET') ||
+        (pathname === '/api/leave-applications' && method === 'POST') ||
+        (/^\/api\/leave-applications\/[^/]+$/.test(pathname) && method === 'PATCH')
+
+      if (pathname.startsWith('/api') && !isKioskSelfServiceApi) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      if (!pathname.startsWith('/api') && !isOwnHrPath) {
+        return NextResponse.redirect(new URL('/my-attendance', request.url))
+      }
     }
 
     // Skip API routes (enforced at DB/RLS), locked roles (always full access), and
@@ -158,7 +179,7 @@ export async function proxy(request: NextRequest) {
     if (!pathname.startsWith('/api') &&
       !LOCKED_ROLES.includes(profile.role) &&
       !isOwnHrPath &&
-      !(profile.role === 'attendance_kiosk' && pathname.startsWith('/attendance/new'))) {
+      !pathname.startsWith('/inventory/assets')) {
       const routeModule = getRouteModule(pathname)
       if (routeModule) {
         // Check DB for org-customised permission, fall back to system default

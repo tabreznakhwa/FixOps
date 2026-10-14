@@ -45,8 +45,11 @@ migration 048 was already known to be absent from history. Do not run
 `db push --include-all` just to make the histories match — it would replay
 already-applied DDL.
 
-Migration 051 was manually applied by the user on 14 Oct 2026. Its two unique
-indexes and five `SECURITY DEFINER` functions were verified in production;
+Migration 051 was manually applied by the user on 14 Oct 2026. Migration 053
+was manually applied by the user on 14 Oct 2026; its production effects have not
+yet been independently verified. Migration 052 (company asset register) still
+requires manual application before the asset feature can be used. Migration
+051's two unique indexes and five `SECURITY DEFINER` functions were verified in production;
 `service_role` alone has execute access to those functions. It restores the
 unique attendance key `(organization_id, staff_id, date)` required by leave
 approval's `ON CONFLICT`, enforces one salary slip per employee/run, corrects
@@ -123,6 +126,16 @@ WHERE pi.status = 'cancelled' ORDER BY pi.invoice_date DESC;
 ```
 
 ### Attendance & payroll
+An active `attendance_kiosk` login linked through `staff.user_id` is an employee
+self-service login: it can clock only its own attendance, view only its own
+attendance history and payslips, and manage only its own leave applications.
+The proxy confines that role to those self-service pages and an explicit
+API/method allowlist; each allowed page/API also enforces organization and
+linked-staff ownership. The database part of this restoration is migration
+053 and must be applied before kiosk leave submission works; it also enforces
+one non-null `staff.user_id` link per login so self-service identity is
+unambiguous.
+
 Not clocking in creates **no row at all** — absence only exists if written. A
 nightly job (`/api/attendance/auto-absent`, Vercel cron 00:00 UTC = 03:00 Kuwait)
 now writes them, skipping Fridays, public holidays, anyone already recorded and
@@ -133,9 +146,10 @@ paid as an advance (`staff.advance_balance` auto-recovers at month end) rather
 than an off-cycle run.
 
 ### Leave applications
-Every active employee login linked through `staff.user_id` can use `/my-leave`
-to request annual, sick or compensation leave; the shared `attendance_kiosk`
-login is deliberately excluded. Owner/admin review happens at
+Every active employee login linked through `staff.user_id`, including an
+`attendance_kiosk` login, can use `/my-leave` to request annual, sick or
+compensation leave. Every self-service query and mutation remains scoped to the
+linked staff row and its organization. Owner/admin review happens at
 `/leave-applications`. Approval is atomic through `review_leave_application`:
 it creates paid attendance (`leave`, or `sick_leave` for sick requests), skips
 Fridays and known public holidays, and refuses to overwrite worked/manual

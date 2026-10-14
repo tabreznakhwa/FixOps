@@ -9,11 +9,10 @@ async function resolveStaff(userId: string) {
   const admin = createAdminClient() as any
   const { data: profile } = await admin
     .from('users')
-    .select('organization_id, role, status')
+    .select('organization_id, status')
     .eq('id', userId)
     .maybeSingle()
-  if (!profile || profile.status !== 'active' || !profile.organization_id
-    || profile.role === 'attendance_kiosk') return null
+  if (!profile || profile.status !== 'active' || !profile.organization_id) return null
 
   const { data } = await admin
     .from('staff')

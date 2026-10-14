@@ -12,6 +12,12 @@ export type ServiceCategory = 'ac_maintenance' | 'plumbing' | 'electrical' | 'ge
 export type InvoiceStatus = 'draft' | 'issued' | 'partial' | 'paid' | 'overdue' | 'cancelled' | 'written_off'
 export type PaymentMode = 'cash' | 'bank_transfer' | 'card' | 'pos' | 'cheque' | 'online' | 'other'
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid' | 'overdue' | 'written_off'
+export type AssetCondition = 'excellent' | 'good' | 'fair' | 'poor' | 'out_of_service'
+export type AssetStatus = 'available' | 'assigned' | 'maintenance' | 'disposed'
+export type AssetCategory = 'it_equipment' | 'tools_equipment' | 'vehicles' | 'furniture_fixtures' | 'machinery' | 'office_equipment' | 'leasehold_improvements' | 'safety_equipment' | 'other'
+export type AssetPaymentMethod = 'cash' | 'bank_transfer' | 'cheque'
+export type DisposalMethod = 'sold' | 'scrapped' | 'donated' | 'lost' | 'other'
+export type AssetEventType = 'created' | 'updated' | 'assigned' | 'unassigned' | 'status_changed' | 'disposed'
 
 export interface Database {
   public: {
@@ -387,6 +393,59 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['customer_ledger_entries']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['customer_ledger_entries']['Insert']>
       }
+      assets: {
+        Row: {
+          id: string
+          organization_id: string
+          asset_code: string
+          asset_name: string
+          category: string
+          serial_number: string | null
+          purchase_date: string | null
+          purchase_cost: number
+          assigned_to: string | null
+          assigned_staff_id: string | null
+          supplier_id: string | null
+          payment_method: string | null
+          purchase_reference: string | null
+          location: string | null
+          condition: AssetCondition
+          warranty_expiry: string | null
+          service_due_date: string | null
+          status: AssetStatus
+          depreciation_start_date: string | null
+          useful_life_months: number | null
+          salvage_value: number
+          disposal_date: string | null
+          disposal_method: string | null
+          disposal_proceeds: number | null
+          disposal_reason: string | null
+          notes: string | null
+          document_url: string | null
+          created_by: string | null
+          updated_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['assets']['Row'], 'id' | 'asset_code' | 'created_at' | 'updated_at'> & {
+          id?: string
+          asset_code?: string
+        }
+        Update: Partial<Database['public']['Tables']['assets']['Insert']>
+      }
+      asset_events: {
+        Row: {
+          id: string
+          organization_id: string
+          asset_id: string
+          event_type: AssetEventType
+          changes: Json
+          created_by: string | null
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['asset_events']['Row'], 'id' | 'created_at'>
+        Update: never
+      }
       audit_logs: {
         Row: {
           id: string
@@ -511,6 +570,74 @@ export interface Database {
           p_entries: Json
         }
         Returns: undefined
+      }
+      create_asset_with_expense: {
+        Args: {
+          p_org_id: string
+          p_actor_id: string
+          p_asset_id: string
+          p_asset_name: string
+          p_category: string
+          p_purchase_date: string
+          p_purchase_cost: number
+          p_payment_method: string
+          p_useful_life_months: number
+          p_depreciation_start_date: string
+          p_salvage_value?: number
+          p_serial_number?: string | null
+          p_supplier_id?: string | null
+          p_purchase_reference?: string | null
+          p_location?: string | null
+          p_assigned_staff_id?: string | null
+          p_warranty_expiry?: string | null
+          p_service_due_date?: string | null
+          p_condition?: string
+          p_status?: string
+          p_notes?: string | null
+        }
+        Returns: Array<{
+          asset_id: string
+          expense_id: string
+          asset_code: string
+          created: boolean
+        }>
+      }
+      update_asset: {
+        Args: {
+          p_org_id: string
+          p_actor_id: string
+          p_asset_id: string
+          p_expected_updated_at: string
+          p_asset_name: string
+          p_category: string
+          p_purchase_date: string
+          p_purchase_cost: number
+          p_payment_method: string
+          p_useful_life_months: number
+          p_depreciation_start_date: string
+          p_salvage_value: number
+          p_serial_number: string | null
+          p_supplier_id: string | null
+          p_purchase_reference: string | null
+          p_location: string | null
+          p_assigned_staff_id: string | null
+          p_warranty_expiry: string | null
+          p_service_due_date: string | null
+          p_condition: string
+          p_status: string
+          p_notes: string | null
+          p_disposal_date: string | null
+          p_disposal_method: string | null
+          p_disposal_proceeds: number | null
+          p_disposal_reason: string | null
+        }
+        Returns: Array<{
+          asset_id: string
+          expense_id: string
+          updated_at: string
+          changed: boolean
+          history_event_type: string
+        }>
       }
     }
     Enums: Record<string, never>

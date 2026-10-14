@@ -8,7 +8,6 @@ interface Profile {
   userId: string
   organization_id: string
   full_name: string
-  role: string
 }
 
 function isValidISODate(value: string): boolean {
@@ -26,7 +25,7 @@ async function getProfile(): Promise<Profile | null> {
   const admin = createAdminClient() as any
   const { data } = await admin
     .from('users')
-    .select('organization_id, full_name, role, status')
+    .select('organization_id, full_name, status')
     .eq('id', user.id)
     .single()
 
@@ -38,9 +37,6 @@ export async function POST(request: NextRequest) {
   try {
     const profile = await getProfile()
     if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    if (profile.role === 'attendance_kiosk') {
-      return NextResponse.json({ error: 'The shared attendance kiosk cannot submit personal leave applications' }, { status: 403 })
-    }
 
     const body = await request.json()
     const leaveType = body.leave_type as LeaveType

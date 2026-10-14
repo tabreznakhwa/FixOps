@@ -1,10 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { EditExpenseForm } from './EditExpenseForm'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 
 export const metadata = { title: 'Edit Expense' }
 
@@ -23,7 +22,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
   const [{ data: expense }, { data: customCategoriesRaw }] = await Promise.all([
     admin
       .from('expenses')
-      .select('id, expense_number, expense_date, category, description, amount, payment_method, reference_number, notes')
+      .select('id, expense_number, expense_date, category, description, amount, payment_method, reference_number, notes, asset_id')
       .eq('id', id)
       .eq('organization_id', profile.organization_id)
       .single(),
@@ -36,6 +35,12 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
   const customCategories = (customCategoriesRaw ?? []) as { value: string; label: string }[]
 
   if (!expense) notFound()
+  if (expense.asset_id) {
+    if (['owner', 'admin', 'manager'].includes(profile.role)) {
+      redirect(`/inventory/assets/${expense.asset_id}`)
+    }
+    redirect('/finance/expenses?error=linked_asset')
+  }
 
   return (
     <div className="animate-fade-in">

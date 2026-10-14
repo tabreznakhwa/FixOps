@@ -40,6 +40,7 @@ const LABEL_MAP: Record<string, string> = {
   '/finance/owner-withdrawals': 'Owner Withdrawals',
   '/amc': 'AMC Contracts',
   '/inventory': 'Inventory',
+  '/inventory/assets': 'Company Assets',
   '/inventory/purchase-invoices': 'Purchase Invoices',
   '/inventory/opening-stock': 'Opening Stock',
   '/inventory/stock-trial': 'Stock Trial',

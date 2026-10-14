@@ -26,6 +26,7 @@ const LABELS: [string, string][] = [
   ['/finance/expenses', 'Expenses'],
   ['/finance/ledger', 'Ledger'],
   ['/inventory/purchase-invoices', 'Purchase Invoices'],
+  ['/inventory/assets', 'Company Assets'],
   ['/suppliers/vendor-outstanding', 'Vendor Outstanding'],
   ['/suppliers/purchase-register', 'Purchase Register'],
   ['/suppliers/vendor-payments', 'Vendor Payments'],

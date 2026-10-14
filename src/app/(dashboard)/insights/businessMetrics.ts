@@ -236,7 +236,7 @@ export async function buildBusinessMetrics(
 
   const expenseByCat = new Map<string, number>()
   for (const e of expenses) {
-    if (!e.expense_date) continue
+    if (!e.expense_date || e.category === 'asset_purchase') continue
     const amt = num(e.amount)
     bump(monthKey(e.expense_date), m => { m.expenses += amt })
     const c = e.category ?? 'other'

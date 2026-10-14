@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { LogIn, CheckCircle2, Clock, AlertCircle, UserCheck } from 'lucide-react'
+import { LogIn, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
 interface AttendanceRecord {
@@ -43,13 +43,11 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function MyAttendanceDashboard({
   staffLinked,
-  isKiosk,
   initialAttendance,
   recentRecords,
   today,
 }: {
   staffLinked: boolean
-  isKiosk: boolean
   initialAttendance: AttendanceRecord | null
   recentRecords: HistoryRecord[]
   today: string
@@ -84,24 +82,6 @@ export function MyAttendanceDashboard({
     } finally {
       setLoading(false)
     }
-  }
-
-  if (isKiosk) {
-    return (
-      <div className="p-6">
-        <div className="max-w-lg bg-white border border-slate-200 rounded-2xl px-6 py-8 text-center">
-          <UserCheck className="w-10 h-10 text-blue-600 mx-auto mb-3" />
-          <p className="font-semibold text-slate-900 mb-2">Shared Attendance Kiosk</p>
-          <p className="text-sm text-slate-600 mb-5">Select an employee on this shared device to record today&apos;s attendance. Personal history is never shown here.</p>
-          <a
-            href="/attendance/new"
-            className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
-          >
-            Mark Employee Attendance
-          </a>
-        </div>
-      </div>
-    )
   }
 
   if (!staffLinked) {

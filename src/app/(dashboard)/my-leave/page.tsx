@@ -23,11 +23,10 @@ export default async function MyLeavePage({ searchParams }: PageProps<'/my-leave
   const admin = createAdminClient() as any
   const { data: profile } = await admin
     .from('users')
-    .select('organization_id, role, status')
+    .select('organization_id, status')
     .eq('id', user.id)
     .single()
-  if (!profile || profile.status !== 'active') redirect('/login')
-  if (profile.role === 'attendance_kiosk') redirect('/my-attendance')
+  if (!profile || profile.status !== 'active' || !profile.organization_id) redirect('/login')
 
   const params = await searchParams
   const page = parsePage(params.page)

@@ -18,17 +18,13 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/le
     const admin = createAdminClient() as any
     const { data: profile } = await admin
       .from('users')
-      .select('organization_id, full_name, role, status')
+      .select('organization_id, full_name, status')
       .eq('id', user.id)
       .single()
 
     if (!profile || profile.status !== 'active' || !profile.organization_id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    if (profile.role === 'attendance_kiosk') {
-      return NextResponse.json({ error: 'The shared attendance kiosk cannot manage personal leave applications' }, { status: 403 })
-    }
-
     const { data: staff } = await admin
       .from('staff')
       .select('id, organization_id, full_name')

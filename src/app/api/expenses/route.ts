@@ -26,6 +26,9 @@ export async function POST(request: NextRequest) {
     if (Number(amount) <= 0) {
       return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 })
     }
+    if (category === 'asset_purchase') {
+      return NextResponse.json({ error: 'Record capital purchases in the Company Assets register' }, { status: 400 })
+    }
 
     const admin = createAdminClient()
 
