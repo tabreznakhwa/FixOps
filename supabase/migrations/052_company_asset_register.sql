@@ -45,6 +45,8 @@ alter table public.assets
   add column if not exists disposal_date date,
   add column if not exists disposal_method text,
   add column if not exists disposal_proceeds numeric(12, 3),
+  add column if not exists disposal_payment_method text,
+  add column if not exists disposal_reference text,
   add column if not exists disposal_reason text,
   add column if not exists updated_by uuid
     references public.users(id) on delete set null;
@@ -156,6 +158,13 @@ alter table public.assets
     check (disposal_date is null or disposal_date >= purchase_date) not valid,
   add constraint chk_assets_disposal_proceeds
     check (disposal_proceeds is null or disposal_proceeds >= 0) not valid,
+  add constraint chk_assets_disposal_payment_method
+    check (disposal_payment_method is null
+           or disposal_payment_method in ('cash', 'bank_transfer', 'cheque'))
+    not valid,
+  add constraint chk_assets_disposal_reference
+    check (disposal_reference is null or char_length(disposal_reference) <= 100)
+    not valid,
   add constraint chk_assets_disposal_method
     check (disposal_method is null
            or disposal_method in ('sold', 'scrapped', 'donated', 'lost', 'other'))
@@ -169,6 +178,12 @@ alter table public.assets
       and disposal_method is not null
       and disposal_reason is not null
       and disposal_proceeds is not null
+      and (
+        (disposal_proceeds = 0
+          and disposal_payment_method is null
+          and disposal_reference is null)
+        or (disposal_proceeds > 0 and disposal_payment_method is not null)
+      )
     )) not valid,
   add constraint chk_assets_disposed_no_custodian
     check (status is distinct from 'disposed' or assigned_staff_id is null)
@@ -179,6 +194,8 @@ alter table public.assets
       and disposal_method is null
       and disposal_reason is null
       and disposal_proceeds is null
+      and disposal_payment_method is null
+      and disposal_reference is null
     )) not valid,
   add constraint chk_assets_required_acquisition
     check (
@@ -233,7 +250,7 @@ grant select on public.asset_events to authenticated;
 grant all on public.asset_events to service_role;
 
 -- ---------------------------------------------------------------------------
--- 7. Guard linked capital expenses from direct edits/deletes
+-- 7. Guard linked capital expenses from direct creates/edits/deletes
 -- ---------------------------------------------------------------------------
 
 create or replace function public.guard_asset_linked_expense_write()
@@ -250,6 +267,14 @@ begin
     return old;
   end if;
 
+  if tg_op = 'INSERT' then
+    if new.asset_id is not null
+       and coalesce(current_setting('fixops.allow_asset_expense_write', true), '') <> 'true' then
+      raise exception 'Asset purchase expenses must be created through the asset register';
+    end if;
+    return new;
+  end if;
+
   if coalesce(new.asset_id, old.asset_id) is not null then
     if coalesce(current_setting('fixops.allow_asset_expense_write', true), '') <> 'true' then
       raise exception 'Asset purchase expenses cannot be edited directly; edit the asset instead';
@@ -261,7 +286,7 @@ $$;
 
 drop trigger if exists trg_guard_asset_linked_expense_write on public.expenses;
 create trigger trg_guard_asset_linked_expense_write
-  before update or delete on public.expenses
+  before insert or update or delete on public.expenses
   for each row
   execute function public.guard_asset_linked_expense_write();
 
@@ -308,6 +333,7 @@ declare
   v_expense_id uuid;
   v_existing assets%rowtype;
   v_kw_date date := (now() at time zone 'Asia/Kuwait')::date;
+  v_existing_sequence integer;
 begin
   if p_org_id is null or p_actor_id is null or p_asset_id is null then
     raise exception 'Unauthorized';
@@ -443,6 +469,28 @@ begin
     return;
   end if;
 
+  -- Seed the shared sequence from any legacy AST-##### codes before generating
+  -- the first new code. Lock the sequence key so concurrent first creates cannot
+  -- both inspect the same legacy maximum.
+  perform pg_advisory_xact_lock(hashtextextended('fixops.asset-code:' || p_org_id::text, 0));
+  select coalesce(max((substring(a.asset_code from '^AST-([0-9]+)$'))::integer), 0)
+  into v_existing_sequence
+  from public.assets a
+  where a.organization_id = p_org_id
+    and a.asset_code ~ '^AST-[0-9]+$';
+
+  insert into public.organization_sequences (
+    organization_id, sequence_type, prefix, last_number
+  ) values (
+    p_org_id, 'asset', 'AST-', v_existing_sequence
+  )
+  on conflict (organization_id, sequence_type) do update
+  set prefix = 'AST-',
+      last_number = greatest(
+        public.organization_sequences.last_number,
+        excluded.last_number
+      );
+
   v_code := public.generate_sequence_number(p_org_id, 'asset', 'AST-');
 
   insert into public.assets (
@@ -535,6 +583,8 @@ create or replace function public.update_asset(
   p_disposal_date date,
   p_disposal_method text,
   p_disposal_proceeds numeric,
+  p_disposal_payment_method text,
+  p_disposal_reference text,
   p_disposal_reason text
 )
 returns table(asset_id uuid, expense_id uuid, updated_at timestamptz, changed boolean, history_event_type text)
@@ -550,6 +600,8 @@ declare
   v_notes text := nullif(btrim(p_notes), '');
   v_salvage numeric := coalesce(p_salvage_value, 0);
   v_disposal_method text := nullif(btrim(p_disposal_method), '');
+  v_disposal_payment_method text := nullif(btrim(p_disposal_payment_method), '');
+  v_disposal_reference text := nullif(btrim(p_disposal_reference), '');
   v_disposal_reason text := nullif(btrim(p_disposal_reason), '');
   v_old assets%rowtype;
   v_new_ts timestamptz := now();
@@ -664,12 +716,28 @@ begin
     if p_disposal_proceeds is null or p_disposal_proceeds < 0 or scale(p_disposal_proceeds) > 3 then
       raise exception 'Disposal proceeds must be zero or more';
     end if;
+    if p_disposal_proceeds > 0 and (
+      v_disposal_payment_method is null
+      or v_disposal_payment_method not in ('cash', 'bank_transfer', 'cheque')
+    ) then
+      raise exception 'Select how the disposal proceeds were received';
+    end if;
+    if p_disposal_proceeds = 0 and v_disposal_payment_method is not null then
+      raise exception 'A receipt method is only allowed when disposal proceeds are greater than zero';
+    end if;
+    if p_disposal_proceeds = 0 and v_disposal_reference is not null then
+      raise exception 'A disposal reference is only allowed when disposal proceeds are greater than zero';
+    end if;
+    if v_disposal_reference is not null and char_length(v_disposal_reference) > 100 then
+      raise exception 'Disposal reference must be 100 characters or fewer';
+    end if;
     if p_assigned_staff_id is not null then
       raise exception 'A disposed asset cannot have a custodian';
     end if;
   else
     if p_disposal_date is not null or v_disposal_method is not null
-       or p_disposal_proceeds is not null or v_disposal_reason is not null then
+       or p_disposal_proceeds is not null or v_disposal_payment_method is not null
+       or v_disposal_reference is not null or v_disposal_reason is not null then
       raise exception 'Disposal details can only be set when disposing an asset';
     end if;
   end if;
@@ -779,6 +847,14 @@ begin
     v_changes := v_changes || jsonb_build_object('disposal_proceeds',
       jsonb_build_object('before', v_old.disposal_proceeds, 'after', p_disposal_proceeds));
   end if;
+  if v_old.disposal_payment_method is distinct from v_disposal_payment_method then
+    v_changes := v_changes || jsonb_build_object('disposal_payment_method',
+      jsonb_build_object('before', v_old.disposal_payment_method, 'after', v_disposal_payment_method));
+  end if;
+  if v_old.disposal_reference is distinct from v_disposal_reference then
+    v_changes := v_changes || jsonb_build_object('disposal_reference',
+      jsonb_build_object('before', v_old.disposal_reference, 'after', v_disposal_reference));
+  end if;
   if v_old.disposal_reason is distinct from v_disposal_reason then
     v_changes := v_changes || jsonb_build_object('disposal_reason',
       jsonb_build_object('before', v_old.disposal_reason, 'after', v_disposal_reason));
@@ -812,6 +888,8 @@ begin
     disposal_date = case when p_status = 'disposed' then p_disposal_date else null end,
     disposal_method = case when p_status = 'disposed' then v_disposal_method else null end,
     disposal_proceeds = case when p_status = 'disposed' then p_disposal_proceeds else null end,
+    disposal_payment_method = case when p_status = 'disposed' then v_disposal_payment_method else null end,
+    disposal_reference = case when p_status = 'disposed' then v_disposal_reference else null end,
     disposal_reason = case when p_status = 'disposed' then v_disposal_reason else null end,
     updated_by = p_actor_id,
     updated_at = v_new_ts
@@ -854,20 +932,20 @@ $$;
 revoke all on function public.update_asset(
   uuid, uuid, uuid, timestamptz, text, text, date, numeric, text, integer, date,
   numeric, text, uuid, text, text, uuid, date, date, text, text, text, date,
-  text, numeric, text
+  text, numeric, text, text, text
 ) from public;
 revoke all on function public.update_asset(
   uuid, uuid, uuid, timestamptz, text, text, date, numeric, text, integer, date,
   numeric, text, uuid, text, text, uuid, date, date, text, text, text, date,
-  text, numeric, text
+  text, numeric, text, text, text
 ) from anon;
 revoke all on function public.update_asset(
   uuid, uuid, uuid, timestamptz, text, text, date, numeric, text, integer, date,
   numeric, text, uuid, text, text, uuid, date, date, text, text, text, date,
-  text, numeric, text
+  text, numeric, text, text, text
 ) from authenticated;
 grant execute on function public.update_asset(
   uuid, uuid, uuid, timestamptz, text, text, date, numeric, text, integer, date,
   numeric, text, uuid, text, text, uuid, date, date, text, text, text, date,
-  text, numeric, text
+  text, numeric, text, text, text
 ) to service_role;

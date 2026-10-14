@@ -43,6 +43,8 @@ export interface AssetInitial {
   disposal_date: string | null
   disposal_method: string | null
   disposal_proceeds: number | null
+  disposal_payment_method: string | null
+  disposal_reference: string | null
   disposal_reason: string | null
   notes: string | null
 }
@@ -84,8 +86,10 @@ export function AssetForm({ suppliers, staff, initial }: Props) {
     salvage_value: initial ? String(initial.salvage_value ?? 0) : '0',
     notes: initial?.notes ?? '',
     disposal_date: initial?.disposal_date ?? '',
-    disposal_method: initial?.disposal_method ?? 'sold',
+    disposal_method: initial?.disposal_method ?? '',
     disposal_proceeds: initial?.disposal_proceeds != null ? String(initial.disposal_proceeds) : '',
+    disposal_payment_method: initial?.disposal_payment_method ?? '',
+    disposal_reference: initial?.disposal_reference ?? '',
     disposal_reason: initial?.disposal_reason ?? '',
   })
 
@@ -156,6 +160,15 @@ export function AssetForm({ suppliers, staff, initial }: Props) {
         setError('Complete all disposal details')
         return
       }
+      const proceeds = Number(form.disposal_proceeds)
+      if (!Number.isFinite(proceeds) || proceeds < 0) {
+        setError('Disposal proceeds must be zero or more')
+        return
+      }
+      if (proceeds > 0 && !form.disposal_payment_method) {
+        setError('Select how the disposal proceeds were received')
+        return
+      }
       if (form.assigned_staff_id) {
         setError('Remove the custodian before disposing of the asset')
         return
@@ -189,10 +202,18 @@ export function AssetForm({ suppliers, staff, initial }: Props) {
 
     if (isEdit) {
       body.expected_updated_at = initial!.updated_at
-      body.disposal_date = form.disposal_date || null
-      body.disposal_method = form.disposal_method || null
-      body.disposal_proceeds = form.disposal_proceeds !== '' ? form.disposal_proceeds : null
-      body.disposal_reason = form.disposal_reason.trim() || null
+      body.disposal_date = isDisposed ? form.disposal_date || null : null
+      body.disposal_method = isDisposed ? form.disposal_method || null : null
+      body.disposal_proceeds = isDisposed && form.disposal_proceeds !== ''
+        ? form.disposal_proceeds
+        : null
+      body.disposal_payment_method = isDisposed && Number(form.disposal_proceeds) > 0
+        ? form.disposal_payment_method || null
+        : null
+      body.disposal_reference = isDisposed && Number(form.disposal_proceeds) > 0
+        ? form.disposal_reference.trim() || null
+        : null
+      body.disposal_reason = isDisposed ? form.disposal_reason.trim() || null : null
     } else {
       body.asset_id = assetIdRef.current
     }
@@ -369,7 +390,8 @@ export function AssetForm({ suppliers, staff, initial }: Props) {
             </div>
             <div>
               <label className={labelClass}>Disposal Method <span className="text-red-500">*</span></label>
-              <select value={form.disposal_method} onChange={set('disposal_method')} className={inputClass}>
+              <select value={form.disposal_method} onChange={set('disposal_method')} className={inputClass} required>
+                <option value="">Select method</option>
                 {DISPOSAL_METHODS.map((m) => <option key={m} value={m}>{DISPOSAL_METHOD_LABELS[m]}</option>)}
               </select>
             </div>
@@ -378,6 +400,26 @@ export function AssetForm({ suppliers, staff, initial }: Props) {
             <label className={labelClass}>Proceeds (KWD) <span className="text-slate-400 font-normal">(0 if none)</span></label>
             <input type="number" min="0" step="0.001" value={form.disposal_proceeds} onChange={set('disposal_proceeds')} placeholder="0.000" className={inputClass} required />
           </div>
+          {Number(form.disposal_proceeds) > 0 && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Receipt Method <span className="text-red-500">*</span></label>
+                <select value={form.disposal_payment_method} onChange={set('disposal_payment_method')} className={inputClass} required>
+                  <option value="">Select method</option>
+                  {ASSET_PAYMENT_METHODS.map((m) => <option key={m} value={m}>{ASSET_PAYMENT_METHOD_LABELS[m]}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Receipt Reference</label>
+                <input type="text" value={form.disposal_reference} onChange={set('disposal_reference')} placeholder="Optional" className={inputClass} />
+              </div>
+            </div>
+          )}
+          {Number(form.disposal_proceeds) > 0 && (
+            <p className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+              These proceeds will appear as a receipt in the {form.disposal_payment_method === 'cash' ? 'Cash' : 'Bank'} Book.
+            </p>
+          )}
           <div>
             <label className={labelClass}>Reason <span className="text-red-500">*</span></label>
             <textarea value={form.disposal_reason} onChange={set('disposal_reason')} rows={2} className={inputClass + ' resize-none'} required />

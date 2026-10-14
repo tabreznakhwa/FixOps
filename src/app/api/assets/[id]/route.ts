@@ -77,6 +77,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const disposalDate = body.disposal_date ? String(body.disposal_date) : null
     const disposalMethod = body.disposal_method ? String(body.disposal_method).trim() : null
     const disposalProceeds = body.disposal_proceeds != null && body.disposal_proceeds !== '' ? body.disposal_proceeds : null
+    const disposalPaymentMethod = body.disposal_payment_method ? String(body.disposal_payment_method).trim() : null
+    const disposalReference = String(body.disposal_reference ?? '').trim() || null
     const disposalReason = String(body.disposal_reason ?? '').trim() || null
 
     if (!expectedUpdatedAt) {
@@ -128,6 +130,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (disposalProceeds != null && (!isValidMoney(disposalProceeds) || Number(disposalProceeds) < 0)) {
       return NextResponse.json({ error: 'Disposal proceeds must be zero or more' }, { status: 400 })
     }
+    if (Number(disposalProceeds) > 0 && !ASSET_PAYMENT_METHODS.includes(disposalPaymentMethod as (typeof ASSET_PAYMENT_METHODS)[number])) {
+      return NextResponse.json({ error: 'Select how the disposal proceeds were received' }, { status: 400 })
+    }
+    if (disposalReference && disposalReference.length > 100) {
+      return NextResponse.json({ error: 'Disposal reference must be 100 characters or fewer' }, { status: 400 })
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any
@@ -157,6 +165,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       p_disposal_date: disposalDate,
       p_disposal_method: disposalMethod,
       p_disposal_proceeds: disposalProceeds != null ? Number(disposalProceeds) : null,
+      p_disposal_payment_method: Number(disposalProceeds) > 0 ? disposalPaymentMethod : null,
+      p_disposal_reference: Number(disposalProceeds) > 0 ? disposalReference : null,
       p_disposal_reason: disposalReason,
     })
 
@@ -188,6 +198,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         'Select a valid disposal method',
         'A disposal reason is required and must be 1,000 characters or fewer',
         'Disposal proceeds must be zero or more',
+        'Select how the disposal proceeds were received',
+        'A receipt method is only allowed when disposal proceeds are greater than zero',
+        'A disposal reference is only allowed when disposal proceeds are greater than zero',
+        'Disposal reference must be 100 characters or fewer',
         'A disposed asset cannot have a custodian',
         'Disposal details can only be set when disposing an asset',
         'Supplier does not belong to this organization',

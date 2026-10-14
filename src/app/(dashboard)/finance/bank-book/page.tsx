@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Landmark, TrendingUp, TrendingDown } from 'lucide-react'
@@ -7,6 +7,9 @@ import { PrintActions } from '@/components/print/PrintActions'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { Suspense } from 'react'
+import { fetchAllAssetDisposalsForBook } from '@/lib/assets.server'
+import { getAuthedProfile } from '@/lib/auth/session'
+import { getRoleAccess } from '@/lib/orgPermissions'
 
 export const metadata = { title: 'Bank Book' }
 
@@ -38,10 +41,15 @@ export default async function BankBookPage({
   const from = params.from ?? today
   const to = params.to ?? today
 
+  const { profile } = await getAuthedProfile()
+  if (!profile || profile.status !== 'active') return null
+  const financeAccess = await getRoleAccess(profile.organization_id, profile.role)
+  if (financeAccess.finance === 'none') return null
+
   // Opening balance
   const { data: orgRaw } = await (supabase as any)
-    .from('organizations').select('opening_bank_balance, opening_balance_date').limit(1).single()
-  const org = (orgRaw ?? {}) as { opening_bank_balance: number | null; opening_balance_date: string | null }
+    .from('organizations').select('id, opening_bank_balance, opening_balance_date').limit(1).single()
+  const org = (orgRaw ?? {}) as { id: string | null; opening_bank_balance: number | null; opening_balance_date: string | null }
   const openingBank = org.opening_bank_balance ?? 0
   const openingDate = org.opening_balance_date ?? null
 
@@ -120,6 +128,18 @@ export default async function BankBookPage({
     .order('bonus_date', { ascending: true })
     .limit(5000)
 
+  // Asset RLS is narrower than Finance access, so load only this book's
+  // disposal receipts through the service role after explicitly authorizing the
+  // active caller, tenant and effective Finance permission.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any
+  const allAssetDisposals = await fetchAllAssetDisposalsForBook(
+    admin,
+    profile.organization_id,
+    ['bank_transfer', 'cheque'],
+    openingDate,
+  )
+
   type Receipt = { payment_date: string; payment_number: string; amount_received: number; payment_mode: string; reference_number: string | null; customers: { full_name: string } | null }
   type SupplierPay = { payment_date: string; amount_paid: number; payment_mode: string; reference_number: string | null; suppliers: { supplier_name: string } | null }
   type Expense = { expense_date: string; expense_number: string; category: string; description: string; amount: number; payment_method: string; reference_number: string | null }
@@ -130,7 +150,6 @@ export default async function BankBookPage({
   type Transfer = { transfer_date: string; from_account: string; to_account: string; amount: number; reference_number: string | null; notes: string | null }
   type Withdrawal = { withdrawal_date: string; amount: number; payment_mode: string; purpose: string | null; notes: string | null }
   type Bonus = { bonus_date: string; amount: number; payment_mode: string; notes: string | null; staff: { full_name: string } | null }
-
   const allReceipts = (allReceiptsRaw ?? []) as Receipt[]
   const allSupplierPayments = (allSupplierPaymentsRaw ?? []) as SupplierPay[]
   const allExpenses = (allExpensesRaw ?? []) as Expense[]
@@ -151,6 +170,7 @@ export default async function BankBookPage({
     + allAmcPayments.reduce((s, p) => s + p.amount, 0)
     + bankTransfersIn.reduce((s, t) => s + t.amount, 0)
     + allRepayments.reduce((s, r) => s + r.amount, 0)
+    + allAssetDisposals.reduce((s, a) => s + Number(a.disposal_proceeds), 0)
   const totalBankOut = allSupplierPayments.reduce((s, r) => s + r.amount_paid, 0)
     + allExpenses.reduce((s, r) => s + r.amount, 0)
     + allSalaries.reduce((s, r) => s + r.net_salary, 0)
@@ -166,6 +186,7 @@ export default async function BankBookPage({
     + allAmcPayments.filter((p) => p.payment_date < from).reduce((s, p) => s + p.amount, 0)
     + bankTransfersIn.filter((t) => t.transfer_date < from).reduce((s, t) => s + t.amount, 0)
     + allRepayments.filter((r) => r.repayment_date < from).reduce((s, r) => s + r.amount, 0)
+    + allAssetDisposals.filter((a) => a.disposal_date < from).reduce((s, a) => s + Number(a.disposal_proceeds), 0)
   )
   const prePeriodOut = allTime ? 0 : (
     allSupplierPayments.filter((p) => p.payment_date < from).reduce((s, p) => s + p.amount_paid, 0)
@@ -238,6 +259,13 @@ export default async function BankBookPage({
       mode: MODE_LABELS[p.payment_mode] ?? p.payment_mode,
       receipts: p.amount, payments: 0,
       ref: p.reference_number ?? '—',
+    })),
+    ...allAssetDisposals.filter((a) => inPeriod(a.disposal_date)).map((a) => ({
+      date: a.disposal_date,
+      narration: `Asset Disposal — ${a.asset_code}: ${a.asset_name}`,
+      mode: MODE_LABELS[a.disposal_payment_method] ?? a.disposal_payment_method,
+      receipts: Number(a.disposal_proceeds), payments: 0,
+      ref: a.disposal_reference ?? a.asset_code,
     })),
     ...bankTransfersIn.filter((t) => inPeriod(t.transfer_date)).map((t) => ({
       date: t.transfer_date,

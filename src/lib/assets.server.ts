@@ -62,3 +62,46 @@ export function fetchAllActiveAssetStaff(
     'full_name',
   )
 }
+
+export type AssetDisposalBookRow = {
+  disposal_date: string
+  disposal_proceeds: number
+  disposal_payment_method: string
+  disposal_reference: string | null
+  asset_code: string
+  asset_name: string
+}
+
+export async function fetchAllAssetDisposalsForBook(
+  client: PostgrestClient,
+  organizationId: string,
+  paymentMethods: string[],
+  openingBalanceDate: string | null,
+): Promise<AssetDisposalBookRow[]> {
+  const all: AssetDisposalBookRow[] = []
+
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    let query = client
+      .from('assets')
+      .select('disposal_date, disposal_proceeds, disposal_payment_method, disposal_reference, asset_code, asset_name')
+      .eq('organization_id', organizationId)
+      .eq('status', 'disposed')
+      .in('disposal_payment_method', paymentMethods)
+      .gt('disposal_proceeds', 0)
+
+    if (openingBalanceDate) query = query.gte('disposal_date', openingBalanceDate)
+
+    const { data, error } = await query
+      .order('disposal_date', { ascending: true })
+      .order('asset_code', { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1)
+
+    if (error) throw new Error(error.message)
+
+    const rows = (data ?? []) as AssetDisposalBookRow[]
+    all.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+  }
+
+  return all
+}

@@ -419,6 +419,8 @@ export interface Database {
           disposal_date: string | null
           disposal_method: string | null
           disposal_proceeds: number | null
+          disposal_payment_method: string | null
+          disposal_reference: string | null
           disposal_reason: string | null
           notes: string | null
           document_url: string | null
@@ -629,6 +631,8 @@ export interface Database {
           p_disposal_date: string | null
           p_disposal_method: string | null
           p_disposal_proceeds: number | null
+          p_disposal_payment_method: string | null
+          p_disposal_reference: string | null
           p_disposal_reason: string | null
         }
         Returns: Array<{

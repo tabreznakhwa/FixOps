@@ -136,6 +136,15 @@ linked-staff ownership. The database part of this restoration is migration
 one non-null `staff.user_id` link per login so self-service identity is
 unambiguous.
 
+### Company assets
+Owner/admin manage the register; manager is view-only. Recording an asset
+atomically creates one linked `asset_purchase` expense, and generic expense
+create/edit/delete paths cannot mutate those capital purchases. Straight-line
+depreciation is calculated on demand. Disposal is terminal; positive proceeds
+require a cash/bank receipt method and feed the corresponding Cash or Bank Book
+from the disposed asset record. Migration 052 must be applied before this feature
+is deployed or used.
+
 Not clocking in creates **no row at all** — absence only exists if written. A
 nightly job (`/api/attendance/auto-absent`, Vercel cron 00:00 UTC = 03:00 Kuwait)
 now writes them, skipping Fridays, public holidays, anyone already recorded and

@@ -102,6 +102,8 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     disposal_date: string | null
     disposal_method: string | null
     disposal_proceeds: number | null
+    disposal_payment_method: string | null
+    disposal_reference: string | null
     disposal_reason: string | null
     notes: string | null
     created_at: string
@@ -238,6 +240,10 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
                   {field({ label: 'Disposal Date', value: formatDate(asset.disposal_date) })}
                   {field({ label: 'Method', value: DISPOSAL_METHOD_LABELS[asset.disposal_method as keyof typeof DISPOSAL_METHOD_LABELS] ?? asset.disposal_method ?? '—' })}
                   {field({ label: 'Proceeds', value: formatCurrency(Number(asset.disposal_proceeds ?? 0)) })}
+                  {field({ label: 'Receipt Method', value: asset.disposal_payment_method
+                    ? ASSET_PAYMENT_METHOD_LABELS[asset.disposal_payment_method as keyof typeof ASSET_PAYMENT_METHOD_LABELS] ?? asset.disposal_payment_method
+                    : '—' })}
+                  {field({ label: 'Receipt Reference', value: asset.disposal_reference ?? '—' })}
                   {field({ label: 'Gain / (Loss)', value: <span className={gainLoss != null && gainLoss < 0 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>{gainLoss == null ? '—' : formatCurrency(gainLoss)}</span> })}
                 </div>
                 {asset.disposal_reason && (

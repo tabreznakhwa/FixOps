@@ -32,7 +32,7 @@ export default async function EditAssetPage({ params }: { params: Promise<{ id: 
   const [{ data: assetRaw }, supplierRows, staffRows] = await Promise.all([
     admin
       .from('assets')
-      .select('id, updated_at, asset_name, category, serial_number, purchase_date, purchase_cost, payment_method, purchase_reference, supplier_id, assigned_staff_id, location, condition, status, warranty_expiry, service_due_date, depreciation_start_date, useful_life_months, salvage_value, disposal_date, disposal_method, disposal_proceeds, disposal_reason, notes')
+      .select('id, updated_at, asset_name, category, serial_number, purchase_date, purchase_cost, payment_method, purchase_reference, supplier_id, assigned_staff_id, location, condition, status, warranty_expiry, service_due_date, depreciation_start_date, useful_life_months, salvage_value, disposal_date, disposal_method, disposal_proceeds, disposal_payment_method, disposal_reference, disposal_reason, notes')
       .eq('id', id)
       .eq('organization_id', profile.organization_id)
       .maybeSingle(),
