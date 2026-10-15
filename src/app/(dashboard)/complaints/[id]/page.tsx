@@ -1,7 +1,8 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { getAuthedProfile } from '@/lib/auth/session'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { ClipboardList, Plus, Edit, CalendarClock } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
 import { ComplaintActions } from './ComplaintActions'
@@ -35,6 +36,9 @@ export default async function ComplaintDetailPage({
   // Only non-sensitive staff directory fields cross this authorized server page.
   const admin = createAdminClient()
 
+  const { profile } = await getAuthedProfile()
+  if (!profile || profile.status !== 'active' || !profile.organization_id) redirect('/login')
+
   const { data: raw } = await supabase
     .from('complaints')
     .select('*, customers(full_name, mobile_number, email, area, city), users!complaints_assigned_to_fkey(id, full_name)')
@@ -57,7 +61,7 @@ export default async function ComplaintDetailPage({
 
   const [usersRes, staffRes, workOrdersRes, internalNotesRes, currentUserRes] = await Promise.all([
     supabase.from('users').select('id, full_name, role').in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
-    admin.from('staff').select('id, full_name, designation').eq('employment_status', 'active'),
+    admin.from('staff').select('id, full_name, designation').eq('employment_status', 'active').eq('organization_id', profile.organization_id),
     supabase.from('work_orders').select('id, work_order_number, status').eq('complaint_id', id).order('created_at', { ascending: false }),
     supabase.from('complaint_internal_notes').select('id, note, author_name, created_at, created_by, updated_at').eq('complaint_id', id).order('created_at', { ascending: false }),
     authUser

@@ -112,8 +112,8 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
 
   const [{ data: expenseRaw }, { data: supplierRaw }, { data: staffRaw }, { data: eventsRaw }] = await Promise.all([
     admin.from('expenses').select('id, expense_number, amount, payment_method').eq('asset_id', asset.id).maybeSingle(),
-    asset.supplier_id ? admin.from('suppliers').select('supplier_name').eq('id', asset.supplier_id).maybeSingle() : Promise.resolve({ data: null }),
-    asset.assigned_staff_id ? admin.from('staff').select('full_name, staff_code').eq('id', asset.assigned_staff_id).maybeSingle() : Promise.resolve({ data: null }),
+    asset.supplier_id ? admin.from('suppliers').select('supplier_name').eq('id', asset.supplier_id).eq('organization_id', profile.organization_id).maybeSingle() : Promise.resolve({ data: null }),
+    asset.assigned_staff_id ? admin.from('staff').select('full_name, staff_code').eq('id', asset.assigned_staff_id).eq('organization_id', profile.organization_id).maybeSingle() : Promise.resolve({ data: null }),
     admin.from('asset_events').select('id, event_type, changes, created_by, created_at').eq('asset_id', asset.id).order('created_at', { ascending: false }).limit(50),
   ])
 

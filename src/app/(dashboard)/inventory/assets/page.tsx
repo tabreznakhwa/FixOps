@@ -78,10 +78,10 @@ export default async function AssetsPage({
   const status = params.status ?? ''
   const condition = params.condition ?? ''
 
-  // The generic query builder is reused for summary and paginated projections.
+  // Apply shared filters after select() creates a PostgREST filter builder.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const buildQuery = (base: any) => {
-    let query = base.from('assets').eq('organization_id', profile.organization_id)
+  const applyFilters = (selectedQuery: any) => {
+    let query = selectedQuery.eq('organization_id', profile.organization_id)
     if (safeQ) {
       query = query.or(
         `asset_code.ilike.%${safeQ}%,asset_name.ilike.%${safeQ}%,serial_number.ilike.%${safeQ}%,location.ilike.%${safeQ}%`,
@@ -104,8 +104,9 @@ export default async function AssetsPage({
   }
   const summary: SummaryRow[] = []
   for (let offset = 0; ; offset += 1000) {
-    const { data: batch, error } = await buildQuery(admin)
-      .select('purchase_cost, status, warranty_expiry, service_due_date')
+    const { data: batch, error } = await applyFilters(
+      admin.from('assets').select('purchase_cost, status, warranty_expiry, service_due_date'),
+    )
       .order('id')
       .range(offset, offset + 999)
     if (error) throw error
@@ -127,13 +128,15 @@ export default async function AssetsPage({
   const from = (page - 1) * PAGE_SIZE
   const to = from + PAGE_SIZE - 1
 
-  const { data: rowsRaw, count } = await buildQuery(admin)
-    .select(
+  const { data: rowsRaw, count, error: rowsError } = await applyFilters(
+    admin.from('assets').select(
       'id, asset_code, asset_name, category, serial_number, purchase_date, purchase_cost, assigned_staff_id, location, condition, status, warranty_expiry, service_due_date, depreciation_start_date, useful_life_months, salvage_value, disposal_date',
       { count: 'exact' },
-    )
+    ),
+  )
     .order('asset_code')
     .range(from, to)
+  if (rowsError) throw rowsError
 
   const assets = (rowsRaw ?? []) as AssetRow[]
   const totalCount = count ?? 0

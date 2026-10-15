@@ -1,6 +1,8 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { getAuthedProfile } from '@/lib/auth/session'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { NewWorkOrderForm } from './NewWorkOrderForm'
 import { fetchAllCustomers } from '@/lib/customers'
@@ -19,6 +21,9 @@ export default async function NewWorkOrderPage({
   // non-sensitive assignment fields after proxy authorization.
   const admin = createAdminClient()
 
+  const { profile } = await getAuthedProfile()
+  if (!profile || profile.status !== 'active' || !profile.organization_id) redirect('/login')
+
   const [customerRows, usersRes, staffRes, complaintsRes] = await Promise.all([
     fetchAllCustomers(supabase, 'id, full_name, mobile_number, company_name'),
     supabase
@@ -31,6 +36,7 @@ export default async function NewWorkOrderPage({
       .from('staff')
       .select('id, full_name, designation')
       .eq('employment_status', 'active')
+      .eq('organization_id', profile.organization_id)
       .order('full_name'),
     supabase
       .from('complaints')

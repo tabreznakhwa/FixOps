@@ -1,5 +1,6 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { getAuthedProfile } from '@/lib/auth/session'
+import { redirect } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import { DashboardStats } from '@/components/dashboard/DashboardStats'
@@ -20,7 +21,8 @@ export default async function DashboardPage() {
   const admin = createAdminClient()
 
   const { profile } = await getAuthedProfile()
-  const role = profile?.role ?? 'technician'
+  if (!profile || profile.status !== 'active' || !profile.organization_id) redirect('/login')
+  const role = profile.role
   const isTechnician = role === 'technician'
 
   const todayISO = (() => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return d.toISOString() })()
@@ -51,7 +53,7 @@ export default async function DashboardPage() {
     supabase.rpc('get_complaint_status_counts'),
     supabase.from('complaints').select('id, complaint_number, description, priority, status, created_at, customers(full_name)').order('created_at', { ascending: false }).limit(8),
     supabase.from('users').select('id, full_name').eq('role', 'technician').eq('status', 'active'),
-    admin.from('staff').select('id, full_name').eq('employment_status', 'active'),
+    admin.from('staff').select('id, full_name').eq('employment_status', 'active').eq('organization_id', profile.organization_id),
     supabase.from('inventory_items').select('id, item_name, current_stock, minimum_stock_level, unit_of_measure').eq('is_active', true).limit(500),
     isTechnician
       ? Promise.resolve({ data: [] })

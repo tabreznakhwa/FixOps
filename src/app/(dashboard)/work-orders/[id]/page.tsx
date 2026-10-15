@@ -40,8 +40,8 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   const [techniciansRaw, staffRaw, inventoryRaw, lineItemsRaw, woServicesRaw, invServicesRaw, invoiceRaw] = await Promise.all([
     supabase.from('users').select('id, full_name, role').in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
     // Only non-sensitive staff directory fields cross this authorized server page.
-    admin.from('staff').select('id, full_name, designation').eq('employment_status', 'active'),
-    admin.from('inventory_items').select('id, item_code, item_name, unit_of_measure, current_stock, selling_price').eq('is_active', true).order('item_name'),
+    admin.from('staff').select('id, full_name, designation').eq('employment_status', 'active').eq('organization_id', orgId),
+    admin.from('inventory_items').select('id, item_code, item_name, unit_of_measure, current_stock, selling_price').eq('is_active', true).eq('organization_id', orgId).order('item_name'),
     // Use admin client so the UI sees the same rows as the final_amount calculation
     admin.from('work_order_line_items')
       .select('id, item_type, description, quantity, unit_price, inventory_item_id')
