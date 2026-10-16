@@ -4,11 +4,21 @@ import { Header } from '@/components/layout/Header'
 import { BackButton } from '@/components/ui/BackButton'
 import { EditExpenseForm } from './EditExpenseForm'
 import { notFound, redirect } from 'next/navigation'
+import { resolveBack, safeReturnTo, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Edit Expense' }
 
-export default async function EditExpensePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditExpensePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
   const { id } = await params
+  const { return_to } = await searchParams
+  const back = resolveBack(return_to, '/finance/expenses', 'Expenses')
+  const expenseDestination = safeReturnTo(return_to) ?? '/finance/expenses'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -37,9 +47,11 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
   if (!expense) notFound()
   if (expense.asset_id) {
     if (['owner', 'admin', 'manager'].includes(profile.role)) {
-      redirect(`/inventory/assets/${expense.asset_id}`)
+      redirect(withReturnTo(`/inventory/assets/${expense.asset_id}`, expenseDestination))
     }
-    redirect('/finance/expenses?error=linked_asset')
+    const destinationUrl = new URL(expenseDestination, 'https://fixops.internal')
+    destinationUrl.searchParams.set('error', 'linked_asset')
+    redirect(`${destinationUrl.pathname}${destinationUrl.search}${destinationUrl.hash}`)
   }
 
   return (
@@ -48,11 +60,11 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
         title="Edit Expense"
         subtitle={expense.expense_number}
         actions={
-          <BackButton fallbackHref="/finance/expenses" label="Back to Expenses" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6">
-        <EditExpenseForm id={id} initial={expense} customCategories={customCategories} canManageCategories={canManageCategories} />
+        <EditExpenseForm id={id} initial={expense} customCategories={customCategories} canManageCategories={canManageCategories} returnTo={back.href} />
       </div>
     </div>
   )

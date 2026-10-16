@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, Trash2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { safeReturnTo } from '@/lib/backNav'
 
 interface Supplier {
   id: string
@@ -19,6 +21,7 @@ interface LineItem {
 interface Props {
   suppliers: Supplier[]
   defaultSupplierId: string
+  returnTo: string
 }
 
 const CATEGORIES = [
@@ -40,7 +43,9 @@ function emptyItem(): LineItem {
   return { description: '', category: '', quantity: 1, unit_price: 0 }
 }
 
-export function NewPOForm({ suppliers, defaultSupplierId }: Props) {
+export function NewPOForm({ suppliers, defaultSupplierId, returnTo }: Props) {
+  const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/suppliers?tab=po'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [items, setItems] = useState<LineItem[]>([emptyItem()])
@@ -110,7 +115,8 @@ export function NewPOForm({ suppliers, defaultSupplierId }: Props) {
         setLoading(false)
         return
       }
-      window.location.href = '/suppliers?tab=po'
+      router.replace(destination)
+      router.refresh()
     } catch {
       setError('Network error. Please try again.')
       setLoading(false)
@@ -248,9 +254,13 @@ export function NewPOForm({ suppliers, defaultSupplierId }: Props) {
         >
           {loading ? 'Creating…' : 'Create Purchase Order'}
         </button>
-        <a href="/suppliers?tab=po" className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors">
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
+          className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+        >
           Cancel
-        </a>
+        </button>
       </div>
     </form>
   )

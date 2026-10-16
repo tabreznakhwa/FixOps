@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/audit'
 import { ALL_ROLES } from '@/lib/permissions'
+import { returnToFromFormData } from '@/lib/backNav'
 
 export async function PATCH(
   request: NextRequest,
@@ -78,6 +79,7 @@ export async function POST(
 ) {
   try {
     const { id: targetUserId } = await params
+    const returnTo = returnToFromFormData(await request.formData()) ?? '/settings'
     const { pathname } = request.nextUrl
     const action = pathname.endsWith('/approve') ? 'approve' : pathname.endsWith('/reject') ? 'reject' : null
     if (!action) return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
@@ -117,7 +119,7 @@ export async function POST(
       entityLabel: (targetRaw as any)?.full_name ?? targetUserId,
     })
 
-    return NextResponse.redirect(new URL('/settings', request.url))
+    return NextResponse.redirect(new URL(returnTo, request.url), { status: 303 })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : JSON.stringify(err)
     return NextResponse.json({ error: msg }, { status: 500 })

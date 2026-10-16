@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, Trash2, AlertCircle, ChevronDown, X, Search } from 'lucide-react'
+import { safeReturnTo, withReturnTo } from '@/lib/backNav'
 
 interface Customer {
   id: string
@@ -53,6 +55,7 @@ interface Props {
   inventoryItems: InventoryItem[]
   customServices: string[]
   initialWorkOrderId?: string
+  returnTo: string
 }
 
 const PRESET_SERVICES = [
@@ -390,7 +393,9 @@ function emptyItem(): LineItem {
   }
 }
 
-export function NewInvoiceForm({ customers, workOrders, inventoryItems, customServices, initialWorkOrderId }: Props) {
+export function NewInvoiceForm({ customers, workOrders, inventoryItems, customServices, initialWorkOrderId, returnTo }: Props) {
+  const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/finance/invoices'
   const [customerId, setCustomerId] = useState('')
   const [invoiceType, setInvoiceType] = useState('service')
   const [invoiceDate, setInvoiceDate] = useState(TODAY)
@@ -577,13 +582,14 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to create invoice')
 
-      // replace() so the form is not pushed onto the history stack —
-      // Back from invoice detail goes to the WO, not back to this blank form.
-      window.location.replace(
-        initialWorkOrderId
-          ? `/finance/invoices/${data.id}?work_order_id=${initialWorkOrderId}`
-          : `/finance/invoices/${data.id}`
-      )
+      const relationship = workOrderId
+        ? `?work_order_id=${encodeURIComponent(workOrderId)}`
+        : ''
+      router.replace(withReturnTo(
+        `/finance/invoices/${data.id}${relationship}`,
+        destination,
+      ))
+      router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setLoading(false)
@@ -873,12 +879,13 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
         >
           {loading ? 'Creating…' : 'Create Invoice'}
         </button>
-        <a
-          href={initialWorkOrderId ? `/work-orders/${initialWorkOrderId}` : '/finance/invoices'}
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
           className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
         >
           Cancel
-        </a>
+        </button>
       </div>
     </form>
   )

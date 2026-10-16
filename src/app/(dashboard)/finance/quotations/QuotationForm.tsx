@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { AlertCircle, ChevronDown, Plus, Trash2, X } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { safeReturnTo, withReturnTo } from '@/lib/backNav'
 
 interface Customer {
   id: string
@@ -34,6 +34,7 @@ interface InitialQuotation {
 interface Props {
   customers: Customer[]
   initial?: InitialQuotation
+  returnTo: string
 }
 
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
@@ -158,8 +159,9 @@ function CustomerCombobox({
   )
 }
 
-export function QuotationForm({ customers, initial }: Props) {
+export function QuotationForm({ customers, initial, returnTo }: Props) {
   const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? (initial ? `/finance/quotations/${initial.id}` : '/finance/quotations')
   const [customerId, setCustomerId] = useState(initial?.customer_id ?? '')
   const [quotationDate, setQuotationDate] = useState(initial?.quotation_date ?? TODAY)
   const [validUntil, setValidUntil] = useState(initial?.valid_until ?? '')
@@ -214,7 +216,9 @@ export function QuotationForm({ customers, initial }: Props) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to save quotation')
-      router.push(`/finance/quotations/${data.id}`)
+      router.replace(initial
+        ? destination
+        : withReturnTo(`/finance/quotations/${data.id}`, destination))
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save quotation')
@@ -319,9 +323,9 @@ export function QuotationForm({ customers, initial }: Props) {
         <button type="submit" disabled={loading} className="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition">
           {loading ? 'Saving…' : initial ? 'Save Quotation' : 'Create Quotation'}
         </button>
-        <Link href={initial ? `/finance/quotations/${initial.id}` : '/finance/quotations'} className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
+        <button type="button" onClick={() => router.replace(destination)} className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
           Cancel
-        </Link>
+        </button>
       </div>
     </form>
   )

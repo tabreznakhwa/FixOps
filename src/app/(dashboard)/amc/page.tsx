@@ -4,11 +4,13 @@ import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
 import { Plus, ShieldCheck, Clock, AlertTriangle, Package } from 'lucide-react'
 import { formatCurrency, formatDate, daysUntil, getStatusColor } from '@/lib/utils'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'AMC Contracts' }
 
 export default async function AMCPage({ searchParams }: { searchParams: Promise<{ status?: string; parts?: string }> }) {
   const params = await searchParams
+  const listPath = currentPath('/amc', params)
   const supabase = await createClient()
 
   let query = supabase
@@ -50,7 +52,7 @@ export default async function AMCPage({ searchParams }: { searchParams: Promise<
           <div className="flex items-center gap-2">
             <RefreshButton />
             <Link
-              href="/amc/new"
+              href={withReturnTo('/amc/new', listPath)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" /> New Contract
@@ -139,7 +141,7 @@ export default async function AMCPage({ searchParams }: { searchParams: Promise<
               return (
                 <Link
                   key={c.id}
-                  href={`/amc/${c.id}`}
+                  href={withReturnTo(`/amc/${c.id}`, listPath)}
                   className={`block bg-white rounded-xl border ${isExpiringSoon ? 'border-amber-300' : isExpired ? 'border-red-300' : 'border-slate-200'} p-5 hover:shadow-md transition-all`}
                 >
                   <div className="flex items-start justify-between mb-3">

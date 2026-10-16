@@ -4,10 +4,17 @@ import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
 import { Plus, Users, AlertTriangle, UserCheck } from 'lucide-react'
 import { formatDate, daysUntil } from '@/lib/utils'
+import { currentPath, withReturnTo, type SearchParamValue } from '@/lib/backNav'
 
 export const metadata = { title: 'Staff' }
 
-export default async function StaffPage() {
+export default async function StaffPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, SearchParamValue>>
+}) {
+  const params = await searchParams
+  const staffPath = currentPath('/staff', params)
   const supabase = await createClient()
 
   const { data: staffRaw } = await supabase
@@ -34,7 +41,7 @@ export default async function StaffPage() {
         actions={
           <div className="flex items-center gap-2">
             <RefreshButton />
-            <Link href="/staff/new" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+            <Link href={withReturnTo('/staff/new', staffPath)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
               <Plus className="w-4 h-4" /> Add Staff
             </Link>
           </div>
@@ -133,7 +140,7 @@ export default async function StaffPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <Link href={`/staff/${s.id}`} className="text-xs text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">View →</Link>
+                        <Link href={withReturnTo(`/staff/${s.id}`, staffPath)} className="text-xs text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">View →</Link>
                       </td>
                     </tr>
                   )

@@ -4,6 +4,7 @@ import { BookOpen, Users, Clock, Banknote, FileText, CheckCircle, AlertCircle, C
 import { BackButton } from '@/components/ui/BackButton'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
+import { currentPath, resolveBack, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Payroll User Guide' }
 
@@ -89,7 +90,15 @@ const TOC = [
   { id: 'faq', label: 'FAQ' },
 ]
 
-export default function PayrollGuidePage() {
+export default async function PayrollGuidePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
+  const query = await searchParams
+  const guidePath = currentPath('/payroll/guide', query)
+  const back = resolveBack(query.return_to, '/payroll', 'Payroll')
+
   return (
     <div className="animate-fade-in">
       <div className="hidden print:block px-8 pt-8">
@@ -101,7 +110,7 @@ export default function PayrollGuidePage() {
         actions={
           <div className="flex items-center gap-2">
             <PrintActions />
-            <BackButton fallbackHref="/payroll" label="Back to Payroll" />
+            <BackButton href={back.href} label={back.label} />
           </div>
         }
       />
@@ -124,7 +133,7 @@ export default function PayrollGuidePage() {
               </nav>
               <div className="mt-4 pt-4 border-t border-slate-100">
                 <p className="text-xs text-slate-400 mb-2">Quick links</p>
-                <Link href="/payroll/process" className="flex items-center gap-1.5 text-xs text-blue-600 hover:underline font-semibold">
+                <Link href={withReturnTo('/payroll/process', guidePath)} className="flex items-center gap-1.5 text-xs text-blue-600 hover:underline font-semibold">
                   <BookOpen className="w-3.5 h-3.5" /> Process Payroll →
                 </Link>
               </div>

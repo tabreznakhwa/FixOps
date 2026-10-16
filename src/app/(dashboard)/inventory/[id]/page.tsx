@@ -7,16 +7,21 @@ import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency } from '@/lib/utils'
 import { InventoryActions } from './InventoryActions'
 import { EditItemDetails } from './EditItemDetails'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Inventory Item' }
 
 export default async function InventoryItemPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string }>
 }) {
   const { id } = await params
+  const { return_to } = await searchParams
   const supabase = await createClient()
+  const back = resolveBack(return_to, '/inventory', 'Inventory')
 
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
@@ -73,7 +78,7 @@ export default async function InventoryItemPage({
                 unitOfMeasure={item.unit_of_measure}
               />
             )}
-            <BackButton fallbackHref="/inventory" label="Back" />
+            <BackButton href={back.href} label={back.label} />
           </div>
         }
       />

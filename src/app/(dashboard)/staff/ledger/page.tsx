@@ -6,6 +6,7 @@ import { FileBarChart } from 'lucide-react'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
 import { StaffLedgerSelector } from './StaffLedgerSelector'
+import { currentPath, withReturnTo, type SearchParamValue } from '@/lib/backNav'
 
 export const metadata = { title: 'Staff Ledger' }
 
@@ -23,9 +24,10 @@ function slipDate(run: { salary_year: number; salary_month: number }): string {
 export default async function StaffLedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ staff_id?: string; from_date?: string; to_date?: string }>
+  searchParams: Promise<Record<string, SearchParamValue>>
 }) {
   const params = await searchParams
+  const ledgerPath = currentPath('/staff/ledger', params)
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -55,9 +57,9 @@ export default async function StaffLedgerPage({
     return a.full_name.localeCompare(b.full_name)
   })
 
-  const staffId = params.staff_id ?? ''
-  const fromDate = params.from_date ?? ''
-  const toDate = params.to_date ?? ''
+  const staffId = typeof params.staff_id === 'string' ? params.staff_id : ''
+  const fromDate = typeof params.from_date === 'string' ? params.from_date : ''
+  const toDate = typeof params.to_date === 'string' ? params.to_date : ''
 
   type SalaryRun = { salary_month: number; salary_year: number; status: string }
   type SalarySlip = {
@@ -523,7 +525,7 @@ export default async function StaffLedgerPage({
                                   </td>
                                   <td className="px-4 py-3.5 text-right">
                                     <Link
-                                      href={`/payroll/slips/${sl.salary_run_id}/${staffId}?return_to=${encodeURIComponent(`/staff/ledger?staff_id=${staffId}`)}`}
+                                      href={withReturnTo(`/payroll/slips/${sl.salary_run_id}/${staffId}`, ledgerPath)}
                                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                                     >
                                       Payslip →

@@ -17,7 +17,7 @@ export default async function PayslipPage({
   searchParams,
 }: {
   params: Promise<{ runId: string; staffId: string }>
-  searchParams: Promise<{ return_to?: string }>
+  searchParams: Promise<{ return_to?: string | string[] }>
 }) {
   const back = resolveBack((await searchParams).return_to, '/payroll/process', 'Back to Payslips')
   const { runId, staffId } = await params
@@ -102,7 +102,7 @@ export default async function PayslipPage({
     return (
       <div className="animate-fade-in p-6">
         <div className="print:hidden mb-4">
-          <BackButton fallbackHref={back.href} label={back.label} />
+          <BackButton href={back.href} label={back.label} />
         </div>
         <div className="max-w-md bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
           <p className="text-base font-semibold text-amber-800 mb-2">Payslip not found</p>
@@ -167,7 +167,7 @@ export default async function PayslipPage({
   return (
     <div className="animate-fade-in">
       <div className="print:hidden p-6 flex items-center gap-3">
-        <BackButton fallbackHref={back.href} label={back.label} />
+        <BackButton href={back.href} label={back.label} />
         <PrintButton />
       </div>
 

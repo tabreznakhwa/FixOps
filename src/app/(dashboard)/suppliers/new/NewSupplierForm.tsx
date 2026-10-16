@@ -1,12 +1,16 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { safeReturnTo } from '@/lib/backNav'
 
 const inputClass =
   'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
-export function NewSupplierForm() {
+export function NewSupplierForm({ returnTo }: { returnTo: string }) {
+  const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/suppliers'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -45,7 +49,8 @@ export function NewSupplierForm() {
         setLoading(false)
         return
       }
-      window.location.href = '/suppliers'
+      router.replace(destination)
+      router.refresh()
     } catch {
       setError('Network error. Please try again.')
       setLoading(false)
@@ -125,9 +130,13 @@ export function NewSupplierForm() {
         >
           {loading ? 'Adding…' : 'Add Supplier'}
         </button>
-        <a href="/suppliers" className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors">
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
+          className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+        >
           Cancel
-        </a>
+        </button>
       </div>
     </form>
   )

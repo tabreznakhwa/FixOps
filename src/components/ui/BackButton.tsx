@@ -2,16 +2,21 @@
 
 import { useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
+import { safeReturnTo } from '@/lib/backNav'
 
 export function BackButton({
+  href,
   fallbackHref,
   label = 'Back',
 }: {
   /** The destination. Always used — Back never consults browser history. */
-  fallbackHref: string
+  href?: string
+  /** @deprecated Use href. Kept while existing static call sites migrate. */
+  fallbackHref?: string
   label?: string
 }) {
   const router = useRouter()
+  const destination = safeReturnTo(href ?? fallbackHref) ?? '/dashboard'
 
   // This app renders every module inside an iframe with a patched history API
   // (see TabModeGuard / IFRAME_GUARD in the dashboard layout), so the history
@@ -24,7 +29,7 @@ export function BackButton({
   return (
     <button
       type="button"
-      onClick={() => router.push(fallbackHref)}
+      onClick={() => router.replace(destination)}
       className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
     >
       <ArrowLeft className="w-4 h-4" /> {label}

@@ -3,10 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, Clock, Loader2, RefreshCw, Send, XCircle } from 'lucide-react'
+import { withReturnTo } from '@/lib/backNav'
 
 interface Props {
   quotationId: string
   currentStatus: string
+  quotationHref: string
 }
 
 const actions = [
@@ -16,7 +18,7 @@ const actions = [
   { status: 'expired', label: 'Expired', icon: Clock, className: 'bg-amber-600 hover:bg-amber-700 text-white' },
 ]
 
-export function QuotationActions({ quotationId, currentStatus }: Props) {
+export function QuotationActions({ quotationId, currentStatus, quotationHref }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -47,7 +49,7 @@ export function QuotationActions({ quotationId, currentStatus }: Props) {
       const res = await fetch(`/api/quotations/${quotationId}/convert`, { method: 'POST' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? 'Failed to convert quotation')
-      router.push(`/finance/invoices/${data.invoice_id}`)
+      router.replace(withReturnTo(`/finance/invoices/${data.invoice_id}`, quotationHref))
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to convert quotation')

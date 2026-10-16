@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Plus, Phone, MapPin, Building2, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 import { CustomerSearch } from './CustomerSearch'
 import { getStatusColor } from '@/lib/utils'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Customers' }
 
@@ -13,6 +14,7 @@ const PAGE_SIZE = 50
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; page?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
+  const listPath = currentPath('/customers', params)
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
   const from = (page - 1) * PAGE_SIZE
   const to = from + PAGE_SIZE - 1
@@ -48,6 +50,14 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
     return `/customers${s ? '?' + s : ''}`
   }
 
+  const typeHref = (type: string) => {
+    const next = new URLSearchParams()
+    if (params.q) next.set('q', params.q)
+    if (params.type !== type) next.set('type', type)
+    const queryString = next.toString()
+    return `/customers${queryString ? `?${queryString}` : ''}`
+  }
+
   const typeColors: Record<string, string> = {
     individual: 'bg-blue-100 text-blue-700',
     company: 'bg-purple-100 text-purple-700',
@@ -65,7 +75,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
           <div className="flex items-center gap-2">
             <RefreshButton />
             <Link
-              href="/customers/new"
+              href={withReturnTo('/customers/new', listPath)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -84,7 +94,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
             {['individual', 'company', 'amc', 'one_time', 'credit'].map((t) => (
               <Link
                 key={t}
-                href={params.type === t ? '/customers' : `/customers?type=${t}`}
+                href={typeHref(t)}
                 className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors capitalize ${
                   params.type === t ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
@@ -102,7 +112,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
             <p className="text-slate-500 font-medium">No customers found</p>
             <p className="text-slate-400 text-sm mt-1">Try a different search or add a new customer</p>
             <Link
-              href="/customers/new"
+              href={withReturnTo('/customers/new', listPath)}
               className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" /> Add Customer
@@ -168,13 +178,13 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                       <td className="px-4 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Link
-                            href={`/customers/${c.id}/edit`}
+                            href={withReturnTo(`/customers/${c.id}/edit`, listPath)}
                             className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
                           >
                             <Pencil className="w-3 h-3" /> Edit
                           </Link>
                           <Link
-                            href={`/customers/${c.id}`}
+                            href={withReturnTo(`/customers/${c.id}`, listPath)}
                             className="px-2.5 py-1.5 text-xs font-semibold text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
                           >
                             View →

@@ -4,12 +4,14 @@ import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
 import { Plus, Building2, FileText, DollarSign } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Suppliers & Purchase Orders' }
 
 export default async function SuppliersPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const params = await searchParams
   const tab = params.tab ?? 'suppliers'
+  const suppliersPath = currentPath('/suppliers', params)
   const supabase = await createClient()
 
   const { data: suppliersRaw } = await supabase
@@ -42,10 +44,10 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
         actions={
           <div className="flex items-center gap-2">
             <RefreshButton />
-            <Link href="/suppliers/new" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
+            <Link href={withReturnTo('/suppliers/new', suppliersPath)} className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
               <Plus className="w-4 h-4" /> Add Supplier
             </Link>
-            <Link href="/suppliers/po/new" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+            <Link href={withReturnTo('/suppliers/po/new', suppliersPath)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
               <Plus className="w-4 h-4" /> Create PO
             </Link>
           </div>
@@ -124,7 +126,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <Link href={`/suppliers/${s.id}`} className="text-xs text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">View →</Link>
+                        <Link href={withReturnTo(`/suppliers/${s.id}`, suppliersPath)} className="text-xs text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">View →</Link>
                       </td>
                     </tr>
                   ))}
@@ -169,7 +171,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
                           <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${getStatusColor(po.status)}`}>{po.status}</span>
                         </td>
                         <td className="px-4 py-3.5 text-right">
-                          <Link href={`/suppliers/po/${po.id}`} className="text-xs text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">View →</Link>
+                          <Link href={withReturnTo(`/suppliers/po/${po.id}`, suppliersPath)} className="text-xs text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">View →</Link>
                         </td>
                       </tr>
                     )

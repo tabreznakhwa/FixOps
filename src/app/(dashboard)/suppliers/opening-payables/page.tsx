@@ -3,10 +3,17 @@ import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { OpeningPayablesForm } from './OpeningPayablesForm'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Opening Payables' }
 
-export default async function OpeningPayablesPage() {
+export default async function OpeningPayablesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return_to?: string }>
+}) {
+  const { return_to } = await searchParams
+  const back = resolveBack(return_to, '/suppliers', 'Suppliers')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -36,7 +43,7 @@ export default async function OpeningPayablesPage() {
         title="Opening Payables"
         subtitle="Supplier bills outstanding before go-live"
         actions={
-          <BackButton fallbackHref="/suppliers" label="Back" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6">

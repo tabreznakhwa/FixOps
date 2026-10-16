@@ -14,6 +14,7 @@ import { VendorLedgerTable } from './VendorLedgerTable'
 import { buildVendorWiseOutstanding } from './vendorWiseOutstanding'
 import { VendorWiseOutstandingTable } from './VendorWiseOutstandingTable'
 import { AsOnFilter } from './AsOnFilter'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Vendor Bill-wise Outstanding' }
 
@@ -25,6 +26,7 @@ export default async function VendorOutstandingPage({
   searchParams: Promise<{ supplier?: string; from?: string; to?: string; q?: string; view?: string; as_on?: string }>
 }) {
   const params = await searchParams
+  const outstandingPath = currentPath('/suppliers/vendor-outstanding', params)
   const view: View =
     params.view === 'ledger' ? 'ledger' : params.view === 'vendorwise' ? 'vendorwise' : 'bills'
   const supabase = await createClient()
@@ -214,7 +216,7 @@ export default async function VendorOutstandingPage({
         actions={
           <div className="flex items-center gap-2 print:hidden">
             <SupplierFilter suppliers={allSuppliers} selectedId={params.supplier} />
-            <Link href="/suppliers/opening-payables" className="px-3 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
+            <Link href={withReturnTo('/suppliers/opening-payables', outstandingPath)} className="px-3 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
               Opening Payables
             </Link>
             <PrintActions />
@@ -259,7 +261,7 @@ export default async function VendorOutstandingPage({
           )}
         </div>
 
-        {vendorWise && <VendorWiseOutstandingTable report={vendorWise} />}
+        {vendorWise && <VendorWiseOutstandingTable report={vendorWise} returnTo={outstandingPath} />}
 
         {ledger && (
           <VendorLedgerTable
@@ -344,7 +346,7 @@ export default async function VendorOutstandingPage({
                     return (
                       <tr key={`pi-${pi.id}`} className="hover:bg-slate-50 transition-colors">
                         <td className="px-5 py-3">
-                          <Link href={`/inventory/purchase-invoices/${pi.id}?return_to=%2Fsuppliers%2Fvendor-outstanding`} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
+                          <Link href={withReturnTo(`/inventory/purchase-invoices/${pi.id}`, outstandingPath)} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
                             {pi.invoice_number}
                           </Link>
                         </td>
@@ -372,7 +374,7 @@ export default async function VendorOutstandingPage({
                     return (
                       <tr key={po.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-5 py-3">
-                          <Link href={`/suppliers/po/${po.id}`} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
+                          <Link href={withReturnTo(`/suppliers/po/${po.id}`, outstandingPath)} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
                             {po.po_number}
                           </Link>
                         </td>

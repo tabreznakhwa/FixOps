@@ -6,6 +6,7 @@ import { InvoicePrintTemplate, type PrintableInvoice, type PrintableInvoiceItem 
 import { notFound } from 'next/navigation'
 import { FileText } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Print Invoices' }
 
@@ -59,7 +60,7 @@ export default async function PrintBatchInvoicesPage({
     itemsByInvoice.set(item.invoice_id, list)
   }
 
-  const backHref = return_to ?? '/finance/receivables'
+  const back = resolveBack(return_to, '/finance/receivables', 'Receivables')
   const totalDue = invoices.reduce((s, inv) => s + inv.balance_due, 0)
 
   return (
@@ -81,7 +82,7 @@ export default async function PrintBatchInvoicesPage({
           actions={
             <div className="flex items-center gap-2">
               <PrintActions label="Print All" />
-              <BackButton fallbackHref={backHref} label="Receivables" />
+              <BackButton href={back.href} label={back.label} />
             </div>
           }
         />

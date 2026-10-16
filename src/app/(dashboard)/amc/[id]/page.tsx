@@ -7,15 +7,20 @@ import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
 import { AMCActions } from './AMCActions'
 import { AMCPayments } from './AMCPayments'
+import { currentPath, resolveBack, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'AMC Contract' }
 
 export default async function AMCDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string | string[] }>
 }) {
-  const { id } = await params
+  const [{ id }, query] = await Promise.all([params, searchParams])
+  const contractPath = currentPath(`/amc/${id}`, query)
+  const back = resolveBack(query.return_to, '/amc', 'AMC Contracts')
   const supabase = await createClient()
 
   const [{ data: contractRaw }, { data: paymentsRaw }] = await Promise.all([
@@ -77,12 +82,12 @@ export default async function AMCDetailPage({
         actions={
           <div className="flex items-center gap-2">
             <Link
-              href={`/amc/${contract.id}/edit`}
+              href={withReturnTo(`/amc/${contract.id}/edit`, contractPath)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition"
             >
               <Pencil className="w-4 h-4" /> Edit
             </Link>
-            <BackButton fallbackHref="/amc" label="Back" />
+            <BackButton href={back.href} label={back.label} />
           </div>
         }
       />
@@ -122,7 +127,7 @@ export default async function AMCDetailPage({
                   {customer.email && <p className="text-sm text-slate-600">{customer.email}</p>}
                 </div>
                 <Link
-                  href={`/customers/${customer.id}?return_to=${encodeURIComponent(`/amc/${contract.id}`)}`}
+                  href={withReturnTo(`/customers/${customer.id}`, contractPath)}
                   className="mt-3 inline-block text-xs text-blue-600 hover:text-blue-700 font-medium"
                 >
                   View customer →

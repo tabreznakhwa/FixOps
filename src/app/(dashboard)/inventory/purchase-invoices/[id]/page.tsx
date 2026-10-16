@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Pencil } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
-import { resolveBack } from '@/lib/backNav'
+import { currentPath, resolveBack, withReturnTo } from '@/lib/backNav'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { PrintActions } from '@/components/print/PrintActions'
 import { CancelPurchaseInvoiceButton } from '../CancelPurchaseInvoiceButton'
@@ -19,8 +19,11 @@ export default async function PurchaseInvoiceDetailPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ return_to?: string }>
 }) {
-  const back = resolveBack((await searchParams).return_to, '/inventory/purchase-invoices', 'Back')
+  const query = await searchParams
+  const back = resolveBack(query.return_to, '/inventory/purchase-invoices', 'Purchase Invoices')
   const { id } = await params
+  const invoicePath = currentPath(`/inventory/purchase-invoices/${id}`, query)
+  const editHref = withReturnTo(`/inventory/purchase-invoices/${id}/edit`, invoicePath)
   const admin = createAdminClient() as any
   const supabase = await createClient()
 
@@ -192,14 +195,14 @@ export default async function PurchaseInvoiceDetailPage({
             <PrintActions label="Print" />
             {!isCancelled && (
               <>
-                <Link href={`/inventory/purchase-invoices/${invoice.id}/edit`}
+                <Link href={editHref}
                   className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
                   <Pencil className="w-4 h-4" /> Edit
                 </Link>
-                <CancelPurchaseInvoiceButton id={invoice.id} redirect />
+                <CancelPurchaseInvoiceButton id={invoice.id} redirectHref={back.href} />
               </>
             )}
-            <BackButton fallbackHref={back.href} label={back.label} />
+            <BackButton href={back.href} label={back.label} />
           </div>
         }
       />

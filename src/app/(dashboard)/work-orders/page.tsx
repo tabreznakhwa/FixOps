@@ -7,6 +7,7 @@ import { Plus, ClipboardList } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDate, formatCurrency } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { WorkOrderSearchBar } from './WorkOrderSearchBar'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Work Orders' }
@@ -14,6 +15,7 @@ export const metadata = { title: 'Work Orders' }
 export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; from?: string; to?: string; q?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
+  const listPath = currentPath('/work-orders', params)
   const hasDateFilter = Boolean(params.from || params.to || params.q)
 
   let query = supabase
@@ -78,7 +80,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
               <WorkOrderSearchBar />
             </Suspense>
             <Link
-              href="/work-orders/new"
+              href={withReturnTo('/work-orders/new', listPath)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" /> New Work Order
@@ -152,7 +154,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <Link
-                          href={`/work-orders/${wo.id}`}
+                          href={withReturnTo(`/work-orders/${wo.id}`, listPath)}
                           className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-blue-600 hover:text-white transition-colors whitespace-nowrap"
                         >
                           View

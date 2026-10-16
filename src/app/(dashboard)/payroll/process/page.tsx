@@ -10,6 +10,7 @@ import { ResetRunButton } from './ResetRunButton'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
 import { redirect } from 'next/navigation'
+import { currentPath, resolveBack, safeReturnTo, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Payslips' }
 
@@ -68,13 +69,20 @@ async function fetchAllPages<T>(
 export default async function PayrollProcessPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; year?: string }>
+  searchParams: Promise<{ month?: string; year?: string; return_to?: string | string[] }>
 }) {
   const params = await searchParams
   const nowKuwait = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuwait' })
   const now = new Date(nowKuwait)
   const month = parseInt(params.month ?? String(now.getMonth() + 1))
   const year = parseInt(params.year ?? String(now.getFullYear()))
+  const returnTo = safeReturnTo(params.return_to)
+  const back = resolveBack(returnTo, '/payroll', 'Payroll')
+  const processPath = currentPath('/payroll/process', {
+    month: String(month),
+    year: String(year),
+    ...(returnTo ? { return_to: returnTo } : {}),
+  })
 
   const supabase = await createClient()
   // Payroll and attendance still trail the generated Database type.
@@ -288,8 +296,16 @@ export default async function PayrollProcessPage({
                 {run && run.status !== 'paid' && canResetRun && (
                   <ResetRunButton runId={run.id} />
                 )}
+                {canProcessRun && (
+                  <Link
+                    href={withReturnTo('/payroll/leave-settlement', processPath)}
+                    className="px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
+                  >
+                    Leave Settlement
+                  </Link>
+                )}
                 <PrintActions label="Print Summary" />
-                <BackButton fallbackHref="/payroll" label="Payroll" />
+                <BackButton href={back.href} label={back.label} />
               </div>
             }
           />
@@ -299,6 +315,7 @@ export default async function PayrollProcessPage({
       <div className="p-6 space-y-5">
         {/* Month/Year selector */}
         <form method="get" className="flex items-center gap-3 flex-wrap bg-white border border-slate-200 rounded-xl p-4">
+          {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
           <select name="month" defaultValue={month}
             className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
             {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
@@ -401,7 +418,7 @@ export default async function PayrollProcessPage({
                     <td className="px-5 py-3.5 text-center">
                       {run && r.slip ? (
                         <Link
-                          href={`/payroll/slips/${run.id}/${r.id}`}
+                          href={withReturnTo(`/payroll/slips/${run.id}/${r.id}`, processPath)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                         >
                           <Printer className="w-3.5 h-3.5" /> Print

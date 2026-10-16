@@ -7,6 +7,7 @@ import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
 import { POActions } from './POActions'
 import { PrintActions } from '@/components/print/PrintActions'
+import { currentPath, resolveBack, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Purchase Order' }
 
@@ -18,8 +19,17 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: 'Cancelled',
 }
 
-export default async function PODetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PODetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string }>
+}) {
   const { id } = await params
+  const query = await searchParams
+  const poPath = currentPath(`/suppliers/po/${id}`, query)
+  const back = resolveBack(query.return_to, '/suppliers?tab=po', 'Purchase Orders')
   const supabase = await createClient()
 
   const { data: poRaw } = await (supabase as any)
@@ -87,7 +97,7 @@ export default async function PODetailPage({ params }: { params: Promise<{ id: s
         subtitle={`Purchase Order · ${formatDate(po.purchase_date)}`}
         actions={
           <div className="flex items-center gap-2 print:hidden">
-            <BackButton fallbackHref="/suppliers?tab=po" label="Back" />
+            <BackButton href={back.href} label={back.label} />
             <PrintActions />
           </div>
         }
@@ -129,7 +139,7 @@ export default async function PODetailPage({ params }: { params: Promise<{ id: s
               </div>
               {supplier ? (
                 <div className="space-y-1.5 text-sm">
-                  <Link href={`/suppliers/${supplier.id}`} className="font-bold text-blue-700 hover:underline">
+                  <Link href={withReturnTo(`/suppliers/${supplier.id}`, poPath)} className="font-bold text-blue-700 hover:underline">
                     {supplier.supplier_name}
                   </Link>
                   <p className="text-slate-400 font-mono text-xs">{supplier.supplier_code}</p>
@@ -186,7 +196,7 @@ export default async function PODetailPage({ params }: { params: Promise<{ id: s
               <POActions poId={po.id} poStatus={po.status} items={items} />
               <div className="mt-3">
                 <Link
-                  href={`/suppliers/vendor-payments?po=${po.id}`}
+                  href={withReturnTo(`/suppliers/vendor-payments/new?po=${encodeURIComponent(po.id)}`, poPath)}
                   className="flex items-center gap-2 w-full px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors justify-center"
                 >
                   <DollarSign className="w-4 h-4" /> Record Vendor Payment

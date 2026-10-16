@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Phone, MessageCircle, Mail, MapPin, Edit, Plus, Building2, User, Printer } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
-import { resolveBack } from '@/lib/backNav'
+import { currentPath, resolveBack, withReturnTo } from '@/lib/backNav'
 import { formatDate, getStatusColor, getPriorityColor, formatStatus } from '@/lib/utils'
 import { DeleteCustomerButton } from './DeleteCustomerButton'
 
@@ -33,8 +33,10 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ return_to?: string }>
 }) {
-  const back = resolveBack((await searchParams).return_to, '/customers', 'Back')
+  const query = await searchParams
+  const back = resolveBack(query.return_to, '/customers', 'Customers')
   const { id } = await params
+  const customerPath = currentPath(`/customers/${id}`, query)
   const supabase = await createClient()
 
   const { data: customerRaw } = await (supabase as any)
@@ -75,9 +77,9 @@ export default async function CustomerDetailPage({
         subtitle={customer.customer_code}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <BackButton fallbackHref={back.href} label={back.label} />
+            <BackButton href={back.href} label={back.label} />
             <Link
-              href={`/customers/${customer.id}/edit`}
+              href={withReturnTo(`/customers/${customer.id}/edit`, customerPath)}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
             >
               <Edit className="w-4 h-4" /> Edit
@@ -86,9 +88,10 @@ export default async function CustomerDetailPage({
               customerId={customer.id}
               customerName={customer.full_name}
               complaintCount={complaintTotal ?? complaints.length}
+              returnTo={back.href}
             />
             <Link
-              href={`/complaints/new?customer_id=${customer.id}&return_to=${encodeURIComponent(`/customers/${customer.id}`)}`}
+              href={withReturnTo(`/complaints/new?customer_id=${customer.id}`, customerPath)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" /> Add Complaint
@@ -233,7 +236,7 @@ export default async function CustomerDetailPage({
               )}
             </h3>
             <Link
-              href={`/complaints/new?customer_id=${customer.id}&return_to=${encodeURIComponent(`/customers/${customer.id}`)}`}
+              href={withReturnTo(`/complaints/new?customer_id=${customer.id}`, customerPath)}
               className="flex items-center gap-1.5 text-xs text-blue-600 font-semibold hover:text-blue-700 transition-colors"
             >
               <Plus className="w-3.5 h-3.5" /> New Complaint
@@ -251,7 +254,7 @@ export default async function CustomerDetailPage({
                 return (
                   <Link
                     key={c.id}
-                    href={`/complaints/${c.id}?return_to=${encodeURIComponent(`/customers/${customer.id}`)}`}
+                    href={withReturnTo(`/complaints/${c.id}`, customerPath)}
                     className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors group"
                   >
                     <span className="text-xl flex-shrink-0 mt-0.5">{categoryIcons[cats[0]] ?? '🔧'}</span>

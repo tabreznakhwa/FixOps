@@ -9,6 +9,7 @@ import { getPriorityColor, formatStatus } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { ComplaintSearchBar } from './ComplaintSearchBar'
 import { ComplaintList, type ComplaintListItem } from './ComplaintList'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const revalidate = 60
 export const metadata = { title: 'Complaints' }
@@ -17,6 +18,7 @@ export const metadata = { title: 'Complaints' }
 export default async function ComplaintsPage({ searchParams }: { searchParams: Promise<{ status?: string; priority?: string; q?: string; from?: string; to?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
+  const listPath = currentPath('/complaints', params)
 
   const { profile } = await getAuthedProfile()
   const role = profile?.role ?? ''
@@ -146,13 +148,13 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
               <ComplaintSearchBar />
             </Suspense>
             <Link
-              href="/customers/new?return_to=%2Fcomplaints"
+              href={withReturnTo('/customers/new', listPath)}
               className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
             >
               <UserPlus className="w-4 h-4" /> New Customer
             </Link>
             <Link
-              href="/complaints/new"
+              href={withReturnTo('/complaints/new', listPath)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" /> New Complaint
@@ -204,6 +206,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
         <ComplaintList
           key={complaints.map(c => `${c.id}:${c.status}:${c.visit_order ?? ''}`).join('|')}
           complaints={complaints ?? []}
+          sourcePath={listPath}
           isTechnician={isTechnician}
           canReorder={canReorder}
         />

@@ -1,14 +1,22 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { EditSupplierForm } from './EditSupplierForm'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Edit Supplier' }
 
-export default async function EditSupplierPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditSupplierPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string }>
+}) {
   const { id } = await params
+  const { return_to } = await searchParams
+  const destination = resolveBack(return_to, `/suppliers/${id}`, 'Supplier')
   const supabase = await createClient()
 
   const { data: supplierRaw } = await (supabase as any)
@@ -25,11 +33,11 @@ export default async function EditSupplierPage({ params }: { params: Promise<{ i
         title="Edit Supplier"
         subtitle="Update supplier information"
         actions={
-          <BackButton fallbackHref={`/suppliers/${id}`} label="Cancel" />
+          <BackButton href={destination.href} label="Cancel" />
         }
       />
       <div className="p-6 max-w-2xl">
-        <EditSupplierForm supplier={supplierRaw} />
+        <EditSupplierForm supplier={supplierRaw} returnTo={destination.href} />
       </div>
     </div>
   )

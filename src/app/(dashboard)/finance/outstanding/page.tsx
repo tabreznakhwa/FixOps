@@ -5,6 +5,7 @@ import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Bill-wise Outstanding' }
 
@@ -14,6 +15,7 @@ export default async function OutstandingPage({
   searchParams: Promise<{ customer?: string }>
 }) {
   const params = await searchParams
+  const outstandingPath = currentPath('/finance/outstanding', params)
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profileRaw } = await (supabase as any).from('users').select('organization_id').eq('id', user!.id).single()
@@ -93,7 +95,7 @@ export default async function OutstandingPage({
       <Header title="Bill-wise Outstanding" subtitle="Customer invoices with pending balances"
         actions={
           <div className="flex items-center gap-2 print:hidden">
-            <Link href="/finance/opening-receivables" className="px-3 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
+            <Link href={withReturnTo('/finance/opening-receivables', outstandingPath)} className="px-3 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
               Opening Receivables
             </Link>
             <PrintActions />
@@ -178,7 +180,7 @@ export default async function OutstandingPage({
                     return (
                       <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-5 py-3">
-                          <Link href={`/finance/invoices/${inv.id}`} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
+                          <Link href={withReturnTo(`/finance/invoices/${inv.id}`, outstandingPath)} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
                             {inv.invoice_number}
                           </Link>
                         </td>

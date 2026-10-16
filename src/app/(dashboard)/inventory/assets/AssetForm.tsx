@@ -17,6 +17,7 @@ import {
   computeDepreciation,
 } from '@/lib/assets'
 import { formatCurrency } from '@/lib/utils'
+import { safeReturnTo, withReturnTo } from '@/lib/backNav'
 
 export interface AssetOption { id: string; name: string }
 
@@ -53,6 +54,8 @@ interface Props {
   suppliers: AssetOption[]
   staff: AssetOption[]
   initial?: AssetInitial
+  cancelHref: string
+  returnTo: string
 }
 
 const inputClass =
@@ -61,8 +64,10 @@ const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
 const todayISO = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
 
-export function AssetForm({ suppliers, staff, initial }: Props) {
+export function AssetForm({ suppliers, staff, initial, cancelHref, returnTo }: Props) {
   const router = useRouter()
+  const cancelDestination = safeReturnTo(cancelHref) ?? (initial ? `/inventory/assets/${initial.id}` : '/inventory/assets')
+  const origin = safeReturnTo(returnTo) ?? cancelDestination
   const isEdit = Boolean(initial)
   const assetIdRef = useRef<string | null>(initial?.id ?? null)
 
@@ -231,7 +236,10 @@ export function AssetForm({ suppliers, staff, initial }: Props) {
         setSubmitting(false)
         return
       }
-      router.replace(`/inventory/assets/${data.asset_id}`)
+      const destination = initial
+        ? cancelDestination
+        : withReturnTo(`/inventory/assets/${data.asset_id}`, origin)
+      router.replace(destination)
       router.refresh()
     } catch {
       setError('Network error. Please try again.')
@@ -433,7 +441,7 @@ export function AssetForm({ suppliers, staff, initial }: Props) {
       </div>
 
       <div className="flex items-center justify-end gap-3 pb-6">
-        <button type="button" onClick={() => router.replace(initial ? `/inventory/assets/${initial.id}` : '/inventory/assets')}
+        <button type="button" onClick={() => router.replace(cancelDestination)}
           className="px-5 py-2.5 border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition">
           Cancel
         </button>

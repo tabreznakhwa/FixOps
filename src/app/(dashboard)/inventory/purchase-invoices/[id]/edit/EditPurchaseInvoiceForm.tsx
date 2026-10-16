@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Building2 } from 'lucide-react'
+import { safeReturnTo } from '@/lib/backNav'
 
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
@@ -21,8 +22,9 @@ interface Invoice {
   notes: string | null
 }
 
-export function EditPurchaseInvoiceForm({ invoice, suppliers }: { invoice: Invoice; suppliers: Supplier[] }) {
+export function EditPurchaseInvoiceForm({ invoice, suppliers, successHref }: { invoice: Invoice; suppliers: Supplier[]; successHref: string }) {
   const router = useRouter()
+  const destination = safeReturnTo(successHref) ?? `/inventory/purchase-invoices/${invoice.id}`
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [selectedSupplierId, setSelectedSupplierId] = useState(invoice.supplier_id ?? '')
@@ -58,7 +60,7 @@ export function EditPurchaseInvoiceForm({ invoice, suppliers }: { invoice: Invoi
       setLoading(false)
       return
     }
-    router.push(`/inventory/purchase-invoices/${invoice.id}`)
+    router.replace(destination)
     router.refresh()
   }
 
@@ -147,6 +149,13 @@ export function EditPurchaseInvoiceForm({ invoice, suppliers }: { invoice: Invoi
         <button type="submit" disabled={loading}
           className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-60">
           {loading ? 'Saving…' : 'Save Changes'}
+        </button>
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
+          className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
+        >
+          Cancel
         </button>
       </div>
     </form>

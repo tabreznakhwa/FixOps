@@ -2,11 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { safeReturnTo } from '@/lib/backNav'
 
 interface Customer { id: string; full_name: string; company_name: string | null; mobile_number: string }
 
 interface Props {
   contractId: string
+  returnTo: string
   customers: Customer[]
   defaults: {
     customer_id: string
@@ -29,8 +31,9 @@ const inputClass =
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 const SERVICES = ['AC Maintenance', 'Plumbing', 'Electrical', 'General']
 
-export function EditAMCForm({ contractId, customers, defaults }: Props) {
+export function EditAMCForm({ contractId, returnTo, customers, defaults }: Props) {
   const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? `/amc/${contractId}`
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [services, setServices] = useState<string[]>(defaults.services_included ?? [])
@@ -68,7 +71,7 @@ export function EditAMCForm({ contractId, customers, defaults }: Props) {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Failed to update'); setLoading(false); return }
-      router.push(`/amc/${contractId}`)
+      router.replace(destination)
       router.refresh()
     } catch {
       setError('Network error. Please try again.')
@@ -197,10 +200,13 @@ export function EditAMCForm({ contractId, customers, defaults }: Props) {
           className="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
           {loading ? 'Saving…' : 'Save Changes'}
         </button>
-        <a href={`/amc/${contractId}`}
-          className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors">
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
+          className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+        >
           Cancel
-        </a>
+        </button>
       </div>
     </form>
   )

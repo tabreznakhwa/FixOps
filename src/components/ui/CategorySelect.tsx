@@ -23,6 +23,7 @@ export function CategorySelect({
   function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const params = new URLSearchParams(searchParams.toString())
     if (e.target.value) params.set(paramKey, e.target.value); else params.delete(paramKey)
+    params.delete('page')
     router.push(`${basePath}?${params.toString()}`)
   }
 

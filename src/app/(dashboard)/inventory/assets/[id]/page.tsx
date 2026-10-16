@@ -19,6 +19,7 @@ import {
   type AssetStatus,
   type AssetCondition,
 } from '@/lib/assets'
+import { currentPath, resolveBack, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Asset' }
 
@@ -49,7 +50,14 @@ function statusBadge(status: AssetStatus) {
   return map[status] ?? 'bg-slate-100 text-slate-700'
 }
 
-export default async function AssetDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AssetDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string }>
+}) {
+  const query = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -66,6 +74,9 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
   if (!canViewAssets(profile.role)) redirect('/dashboard?error=unauthorized')
 
   const { id } = await params
+  const assetPath = currentPath(`/inventory/assets/${id}`, query)
+  const editHref = withReturnTo(`/inventory/assets/${id}/edit`, assetPath)
+  const back = resolveBack(query.return_to, '/inventory/assets', 'Company Assets')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any
@@ -148,13 +159,13 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
           <div className="flex items-center gap-2">
             {canEditAssets(profile.role) && (
               <Link
-                href={`/inventory/assets/${asset.id}/edit`}
+                href={editHref}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Pencil className="w-4 h-4" /> Edit
               </Link>
             )}
-            <BackButton fallbackHref="/inventory/assets" label="Back" />
+            <BackButton href={back.href} label={back.label} />
           </div>
         }
       />

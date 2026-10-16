@@ -9,6 +9,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { CancelPaymentButton } from './CancelPaymentButton'
 import { PaymentSearchBar } from './PaymentSearchBar'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const revalidate = 60
 export const metadata = { title: 'Payments' }
@@ -20,6 +21,7 @@ const MODE_ICONS: Record<string, string> = {
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ mode?: string; from?: string; to?: string; q?: string }> }) {
   const params = await searchParams
+  const paymentsPath = currentPath('/finance/payments', params)
   const supabase = await createClient()
   const { profile } = await getAuthedProfile()
   const userRole = profile?.role ?? ''
@@ -112,7 +114,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               <PaymentSearchBar />
             </Suspense>
             <Link
-              href="/finance/payments/new"
+              href={withReturnTo('/finance/payments/new', paymentsPath)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" /> Record Payment
@@ -125,7 +127,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         {/* Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-5 text-white">
-            <p className="text-sm opacity-80 mb-1">Today's Collection</p>
+            <p className="text-sm opacity-80 mb-1">Today&apos;s Collection</p>
             <p className="text-2xl font-bold">{formatCurrency(totalToday)}</p>
             <div className="mt-3 flex gap-4 border-t border-white/20 pt-3">
               <div>
@@ -246,7 +248,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                       <td className="px-4 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Link
-                            href={`/finance/payments/${p.id}`}
+                            href={withReturnTo(`/finance/payments/${p.id}`, paymentsPath)}
                             className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1"
                           >
                             {canEditDelete ? 'Edit' : 'View'}

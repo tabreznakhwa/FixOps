@@ -167,7 +167,7 @@ export default async function PartsUsedPage({
         actions={
           <div className="flex items-center gap-2">
             <PrintActions label="Print" />
-            <BackButton fallbackHref="/inventory" label="Inventory" />
+            <BackButton href="/inventory" label="Inventory" />
           </div>
         }
       />

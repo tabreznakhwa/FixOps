@@ -7,12 +7,18 @@ import { formatCurrency } from '@/lib/utils'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { InventoryFilters } from './InventoryFilters'
 import { Suspense } from 'react'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Inventory' }
 
 export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ q?: string; filter?: string; category?: string; brand?: string; item_id?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
+  const inventoryPath = currentPath('/inventory', params)
+  const lowStockHref = currentPath('/inventory', {
+    ...params,
+    filter: params.filter === 'low' ? undefined : 'low',
+  })
 
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profileRaw } = await (supabase as any).from('users').select('role').eq('id', user!.id).single()
@@ -65,7 +71,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
             <RefreshButton />
             {!isTechnician && (
               <Link
-                href="/inventory/new"
+                href={withReturnTo('/inventory/new', inventoryPath)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Plus className="w-4 h-4" /> Add Item
@@ -103,7 +109,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
             <InventoryFilters categories={categories} brands={brands} itemNames={itemNames} />
           </Suspense>
           <Link
-            href={params.filter === 'low' ? '/inventory' : '/inventory?filter=low'}
+            href={lowStockHref}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
               params.filter === 'low' ? 'bg-red-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-red-50 hover:border-red-200 hover:text-red-600'
             }`}
@@ -182,7 +188,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <Link
-                          href={`/inventory/${item.id}`}
+                          href={withReturnTo(`/inventory/${item.id}`, inventoryPath)}
                           className="text-xs text-blue-600 hover:text-blue-700 font-medium opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           View →

@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { safeReturnTo, withReturnTo } from '@/lib/backNav'
 
 interface Customer {
   id: string
@@ -11,6 +13,7 @@ interface Customer {
 
 interface Props {
   customers: Customer[]
+  returnTo: string
 }
 
 const inputClass =
@@ -19,7 +22,9 @@ const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
 const SERVICES = ['AC Maintenance', 'Plumbing', 'Electrical', 'General']
 
-export function NewAMCForm({ customers }: Props) {
+export function NewAMCForm({ customers, returnTo }: Props) {
+  const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/amc'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [services, setServices] = useState<string[]>([])
@@ -68,7 +73,8 @@ export function NewAMCForm({ customers }: Props) {
         setLoading(false)
         return
       }
-      window.location.href = `/amc/${data.id}`
+      router.replace(withReturnTo(`/amc/${data.id}`, destination))
+      router.refresh()
     } catch {
       setError('Network error. Please try again.')
       setLoading(false)
@@ -200,9 +206,13 @@ export function NewAMCForm({ customers }: Props) {
         >
           {loading ? 'Creating…' : 'Create Contract'}
         </button>
-        <a href="/amc" className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors">
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
+          className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+        >
           Cancel
-        </a>
+        </button>
       </div>
     </form>
   )

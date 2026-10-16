@@ -2,8 +2,9 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { logAudit } from '@/lib/audit'
+import { returnToFromFormData } from '@/lib/backNav'
+import { replaceRedirect } from '@/lib/backNav.server'
 
 export async function createComplaint(
   prevState: { error?: string } | null,
@@ -67,7 +68,7 @@ export async function createComplaint(
   })
 
   revalidatePath('/complaints')
-  redirect('/complaints')
+  replaceRedirect(returnToFromFormData(formData), '/complaints')
 }
 
 export async function updateComplaint(
@@ -119,5 +120,5 @@ export async function updateComplaint(
 
   revalidatePath(`/complaints/${id}`)
   revalidatePath('/complaints')
-  redirect(`/complaints/${id}`)
+  replaceRedirect(returnToFromFormData(formData), `/complaints/${id}`)
 }

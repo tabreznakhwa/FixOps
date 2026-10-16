@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { CheckCircle, GripVertical, Loader2, MessageSquare, RotateCcw, Save } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
+import { withReturnTo } from '@/lib/backNav'
 
 export interface ComplaintListItem {
   id: string
@@ -28,6 +29,7 @@ export interface ComplaintListItem {
 
 interface Props {
   complaints: ComplaintListItem[]
+  sourcePath: string
   isTechnician: boolean
   canReorder: boolean
 }
@@ -82,7 +84,7 @@ function move<T>(items: T[], from: number, to: number) {
   return copy
 }
 
-export function ComplaintList({ complaints, isTechnician, canReorder }: Props) {
+export function ComplaintList({ complaints, sourcePath, isTechnician, canReorder }: Props) {
   const router = useRouter()
   const useSequenceView = isTechnician || canReorder
   const initialRows = useMemo(
@@ -261,7 +263,7 @@ export function ComplaintList({ complaints, isTechnician, canReorder }: Props) {
               <div className="text-xl leading-none">{categoryIcons[firstCategory] ?? '🔧'}</div>
             </div>
 
-            <Link href={`/complaints/${c.id}`} prefetch={false} className="flex-1 min-w-0">
+            <Link href={withReturnTo(`/complaints/${c.id}`, sourcePath)} prefetch={false} className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="text-xs font-mono text-slate-500">{c.complaint_number}</span>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getPriorityColor(c.priority)}`}>

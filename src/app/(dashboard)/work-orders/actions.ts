@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { logAudit } from '@/lib/audit'
+import { returnToFromFormData } from '@/lib/backNav'
 
 export async function updateWorkOrder(
   prevState: { error?: string } | null,
@@ -66,5 +67,5 @@ export async function updateWorkOrder(
 
   revalidatePath(`/work-orders/${id}`)
   revalidatePath('/work-orders')
-  return { success: true, workOrderId: id }
+  return { success: true, workOrderId: id, returnTo: returnToFromFormData(formData) }
 }

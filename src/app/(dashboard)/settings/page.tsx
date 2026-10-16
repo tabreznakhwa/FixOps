@@ -6,12 +6,18 @@ import { UserRoleEditor } from './UserRoleEditor'
 import { PermissionsEditor } from './PermissionsEditor'
 import { getOrgPermissionsMatrix } from '@/lib/orgPermissions'
 import { type ModuleKey } from '@/lib/permissions'
+import { currentPath, type SearchParamValue, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Settings' }
 
 const EDITABLE_MODULES: ModuleKey[] = ['operations', 'finance', 'hr', 'inventory', 'reports']
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, SearchParamValue>>
+}) {
+  const settingsPath = currentPath('/settings', await searchParams)
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -51,7 +57,7 @@ export default async function SettingsPage() {
         {/* Quick links */}
         {isAdmin && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Link href="/settings/company"
+            <Link href={withReturnTo('/settings/company', settingsPath)}
               className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-all group">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 bg-indigo-100 rounded-lg flex items-center justify-center">
@@ -64,7 +70,7 @@ export default async function SettingsPage() {
               </div>
               <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
             </Link>
-            <Link href="/settings/audit-trail"
+            <Link href={withReturnTo('/settings/audit-trail', settingsPath)}
               className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-all group">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -77,7 +83,7 @@ export default async function SettingsPage() {
               </div>
               <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
             </Link>
-            <Link href="/user-guide"
+            <Link href={withReturnTo('/user-guide', settingsPath)}
               className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 hover:border-green-300 hover:bg-green-50 transition-all group">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center">
@@ -109,11 +115,13 @@ export default async function SettingsPage() {
                   </div>
                   <div className="flex gap-2">
                     <form action={`/api/users/${u.id}/approve`} method="POST">
+                      <input type="hidden" name="return_to" value={settingsPath} />
                       <button type="submit" className="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 transition-colors">
                         Approve
                       </button>
                     </form>
                     <form action={`/api/users/${u.id}/reject`} method="POST">
+                      <input type="hidden" name="return_to" value={settingsPath} />
                       <button type="submit" className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-semibold rounded-lg hover:bg-red-200 transition-colors">
                         Reject
                       </button>

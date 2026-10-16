@@ -8,6 +8,7 @@ import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { Suspense } from 'react'
 import { CancelPurchaseInvoiceButton } from './CancelPurchaseInvoiceButton'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Purchase Invoices' }
 
@@ -18,6 +19,7 @@ export default async function PurchaseInvoicesPage({
 }) {
   const params = await searchParams
   const supabase = await createClient()
+  const invoicesPath = currentPath('/inventory/purchase-invoices', params)
   const admin = createAdminClient() as any
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -63,7 +65,7 @@ export default async function PurchaseInvoicesPage({
         actions={
           <div className="flex items-center gap-2">
             <RefreshButton />
-            <Link href="/inventory/purchase-invoices/new"
+            <Link href={withReturnTo('/inventory/purchase-invoices/new', invoicesPath)}
               className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition">
               <Plus className="w-4 h-4" /> New Purchase Invoice
             </Link>
@@ -102,7 +104,7 @@ export default async function PurchaseInvoicesPage({
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
             <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500 font-medium">No purchase invoices found</p>
-            <Link href="/inventory/purchase-invoices/new"
+            <Link href={withReturnTo('/inventory/purchase-invoices/new', invoicesPath)}
               className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition">
               <Plus className="w-4 h-4" /> Record First Purchase
             </Link>
@@ -130,7 +132,7 @@ export default async function PurchaseInvoicesPage({
                   return (
                     <tr key={inv.id} className={`hover:bg-slate-50 transition-colors group ${isCancelled ? 'opacity-50' : ''}`}>
                       <td className="px-4 py-3.5">
-                        <Link href={`/inventory/purchase-invoices/${inv.id}`}
+                        <Link href={withReturnTo(`/inventory/purchase-invoices/${inv.id}`, invoicesPath)}
                           className="text-sm font-mono font-semibold text-blue-600 hover:text-blue-800">
                           {inv.invoice_number}
                         </Link>
@@ -159,13 +161,13 @@ export default async function PurchaseInvoicesPage({
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Link href={`/inventory/purchase-invoices/${inv.id}`}
+                          <Link href={withReturnTo(`/inventory/purchase-invoices/${inv.id}`, invoicesPath)}
                             className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View">
                             <Eye className="w-4 h-4" />
                           </Link>
                           {!isCancelled && (
                             <>
-                              <Link href={`/inventory/purchase-invoices/${inv.id}/edit`}
+                              <Link href={withReturnTo(`/inventory/purchase-invoices/${inv.id}/edit`, invoicesPath)}
                                 className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
                                 <Pencil className="w-4 h-4" />
                               </Link>

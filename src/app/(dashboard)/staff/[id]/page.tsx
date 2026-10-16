@@ -9,11 +9,19 @@ import { StaffEditForm } from './StaffEditForm'
 import { StaffAdvancePanel } from './StaffAdvancePanel'
 import { StaffBonusPanel } from './StaffBonusPanel'
 import { StaffLoginLink } from './StaffLoginLink'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Staff Profile' }
 
-export default async function StaffDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+export default async function StaffDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
+  const [{ id }, query] = await Promise.all([params, searchParams])
+  const back = resolveBack(query.return_to, '/staff', 'Staff')
   const supabase = await createClient()
 
   const { data: staffRaw } = await (supabase as any)
@@ -110,7 +118,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
         title={s.full_name}
         subtitle={`${s.designation ?? ''} ${s.department ? '· ' + s.department : ''} · ${s.staff_code}`}
         actions={
-          <BackButton fallbackHref="/staff" label="Back to Staff" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
 

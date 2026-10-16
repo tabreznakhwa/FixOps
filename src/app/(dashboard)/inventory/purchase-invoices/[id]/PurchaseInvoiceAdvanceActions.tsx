@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Banknote, Loader2, AlertCircle } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function PurchaseInvoiceAdvanceActions({ invoiceId, advances }: Props) {
+  const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
 
@@ -32,7 +34,8 @@ export function PurchaseInvoiceAdvanceActions({ invoiceId, advances }: Props) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to apply advance')
-      window.location.reload()
+      router.refresh()
+      setLoading(null)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to apply advance')
       setLoading(null)

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { FileText, Clock, AlertCircle, CheckCircle2, Pencil, Printer } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
 import { DeleteInvoiceButton } from './DeleteInvoiceButton'
+import { safeReturnTo, withReturnTo } from '@/lib/backNav'
 
 interface Invoice {
   id: string
@@ -32,8 +33,17 @@ const statusIcons: Record<string, React.ReactNode> = {
  * "Print / Save PDF" sticky bar, same pattern and same print-batch route as
  * the Receivables "Balance Invoices" selector.
  */
-export function InvoiceTableClient({ invoices, canEditDelete }: { invoices: Invoice[]; canEditDelete: boolean }) {
+export function InvoiceTableClient({
+  invoices,
+  canEditDelete,
+  invoicesPath,
+}: {
+  invoices: Invoice[]
+  canEditDelete: boolean
+  invoicesPath: string
+}) {
   const router = useRouter()
+  const source = safeReturnTo(invoicesPath) ?? '/finance/invoices'
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const allSelected = invoices.length > 0 && invoices.every(inv => selected.has(inv.id))
@@ -52,7 +62,10 @@ export function InvoiceTableClient({ invoices, canEditDelete }: { invoices: Invo
   }
 
   const printSelected = () => {
-    router.push(`/finance/invoices/print-batch?ids=${Array.from(selected).join(',')}&return_to=/finance/invoices`)
+    router.push(withReturnTo(
+      `/finance/invoices/print-batch?ids=${Array.from(selected).join(',')}`,
+      source,
+    ))
   }
 
   return (
@@ -142,14 +155,14 @@ export function InvoiceTableClient({ invoices, canEditDelete }: { invoices: Invo
                 <td className="px-4 py-3.5 text-right">
                   <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Link
-                      href={`/finance/invoices/${inv.id}`}
+                      href={withReturnTo(`/finance/invoices/${inv.id}`, source)}
                       className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1"
                     >
                       View
                     </Link>
                     {canEdit && (
                       <Link
-                        href={`/finance/invoices/${inv.id}/edit`}
+                        href={withReturnTo(`/finance/invoices/${inv.id}/edit`, source)}
                         className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         title="Edit invoice"
                       >

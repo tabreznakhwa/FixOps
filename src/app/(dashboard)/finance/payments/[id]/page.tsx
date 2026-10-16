@@ -5,6 +5,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AlertCircle, Loader2, Save } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
+import { useCurrentPath } from '@/lib/backNav.client'
+import { resolveBack, withReturnTo } from '@/lib/backNav'
 
 const PAYMENT_MODES = [
   { value: 'cash', label: 'Cash' },
@@ -52,16 +54,13 @@ export default function PaymentDetailPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  // Back follows where the user actually came from. Without return_to this is
-  // the payments list, which is the only other way in — but an explicit origin
-  // (e.g. arriving from an invoice) must win so Back doesn't strand them.
-  const returnTo = searchParams.get('return_to')
-  const backHref = returnTo ?? '/finance/payments'
-  const backLabel = returnTo?.startsWith('/finance/invoices')
-    ? 'Invoice'
-    : returnTo?.startsWith('/work-orders')
-    ? 'Work Order'
-    : 'Payments'
+  const returnToValues = searchParams.getAll('return_to')
+  const back = resolveBack(
+    returnToValues.length === 1 ? returnToValues[0] : null,
+    '/finance/payments',
+    'Payments',
+  )
+  const paymentPath = useCurrentPath()
 
   const [payment, setPayment] = useState<Payment | null>(null)
   const [loadError, setLoadError] = useState('')
@@ -139,7 +138,7 @@ export default function PaymentDetailPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Cancellation failed')
-      router.push(backHref)
+      router.replace(back.href)
     } catch (e: unknown) {
       setSaveError(e instanceof Error ? e.message : 'Cancellation failed')
       setCancelling(false)
@@ -172,7 +171,7 @@ export default function PaymentDetailPage() {
             {payment.is_advance ? 'Advance Payment' : 'Payment'} · {fmtDate(payment.payment_date)}
           </p>
         </div>
-        <BackButton fallbackHref={backHref} label={backLabel} />
+        <BackButton href={back.href} label={back.label} />
       </div>
 
       <div className="p-6 max-w-2xl space-y-5">
@@ -197,7 +196,7 @@ export default function PaymentDetailPage() {
               <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Invoice</p>
               {payment.invoices ? (
                 <Link
-                  href={`/finance/invoices/${payment.invoices.id}?return_to=${encodeURIComponent(`/finance/payments/${id}`)}`}
+                  href={withReturnTo(`/finance/invoices/${payment.invoices.id}`, paymentPath)}
                   className="font-semibold text-blue-600 hover:underline font-mono"
                 >
                   {payment.invoices.invoice_number}

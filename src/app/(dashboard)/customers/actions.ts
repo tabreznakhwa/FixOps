@@ -2,8 +2,9 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { logAudit } from '@/lib/audit'
+import { replaceRedirect } from '@/lib/backNav.server'
+import { returnToFromFormData } from '@/lib/backNav'
 
 /**
  * Deletes a customer. The reason is mandatory and is written to the audit log,
@@ -99,7 +100,7 @@ export async function deleteCustomer(
   })
 
   revalidatePath('/customers')
-  redirect('/customers')
+  return {}
 }
 
 export async function createCustomer(
@@ -168,15 +169,7 @@ export async function createCustomer(
   })
 
   revalidatePath('/customers')
-  // Return to wherever the user started — e.g. adding a customer part-way
-  // through logging a complaint should land back on Complaints, not the
-  // customer list. Only same-site paths are honoured.
-  const returnTo = formData.get('return_to') as string | null
-  if (returnTo?.startsWith('/') && !returnTo.startsWith('//')) {
-    revalidatePath(returnTo)
-    redirect(returnTo)
-  }
-  redirect('/customers')
+  replaceRedirect(returnToFromFormData(formData), '/customers')
 }
 
 export async function updateCustomer(
@@ -240,5 +233,5 @@ export async function updateCustomer(
 
   revalidatePath(`/customers/${id}`)
   revalidatePath('/customers')
-  redirect(`/customers/${id}`)
+  replaceRedirect(returnToFromFormData(formData), `/customers/${id}`)
 }

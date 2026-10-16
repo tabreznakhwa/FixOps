@@ -9,6 +9,7 @@ import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { CategorySelect } from '@/components/ui/CategorySelect'
 import { Suspense } from 'react'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Expenses' }
 
@@ -56,6 +57,7 @@ export default async function ExpensesPage({
   searchParams: Promise<{ from?: string; to?: string; category?: string; q?: string }>
 }) {
   const params = await searchParams
+  const expensesPath = currentPath('/finance/expenses', params)
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -107,7 +109,7 @@ export default async function ExpensesPage({
           <div className="flex items-center gap-2">
             <RefreshButton />
             <Link
-              href="/finance/expenses/new"
+              href={withReturnTo('/finance/expenses/new', expensesPath)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" /> Add Expense
@@ -174,7 +176,7 @@ export default async function ExpensesPage({
               <p className="text-slate-500 font-medium">No expenses recorded</p>
               <p className="text-slate-400 text-sm mt-1">Add your first expense for this period</p>
               <Link
-                href="/finance/expenses/new"
+                href={withReturnTo('/finance/expenses/new', expensesPath)}
                 className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Plus className="w-4 h-4" /> Add Expense
@@ -229,7 +231,7 @@ export default async function ExpensesPage({
                           {e.asset_id ? (
                             canViewAssets ? (
                               <Link
-                                href={`/inventory/assets/${e.asset_id}`}
+                                href={withReturnTo(`/inventory/assets/${e.asset_id}`, expensesPath)}
                                 className="text-xs font-semibold text-blue-600 hover:text-blue-700 whitespace-nowrap"
                                 title="Open linked asset"
                               >
@@ -243,7 +245,7 @@ export default async function ExpensesPage({
                           ) : (
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <Link
-                                href={`/finance/expenses/${e.id}/edit`}
+                                href={withReturnTo(`/finance/expenses/${e.id}/edit`, expensesPath)}
                                 className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 title="Edit"
                               >

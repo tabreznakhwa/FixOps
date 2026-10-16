@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, dutyHints, DUTY_START, DUTY_END } from '@/lib/attendance'
 import { SickLeaveUsageNote } from '@/components/attendance/SickLeaveUsageNote'
+import { useRouter } from 'next/navigation'
+import { safeReturnTo } from '@/lib/backNav'
 
 interface Record {
   id: string; date: string; status: string
@@ -19,7 +21,9 @@ const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
 function fmtHrs(h: number) { return h % 1 === 0 ? `${h}h` : `${h.toFixed(2)}h` }
 
-export function EditAttendanceForm({ record }: { record: Record }) {
+export function EditAttendanceForm({ record, returnTo }: { record: Record; returnTo?: string }) {
+  const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/attendance'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState(record.status)
@@ -63,7 +67,7 @@ export function EditAttendanceForm({ record }: { record: Record }) {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Failed to save'); setLoading(false); return }
-      window.location.href = '/attendance'
+      router.replace(destination)
     } catch {
       setError('Network error. Please try again.')
       setLoading(false)
@@ -287,9 +291,13 @@ export function EditAttendanceForm({ record }: { record: Record }) {
           className="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
           {loading ? 'Saving…' : 'Save Changes'}
         </button>
-        <a href="/attendance" className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors">
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
+          className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+        >
           Cancel
-        </a>
+        </button>
       </div>
     </form>
   )

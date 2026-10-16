@@ -5,11 +5,19 @@ import { notFound, redirect } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { QuotationForm } from '../../QuotationForm'
 import { fetchAllCustomers } from '@/lib/customers'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Edit Quotation' }
 
-export default async function EditQuotationPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditQuotationPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
   const { id } = await params
+  const back = resolveBack((await searchParams).return_to, `/finance/quotations/${id}`, 'Quotation')
   const supabase = await createClient()
   const admin = createAdminClient()
 
@@ -41,7 +49,7 @@ export default async function EditQuotationPage({ params }: { params: Promise<{ 
     terms_and_conditions: string | null
   }
 
-  if (quotation.status === 'converted') redirect(`/finance/quotations/${id}`)
+  if (quotation.status === 'converted') redirect(back.href)
 
   const [customersRaw, { data: itemsRaw }] = await Promise.all([
     fetchAllCustomers(supabase, 'id, full_name, mobile_number, company_name'),
@@ -63,11 +71,11 @@ export default async function EditQuotationPage({ params }: { params: Promise<{ 
         title="Edit Quotation"
         subtitle="Update estimate details"
         actions={
-          <BackButton fallbackHref={`/finance/quotations/${id}`} label="Quotation" />
+          <BackButton href={back.href} label="Quotation" />
         }
       />
       <div className="p-6">
-        <QuotationForm customers={customers} initial={{ ...quotation, items }} />
+        <QuotationForm customers={customers} initial={{ ...quotation, items }} returnTo={back.href} />
       </div>
     </div>
   )

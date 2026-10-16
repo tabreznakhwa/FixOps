@@ -5,10 +5,16 @@ import { redirect } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { QuotationForm } from '../QuotationForm'
 import { fetchAllCustomers } from '@/lib/customers'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'New Quotation' }
 
-export default async function NewQuotationPage() {
+export default async function NewQuotationPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
+  const back = resolveBack((await searchParams).return_to, '/finance/quotations', 'Quotations')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profileRaw } = user
@@ -32,11 +38,11 @@ export default async function NewQuotationPage() {
         title="New Quotation"
         subtitle="Prepare an estimate for customer approval"
         actions={
-          <BackButton fallbackHref="/finance/quotations" label="Quotations" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6">
-        <QuotationForm customers={customers} />
+        <QuotationForm customers={customers} returnTo={back.href} />
       </div>
     </div>
   )

@@ -3,6 +3,8 @@ import { Header } from '@/components/layout/Header'
 import { redirect } from 'next/navigation'
 import { Activity, Search } from 'lucide-react'
 import Link from 'next/link'
+import { BackButton } from '@/components/ui/BackButton'
+import { resolveBack, safeReturnTo, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Audit Trail' }
 
@@ -23,9 +25,12 @@ const ACTION_COLORS: Record<string, string> = {
 export default async function AuditTrailPage({
   searchParams,
 }: {
-  searchParams: Promise<{ action?: string; entity?: string; user?: string; from?: string; to?: string }>
+  searchParams: Promise<{ action?: string; entity?: string; user?: string; from?: string; to?: string; return_to?: string | string[] }>
 }) {
   const sp = await searchParams
+  const validReturnTo = safeReturnTo(sp.return_to)
+  const back = resolveBack(validReturnTo, '/settings', 'Settings')
+  const resetHref = withReturnTo('/settings/audit-trail', validReturnTo)
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -72,11 +77,13 @@ export default async function AuditTrailPage({
       <Header
         title="Audit Trail"
         subtitle={`${logs.length} events — last 7 days by default`}
+        actions={<BackButton href={back.href} label={back.label} />}
       />
 
       <div className="p-6 space-y-5">
         {/* Filters */}
         <form className="bg-white rounded-xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
+          {validReturnTo && <input type="hidden" name="return_to" value={validReturnTo} />}
           <div className="flex-1 min-w-32">
             <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
             <input type="date" name="from" defaultValue={from}
@@ -116,7 +123,7 @@ export default async function AuditTrailPage({
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
             <Search className="w-4 h-4" /> Filter
           </button>
-          <Link href="/settings/audit-trail"
+          <Link href={resetHref}
             className="px-4 py-2 bg-slate-100 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-200 transition-colors">
             Reset
           </Link>

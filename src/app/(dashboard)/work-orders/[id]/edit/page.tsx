@@ -1,15 +1,16 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { getAuthedProfile } from '@/lib/auth/session'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { EditWorkOrderForm } from './EditWorkOrderForm'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Edit Work Order' }
 
-export default async function EditWorkOrderPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditWorkOrderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ return_to?: string }> }) {
   const { id } = await params
+  const { return_to } = await searchParams
   const supabase = await createClient()
   // Only non-sensitive staff directory fields cross this server boundary.
   const admin = createAdminClient()
@@ -50,17 +51,19 @@ export default async function EditWorkOrderPage({ params }: { params: Promise<{ 
       ? `staff:${wo.assigned_staff_id}`
       : ''
 
+  const detail = resolveBack(return_to, `/work-orders/${id}`, 'Work Order')
+
   return (
     <div className="animate-fade-in">
       <Header
         title={`Edit ${wo.work_order_number}`}
         subtitle="Update work order details"
         actions={
-          <BackButton fallbackHref={`/work-orders/${id}`} label="Cancel" />
+          <BackButton href={detail.href} label="Cancel" />
         }
       />
       <div className="p-6 max-w-2xl">
-        <EditWorkOrderForm wo={wo} technicians={technicians} currentAssigneeKey={currentAssigneeKey} />
+        <EditWorkOrderForm wo={wo} technicians={technicians} currentAssigneeKey={currentAssigneeKey} detailHref={detail.href} returnTo={detail.href} />
       </div>
     </div>
   )

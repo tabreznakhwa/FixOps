@@ -10,6 +10,7 @@ import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { CategorySelect } from '@/components/ui/CategorySelect'
 import { Suspense } from 'react'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Vendor Payment Register' }
 
@@ -31,6 +32,7 @@ export default async function VendorPaymentsPage({
   searchParams: Promise<{ from?: string; to?: string; q?: string; supplier_id?: string }>
 }) {
   const params = await searchParams
+  const vendorPaymentsPath = currentPath('/suppliers/vendor-payments', params)
   const supabase = await createClient()
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
@@ -91,7 +93,7 @@ export default async function VendorPaymentsPage({
         actions={
           <div className="flex items-center gap-2 print:hidden">
             <RefreshButton />
-            <Link href="/suppliers/vendor-payments/new" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+            <Link href={withReturnTo('/suppliers/vendor-payments/new', vendorPaymentsPath)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
               <Plus className="w-4 h-4" /> Record Payment
             </Link>
             <PrintActions />
@@ -185,7 +187,7 @@ export default async function VendorPaymentsPage({
                       </td>
                       <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(p.amount_paid)}</td>
                       <td className="px-4 py-3 text-right print:hidden">
-                        <Link href={`/suppliers/vendor-payments/${p.id}/edit`} className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition">
+                        <Link href={withReturnTo(`/suppliers/vendor-payments/${p.id}/edit`, vendorPaymentsPath)} className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition">
                           <Pencil className="w-3 h-3" /> Edit
                         </Link>
                       </td>

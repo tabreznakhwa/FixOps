@@ -1,14 +1,22 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { BackButton } from '@/components/ui/BackButton'
-import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { EditVendorPaymentForm } from './EditVendorPaymentForm'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Edit Vendor Payment' }
 
-export default async function EditVendorPaymentPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditVendorPaymentPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string }>
+}) {
   const { id } = await params
+  const { return_to } = await searchParams
+  const back = resolveBack(return_to, '/suppliers/vendor-payments', 'Vendor Payments')
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -39,11 +47,11 @@ export default async function EditVendorPaymentPage({ params }: { params: Promis
         title="Edit Vendor Payment"
         subtitle={payment.suppliers?.supplier_name ?? ''}
         actions={
-          <BackButton fallbackHref="/suppliers/vendor-payments" label="Back" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6 max-w-xl">
-        <EditVendorPaymentForm payment={payment} />
+        <EditVendorPaymentForm payment={payment} returnTo={back.href} />
       </div>
     </div>
   )

@@ -5,12 +5,13 @@ import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { EditInvoiceForm } from './EditInvoiceForm'
 import { fetchAllCustomers } from '@/lib/customers'
+import { resolveBack, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Edit Invoice' }
 
-export default async function EditInvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ complaint_id?: string; work_order_id?: string }> }) {
+export default async function EditInvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ return_to?: string }> }) {
   const { id } = await params
-  const { complaint_id, work_order_id } = await searchParams
+  const { return_to } = await searchParams
   const supabase = await createClient()
 
   // Role guard — only admin/owner/manager
@@ -52,12 +53,8 @@ export default async function EditInvoicePage({ params, searchParams }: { params
     .order('item_name')
     .limit(2000)
 
-  // Preserve how the user reached this invoice so Cancel hands the context back
-  // to the detail page rather than dropping it.
-  const originParams = new URLSearchParams()
-  if (work_order_id) originParams.set('work_order_id', work_order_id)
-  if (complaint_id) originParams.set('complaint_id', complaint_id)
-  const cancelQuery = originParams.toString() ? `?${originParams.toString()}` : ''
+  const detail = resolveBack(return_to, `/finance/invoices/${id}`, 'Invoice')
+  const detailHref = withReturnTo(`/finance/invoices/${id}`, return_to)
 
   return (
     <div className="animate-fade-in">
@@ -65,10 +62,7 @@ export default async function EditInvoicePage({ params, searchParams }: { params
         title={`Edit ${invoiceRaw.invoice_number}`}
         subtitle="Update invoice details and line items"
         actions={
-          /* Cancel returns to the invoice being edited — never to a linked work
-             order the user may never have visited. The origin params are carried
-             through so the invoice's own Back still lands where they came from. */
-          <BackButton fallbackHref={`/finance/invoices/${id}${cancelQuery}`} label="Cancel" />
+          <BackButton href={detail.href} label="Cancel" />
         }
       />
       <div className="p-6">
@@ -78,7 +72,7 @@ export default async function EditInvoicePage({ params, searchParams }: { params
           customers={(customersRaw ?? []) as any[]}
           workOrders={(workOrdersRaw ?? []) as any[]}
           inventoryItems={(inventoryRaw ?? []) as any[]}
-          complaintId={complaint_id}
+          detailHref={detailHref}
         />
       </div>
     </div>

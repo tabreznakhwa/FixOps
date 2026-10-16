@@ -6,16 +6,25 @@ import { redirect } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { NewWorkOrderForm } from './NewWorkOrderForm'
 import { fetchAllCustomers } from '@/lib/customers'
+import { resolveBackWithLegacy } from '@/lib/backNav'
 
 export const metadata = { title: 'New Work Order' }
 
 export default async function NewWorkOrderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ complaint_id?: string }>
+  searchParams: Promise<{ complaint_id?: string; return_to?: string }>
 }) {
   const params = await searchParams
   const supabase = await createClient()
+  const back = resolveBackWithLegacy({
+    returnTo: params.return_to,
+    legacy: params.complaint_id
+      ? [{ when: params.complaint_id, href: `/complaints/${params.complaint_id}`, label: 'Complaint' }]
+      : [],
+    fallbackHref: '/work-orders',
+    fallbackLabel: 'Work Orders',
+  })
   // The staff table contains payroll and identity data, so migration 054 limits
   // direct browser-role reads. This server-rendered page exposes only the three
   // non-sensitive assignment fields after proxy authorization.
@@ -117,7 +126,7 @@ export default async function NewWorkOrderPage({
         title="New Work Order"
         subtitle={prefill ? `Linked to complaint ${prefill.complaint_number}` : 'Create a new service job'}
         actions={
-          <BackButton fallbackHref={prefill ? `/complaints/${prefill.complaint_id}` : '/work-orders'} label="Back" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6 max-w-2xl">
@@ -139,6 +148,7 @@ export default async function NewWorkOrderPage({
           technicians={technicians}
           complaints={complaints}
           prefill={prefill}
+          returnTo={back.href}
         />
       </div>
     </div>

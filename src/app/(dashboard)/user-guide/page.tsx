@@ -1,5 +1,7 @@
 import { PrintActions } from '@/components/print/PrintActions'
 import { Header } from '@/components/layout/Header'
+import { BackButton } from '@/components/ui/BackButton'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'User Guide' }
 
@@ -40,13 +42,25 @@ function Tip({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function UserGuidePage() {
+export default async function UserGuidePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
+  const sp = await searchParams
+  const back = resolveBack(sp.return_to, '/dashboard', 'Dashboard')
+
   return (
     <div className="animate-fade-in">
       <Header
         title="User Guide"
         subtitle="Complete guide to using the system — click Print PDF to save"
-        actions={<PrintActions label="Print PDF" />}
+        actions={
+          <div className="flex items-center gap-2">
+            <PrintActions label="Print PDF" />
+            <BackButton href={back.href} label={back.label} />
+          </div>
+        }
       />
 
       <div className="p-6 max-w-4xl space-y-6 print:p-4 print:space-y-4">

@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { NewPOForm } from './NewPOForm'
 import { resolveBack } from '@/lib/backNav'
@@ -13,7 +12,7 @@ export default async function NewPOPage({
   searchParams: Promise<{ supplier_id?: string; return_to?: string }>
 }) {
   const params = await searchParams
-  const back = resolveBack(params.return_to, '/suppliers?tab=po', 'Back')
+  const back = resolveBack(params.return_to, '/suppliers?tab=po', 'Purchase Orders')
   const supabase = await createClient()
 
   const { data: suppliersRaw } = await (supabase as any)
@@ -33,11 +32,11 @@ export default async function NewPOPage({
         title="New Purchase Order"
         subtitle="Create a purchase order for a supplier"
         actions={
-          <BackButton fallbackHref={back.href} label={back.label} />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6">
-        <NewPOForm suppliers={suppliers} defaultSupplierId={params.supplier_id ?? ''} />
+        <NewPOForm suppliers={suppliers} defaultSupplierId={params.supplier_id ?? ''} returnTo={back.href} />
       </div>
     </div>
   )

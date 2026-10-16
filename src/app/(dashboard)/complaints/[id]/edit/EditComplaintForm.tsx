@@ -35,7 +35,13 @@ interface Complaint {
 
 const inputCls = 'w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500'
 
-export function EditComplaintForm({ complaint }: { complaint: Complaint }) {
+export function EditComplaintForm({
+  complaint,
+  destination,
+}: {
+  complaint: Complaint
+  destination: string
+}) {
   const router = useRouter()
 
   const initialCategories = Array.isArray(complaint.service_category)
@@ -77,7 +83,7 @@ export function EditComplaintForm({ complaint }: { complaint: Complaint }) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Update failed')
-      router.push(`/complaints/${complaint.id}`)
+      router.replace(destination)
       router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -192,7 +198,7 @@ export function EditComplaintForm({ complaint }: { complaint: Complaint }) {
         </button>
         <button
           type="button"
-          onClick={() => router.push(`/complaints/${complaint.id}`)}
+          onClick={() => router.replace(destination)}
           className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors"
         >
           Cancel

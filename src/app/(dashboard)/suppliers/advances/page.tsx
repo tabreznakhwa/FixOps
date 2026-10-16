@@ -4,6 +4,7 @@ import { RefreshButton } from '@/components/ui/RefreshButton'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Banknote, Plus } from 'lucide-react'
 import Link from 'next/link'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Supplier Advances' }
 
@@ -21,7 +22,13 @@ const MODE_COLORS: Record<string, string> = {
   other: 'bg-slate-100 text-slate-600',
 }
 
-export default async function SupplierAdvancesPage() {
+export default async function SupplierAdvancesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const advancesPath = currentPath('/suppliers/advances', params)
   const admin = createAdminClient() as any
 
   const { data: advancesRaw } = await admin
@@ -57,7 +64,7 @@ export default async function SupplierAdvancesPage() {
           <div className="flex items-center gap-2">
             <RefreshButton />
             <Link
-              href="/suppliers/advances/new"
+              href={withReturnTo('/suppliers/advances/new', advancesPath)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" /> New Advance
@@ -96,7 +103,7 @@ export default async function SupplierAdvancesPage() {
               <Banknote className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="text-sm text-slate-400">No supplier advances recorded yet</p>
               <Link
-                href="/suppliers/advances/new"
+                href={withReturnTo('/suppliers/advances/new', advancesPath)}
                 className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700"
               >
                 <Plus className="w-3.5 h-3.5" /> Record First Advance

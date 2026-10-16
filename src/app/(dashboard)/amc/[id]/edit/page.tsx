@@ -1,15 +1,22 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { EditAMCForm } from './EditAMCForm'
 import { fetchAllCustomers } from '@/lib/customers'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Edit AMC Contract' }
 
-export default async function EditAMCPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+export default async function EditAMCPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
+  const [{ id }, query] = await Promise.all([params, searchParams])
+  const back = resolveBack(query.return_to, `/amc/${id}`, 'AMC Contract')
   const supabase = await createClient()
 
   const [{ data: contractRaw }, customersRaw] = await Promise.all([
@@ -42,12 +49,13 @@ export default async function EditAMCPage({ params }: { params: Promise<{ id: st
         title={`Edit ${contract.contract_number}`}
         subtitle="Update AMC contract details"
         actions={
-          <BackButton fallbackHref={`/amc/${id}`} label="Back" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6">
         <EditAMCForm
           contractId={id}
+          returnTo={back.href}
           customers={customers}
           defaults={{
             customer_id: contract.customer_id,

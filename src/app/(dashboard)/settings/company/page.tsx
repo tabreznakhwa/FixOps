@@ -1,12 +1,18 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { CompanySettingsForm } from './CompanySettingsForm'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Company Settings' }
 
-export default async function CompanySettingsPage() {
+export default async function CompanySettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
+  const sp = await searchParams
+  const back = resolveBack(sp.return_to, '/settings', 'Settings')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -35,7 +41,7 @@ export default async function CompanySettingsPage() {
         title="Company Settings"
         subtitle="Logo, contact details, bank account, and tax settings"
         actions={
-          <BackButton fallbackHref="/settings" label="Back to Settings" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6 max-w-3xl">

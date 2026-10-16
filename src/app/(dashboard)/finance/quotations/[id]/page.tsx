@@ -7,11 +7,21 @@ import { BackButton } from '@/components/ui/BackButton'
 import { PrintActions } from '@/components/print/PrintActions'
 import { formatCurrency, formatDate, formatStatus, getStatusColor } from '@/lib/utils'
 import { QuotationActions } from './QuotationActions'
+import { currentPath, resolveBack, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Quotation Detail' }
 
-export default async function QuotationDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function QuotationDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
   const { id } = await params
+  const query = await searchParams
+  const quotationPath = currentPath(`/finance/quotations/${id}`, query)
+  const back = resolveBack(query.return_to, '/finance/quotations', 'Quotations')
   const supabase = await createClient()
   const admin = createAdminClient()
 
@@ -186,12 +196,12 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
           actions={
             <div className="flex items-center gap-2">
               {canEdit && (
-                <Link href={`/finance/quotations/${id}/edit`} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
+                <Link href={withReturnTo(`/finance/quotations/${id}/edit`, quotationPath)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
                   <Edit className="w-4 h-4" /> Edit
                 </Link>
               )}
               <PrintActions label="Print Quotation" />
-              <BackButton fallbackHref="/finance/quotations" label="Quotations" />
+              <BackButton href={back.href} label={back.label} />
             </div>
           }
         />
@@ -231,7 +241,7 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
           <div className="space-y-5">
             {customer && <div className="bg-white rounded-xl border border-slate-200 p-5"><h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2"><User className="w-4 h-4 text-slate-400" /> Customer</h3><div className="space-y-1.5 text-sm"><p className="font-semibold text-slate-900">{customer.full_name}</p>{customer.company_name && <p className="text-slate-600 font-medium">{customer.company_name}</p>}<p className="text-slate-600">{customer.mobile_number}</p>{customer.email && <p className="text-slate-600">{customer.email}</p>}{(customer.area || customer.city) && <p className="text-slate-500">{[customer.area, customer.city].filter(Boolean).join(', ')}</p>}</div></div>}
             <div className="bg-white rounded-xl border border-slate-200 p-5"><h3 className="font-semibold text-slate-900 mb-3">Quotation Summary</h3><div className="space-y-2.5 text-sm"><div className="flex justify-between"><span className="text-slate-500">Subtotal</span><span className="font-semibold text-slate-900">{formatCurrency(quotation.subtotal)}</span></div><div className="flex justify-between"><span className="text-slate-500">Discount</span><span className="font-semibold text-green-700">{formatCurrency(quotation.discount_amount)}</span></div><div className="flex justify-between border-t border-slate-100 pt-2.5 text-blue-700"><span className="font-bold">Total</span><span className="font-bold">{formatCurrency(quotation.total_amount)}</span></div></div></div>
-            <QuotationActions quotationId={quotation.id} currentStatus={quotation.status} />
+            <QuotationActions quotationId={quotation.id} currentStatus={quotation.status} quotationHref={quotationPath} />
           </div>
         </div>
       </div>

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { AlertTriangle, ChevronDown, ChevronRight, Printer, Search, X } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
+import { useCurrentPath } from '@/lib/backNav.client'
+import { withReturnTo } from '@/lib/backNav'
 
 interface Invoice {
   id: string
@@ -26,6 +28,7 @@ interface Customer {
 
 export function ReceivablesClient({ customers }: { customers: Customer[] }) {
   const router = useRouter()
+  const receivablesPath = useCurrentPath()
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -59,7 +62,10 @@ export function ReceivablesClient({ customers }: { customers: Customer[] }) {
   }
 
   const printSelected = () => {
-    router.push(`/finance/invoices/print-batch?ids=${Array.from(selected).join(',')}&return_to=/finance/receivables`)
+    router.push(withReturnTo(
+      `/finance/invoices/print-batch?ids=${Array.from(selected).join(',')}`,
+      receivablesPath,
+    ))
   }
 
   return (
@@ -167,7 +173,7 @@ export function ReceivablesClient({ customers }: { customers: Customer[] }) {
                               />
                             )}
                             {inv.id ? (
-                              <Link href={`/finance/invoices/${inv.id}?return_to=/finance/receivables`}
+                              <Link href={withReturnTo(`/finance/invoices/${inv.id}`, receivablesPath)}
                                 className="text-xs font-mono font-semibold text-blue-600 hover:underline"
                                 onClick={e => e.stopPropagation()}>
                                 {inv.invoice_number}

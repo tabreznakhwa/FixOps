@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Trash2, Loader2, AlertTriangle } from 'lucide-react'
 import { deleteCustomer } from '../actions'
+import { safeReturnTo } from '@/lib/backNav'
 
 /**
  * Deleting a customer requires a typed reason, which is written to the audit
@@ -13,11 +15,14 @@ export function DeleteCustomerButton({
   customerId,
   customerName,
   complaintCount = 0,
+  returnTo,
 }: {
   customerId: string
   customerName: string
   complaintCount?: number
+  returnTo?: string
 }) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [alsoComplaints, setAlsoComplaints] = useState(false)
@@ -32,8 +37,12 @@ export function DeleteCustomerButton({
     setError('')
     startTransition(async () => {
       const result = await deleteCustomer(customerId, reason, { deleteComplaints: alsoComplaints })
-      // Success redirects, so reaching here means it was refused.
-      if (result?.error) setError(result.error)
+      if (result?.error) {
+        setError(result.error)
+        return
+      }
+      router.replace(safeReturnTo(returnTo) ?? '/customers')
+      router.refresh()
     })
   }
 

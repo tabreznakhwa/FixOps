@@ -2,8 +2,9 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { logAudit } from '@/lib/audit'
+import { returnToFromFormData } from '@/lib/backNav'
+import { replaceRedirect } from '@/lib/backNav.server'
 
 export async function updateSupplier(
   prevState: { error?: string } | null,
@@ -54,5 +55,5 @@ export async function updateSupplier(
 
   revalidatePath(`/suppliers/${id}`)
   revalidatePath('/suppliers')
-  redirect(`/suppliers/${id}`)
+  replaceRedirect(returnToFromFormData(formData), `/suppliers/${id}`)
 }

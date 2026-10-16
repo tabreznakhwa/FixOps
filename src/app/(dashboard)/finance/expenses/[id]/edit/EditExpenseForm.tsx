@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, AlertCircle, ChevronDown, X } from 'lucide-react'
+import { safeReturnTo } from '@/lib/backNav'
 
 const ADD_NEW = '__add_new__'
 
@@ -44,10 +45,12 @@ interface Props {
   }
   customCategories: { value: string; label: string }[]
   canManageCategories: boolean
+  returnTo: string
 }
 
-export function EditExpenseForm({ id, initial, customCategories, canManageCategories }: Props) {
+export function EditExpenseForm({ id, initial, customCategories, canManageCategories, returnTo }: Props) {
   const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/finance/expenses'
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -134,7 +137,7 @@ export function EditExpenseForm({ id, initial, customCategories, canManageCatego
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      router.push('/finance/expenses')
+      router.replace(destination)
       router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save expense')
@@ -282,7 +285,7 @@ export function EditExpenseForm({ id, initial, customCategories, canManageCatego
       </div>
 
       <div className="flex items-center justify-end gap-3 pb-6">
-        <button type="button" onClick={() => router.back()}
+        <button type="button" onClick={() => router.replace(destination)}
           className="px-5 py-2.5 border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition">
           Cancel
         </button>

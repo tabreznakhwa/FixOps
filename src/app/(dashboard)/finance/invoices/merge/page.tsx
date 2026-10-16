@@ -1,14 +1,23 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { MergeInvoiceForm } from './MergeInvoiceForm'
 import { fetchAllCustomers } from '@/lib/customers'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Monthly Invoice' }
 
-export default async function MergeInvoicePage() {
+export default async function MergeInvoicePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
+  const back = resolveBack(
+    (await searchParams).return_to,
+    '/finance/invoices',
+    'Invoices',
+  )
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -30,11 +39,11 @@ export default async function MergeInvoicePage() {
         title="Monthly Invoice"
         subtitle="Merge multiple invoices into one consolidated invoice"
         actions={
-          <BackButton fallbackHref="/finance/invoices" label="Back to Invoices" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6">
-        <MergeInvoiceForm customers={customers} />
+        <MergeInvoiceForm customers={customers} returnTo={back.href} />
       </div>
     </div>
   )

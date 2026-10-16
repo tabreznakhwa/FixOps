@@ -9,11 +9,13 @@ import { formatCurrency } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { InvoiceSearchBar } from './InvoiceSearchBar'
 import { InvoiceTableClient } from './InvoiceTableClient'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Invoices' }
 
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; from?: string; to?: string }> }) {
   const params = await searchParams
+  const invoicesPath = currentPath('/finance/invoices', params)
   const supabase = await createClient()
   const { profile } = await getAuthedProfile()
   const userRole = profile?.role ?? ''
@@ -80,14 +82,14 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
             </Suspense>
             {canEditDelete && (
               <Link
-                href="/finance/invoices/merge"
+                href={withReturnTo('/finance/invoices/merge', invoicesPath)}
                 className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-200 transition-colors"
               >
                 Monthly Invoice
               </Link>
             )}
             <Link
-              href="/finance/invoices/new"
+              href={withReturnTo('/finance/invoices/new', invoicesPath)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" /> New Invoice
@@ -166,7 +168,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
             <p className="text-slate-500 font-medium">No invoices found</p>
           </div>
         ) : (
-          <InvoiceTableClient invoices={invoices} canEditDelete={canEditDelete} />
+          <InvoiceTableClient invoices={invoices} canEditDelete={canEditDelete} invoicesPath={invoicesPath} />
         )}
       </div>
     </div>

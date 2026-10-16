@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Plus, Trash2, AlertCircle } from 'lucide-react'
 
 interface Customer { id: string; full_name: string; mobile_number: string | null; company_name: string | null }
@@ -30,7 +32,7 @@ interface Props {
   customers: Customer[]
   workOrders: WorkOrder[]
   inventoryItems: InventoryItem[]
-  complaintId?: string
+  detailHref: string
 }
 
 const PRESET_SERVICES = [
@@ -73,7 +75,8 @@ function fmt(n: number) {
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
-export function EditInvoiceForm({ invoice, items: initialItems, customers, workOrders, inventoryItems, complaintId }: Props) {
+export function EditInvoiceForm({ invoice, items: initialItems, customers, workOrders, inventoryItems, detailHref }: Props) {
+  const router = useRouter()
   const [customerId, setCustomerId] = useState(invoice.customer_id)
   const [invoiceType, setInvoiceType] = useState(invoice.invoice_type)
   const [invoiceDate, setInvoiceDate] = useState(invoice.invoice_date)
@@ -183,11 +186,8 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to update invoice')
-      window.location.href = complaintId
-        ? `/complaints/${complaintId}`
-        : invoice.work_order_id
-          ? `/work-orders/${invoice.work_order_id}`
-          : `/finance/invoices/${invoice.id}`
+      router.replace(detailHref)
+      router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setLoading(false)
@@ -382,10 +382,10 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
           className="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed">
           {loading ? 'Saving…' : 'Save Changes'}
         </button>
-        <a href={`/finance/invoices/${invoice.id}`}
+        <Link href={detailHref}
           className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
           Cancel
-        </a>
+        </Link>
       </div>
     </form>
   )

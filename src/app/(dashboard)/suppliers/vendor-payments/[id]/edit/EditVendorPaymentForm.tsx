@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { formatCurrency } from '@/lib/utils'
+import { safeReturnTo } from '@/lib/backNav'
 
 const PAYMENT_MODES = [
   { value: 'bank_transfer', label: 'Bank Transfer' },
@@ -20,12 +22,15 @@ interface Props {
     suppliers: { supplier_name: string; supplier_code: string } | null
     purchase_orders: { po_number: string } | null
   }
+  returnTo: string
 }
 
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
-export function EditVendorPaymentForm({ payment }: Props) {
+export function EditVendorPaymentForm({ payment, returnTo }: Props) {
+  const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/suppliers/vendor-payments'
   const [mode, setMode] = useState(payment.payment_mode)
   const [reference, setReference] = useState(payment.reference_number ?? '')
   const [notes, setNotes] = useState(payment.notes ?? '')
@@ -45,7 +50,8 @@ export function EditVendorPaymentForm({ payment }: Props) {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Update failed'); return }
-      window.location.href = '/suppliers/vendor-payments'
+      router.replace(destination)
+      router.refresh()
     } catch { setError('Network error') }
     finally { setLoading(false) }
   }
@@ -87,10 +93,19 @@ export function EditVendorPaymentForm({ payment }: Props) {
           placeholder="Optional remarks…" className={inputClass} />
       </div>
 
-      <button type="submit" disabled={loading}
-        className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
-        {loading ? 'Saving…' : 'Save Changes'}
-      </button>
+      <div className="flex gap-3">
+        <button type="submit" disabled={loading}
+          className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+          {loading ? 'Saving…' : 'Save Changes'}
+        </button>
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
+          className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
+        >
+          Cancel
+        </button>
+      </div>
     </form>
   )
 }

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2, ChevronDown, CheckCircle, Banknote, X, FileText } from 'lucide-react'
+import { withReturnTo } from '@/lib/backNav'
 
 interface Person { id: string; full_name: string; type: 'user' | 'staff'; role: string }
 
@@ -17,12 +18,12 @@ interface Props {
   paymentStatus: string
   existingInvoiceId: string | null
   existingInvoiceStatus: string | null
-  complaintId?: string
+  workOrderHref: string
 }
 
 export function WorkOrderActions({
   workOrderId, currentStatus, currentAssigneeKey, technicians,
-  customerId, finalAmount, paymentStatus, existingInvoiceId, existingInvoiceStatus, complaintId,
+  customerId, finalAmount, paymentStatus, existingInvoiceId, existingInvoiceStatus, workOrderHref,
 }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
@@ -87,7 +88,8 @@ export function WorkOrderActions({
       if (!res.ok) throw new Error(data.error ?? 'Failed to record payment')
       setShowPayForm(false)
       setPayAmount('')
-      window.location.replace('/finance/invoices')
+      router.replace(workOrderHref)
+      router.refresh()
     } catch (err: unknown) {
       setPayError(err instanceof Error ? err.message : 'Failed to record payment')
     } finally {
@@ -169,7 +171,7 @@ export function WorkOrderActions({
         <div className="border-t border-slate-100 pt-4">
           {existingInvoiceId ? (
             <Link
-              href={`/finance/invoices/${existingInvoiceId}?work_order_id=${workOrderId}${complaintId ? `&complaint_id=${complaintId}` : ''}`}
+              href={withReturnTo(`/finance/invoices/${existingInvoiceId}`, workOrderHref)}
               className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
             >
               <Banknote className="w-4 h-4" />
@@ -255,7 +257,7 @@ export function WorkOrderActions({
           {existingInvoiceId ? (
             <>
               <Link
-                href={`/finance/invoices/${existingInvoiceId}?work_order_id=${workOrderId}${complaintId ? `&complaint_id=${complaintId}` : ''}`}
+                href={withReturnTo(`/finance/invoices/${existingInvoiceId}`, workOrderHref)}
                 className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
               >
                 <FileText className="w-4 h-4" />
@@ -263,7 +265,7 @@ export function WorkOrderActions({
               </Link>
               {existingInvoiceStatus !== 'paid' && (
                 <Link
-                  href={`/finance/invoices/${existingInvoiceId}/edit?work_order_id=${workOrderId}${complaintId ? `&complaint_id=${complaintId}` : ''}`}
+                  href={withReturnTo(`/finance/invoices/${existingInvoiceId}/edit`, workOrderHref)}
                   className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
                 >
                   <FileText className="w-4 h-4" />
@@ -273,7 +275,7 @@ export function WorkOrderActions({
             </>
           ) : isCompleted ? (
             <Link
-              href={`/finance/invoices/new?work_order_id=${workOrderId}${complaintId ? `&complaint_id=${complaintId}` : ''}`}
+              href={withReturnTo(`/finance/invoices/new?work_order_id=${workOrderId}`, workOrderHref)}
               className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
             >
               <FileText className="w-4 h-4" />

@@ -2,11 +2,20 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import { EditAttendanceForm } from './EditAttendanceForm'
+import { BackButton } from '@/components/ui/BackButton'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Edit Attendance' }
 
-export default async function EditAttendancePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+export default async function EditAttendancePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
+  const [{ id }, query] = await Promise.all([params, searchParams])
+  const back = resolveBack(query.return_to, '/attendance', 'Attendance')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -29,13 +38,21 @@ export default async function EditAttendancePage({ params }: { params: Promise<{
     .maybeSingle()
 
   if (!recordRaw) notFound()
-  if (recordRaw.leave_application_id) redirect('/attendance?error=managed_leave')
+  if (recordRaw.leave_application_id) {
+    const managedLeaveDestination = new URL(back.href, 'http://localhost')
+    managedLeaveDestination.searchParams.set('error', 'managed_leave')
+    redirect(`${managedLeaveDestination.pathname}${managedLeaveDestination.search}${managedLeaveDestination.hash}`)
+  }
 
   return (
     <div className="animate-fade-in">
-      <Header title="Edit Attendance" subtitle={`Editing record for ${recordRaw.staff?.full_name ?? '—'}`} />
+      <Header
+        title="Edit Attendance"
+        subtitle={`Editing record for ${recordRaw.staff?.full_name ?? '—'}`}
+        actions={<BackButton href={back.href} label={back.label} />}
+      />
       <div className="p-6">
-        <EditAttendanceForm record={recordRaw} />
+        <EditAttendanceForm record={recordRaw} returnTo={back.href} />
       </div>
     </div>
   )

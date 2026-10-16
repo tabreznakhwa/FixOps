@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
-import Link from 'next/link'
+import { Suspense, useEffect, useState } from 'react'
+import { useParams, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
+import { resolveBack } from '@/lib/backNav'
 import { EditComplaintForm } from './EditComplaintForm'
 
 interface Complaint {
@@ -20,7 +20,21 @@ interface Complaint {
 }
 
 export default function EditComplaintPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+      </div>
+    }>
+      <EditComplaintPageInner />
+    </Suspense>
+  )
+}
+
+function EditComplaintPageInner() {
   const { id } = useParams<{ id: string }>()
+  const searchParams = useSearchParams()
+  const destination = resolveBack(searchParams.get('return_to'), `/complaints/${id}`, 'Complaint')
   const [complaint, setComplaint] = useState<Complaint | null>(null)
   const [error, setError] = useState('')
 
@@ -58,11 +72,11 @@ export default function EditComplaintPage() {
             <h1 className="text-xl font-bold text-slate-900">Edit {complaint.complaint_number}</h1>
             <p className="text-sm text-slate-500 mt-0.5">Update complaint details</p>
           </div>
-          <BackButton fallbackHref={`/complaints/${id}`} label="Cancel" />
+          <BackButton href={destination.href} label="Cancel" />
         </div>
       </header>
       <div className="p-6 max-w-2xl">
-        <EditComplaintForm complaint={complaint} />
+        <EditComplaintForm complaint={complaint} destination={destination.href} />
       </div>
     </div>
   )

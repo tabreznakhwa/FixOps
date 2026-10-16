@@ -3,11 +3,17 @@ import { redirect } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
 import { BackButton } from '@/components/ui/BackButton'
 import { LeaveSettlementForm } from './LeaveSettlementForm'
+import { resolveBack } from '@/lib/backNav'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Leave Settlement' }
 
-export default async function LeaveSettlementPage() {
+export default async function LeaveSettlementPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
+  const back = resolveBack((await searchParams).return_to, '/payroll', 'Payroll')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -39,7 +45,7 @@ export default async function LeaveSettlementPage() {
       <Header
         title="Leave Settlement"
         subtitle="Pay an employee up to their last working day before they travel"
-        actions={<BackButton fallbackHref="/payroll" label="Payroll" />}
+        actions={<BackButton href={back.href} label={back.label} />}
       />
 
       <div className="p-6 space-y-5">

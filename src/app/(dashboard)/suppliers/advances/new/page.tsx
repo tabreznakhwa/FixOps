@@ -1,17 +1,18 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { BackButton } from '@/components/ui/BackButton'
-import Link from 'next/link'
 import { NewSupplierAdvanceForm } from './NewSupplierAdvanceForm'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'New Supplier Advance' }
 
 export default async function NewSupplierAdvancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ supplier_id?: string }>
+  searchParams: Promise<{ supplier_id?: string; return_to?: string }>
 }) {
-  const { supplier_id } = await searchParams
+  const { supplier_id, return_to } = await searchParams
+  const back = resolveBack(return_to, '/suppliers/advances', 'Supplier Advances')
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -30,11 +31,15 @@ export default async function NewSupplierAdvancePage({
         title="New Supplier Advance"
         subtitle="Record an advance payment to a supplier"
         actions={
-          <BackButton fallbackHref="/suppliers/advances" label="Back" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6 max-w-xl">
-        <NewSupplierAdvanceForm suppliers={suppliers} defaultSupplierId={supplier_id} />
+        <NewSupplierAdvanceForm
+          suppliers={suppliers}
+          defaultSupplierId={supplier_id}
+          returnTo={back.href}
+        />
       </div>
     </div>
   )

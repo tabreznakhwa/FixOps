@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertCircle, Search, X } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { safeReturnTo } from '@/lib/backNav'
 
 interface Customer {
   id: string
@@ -27,7 +28,7 @@ interface Props {
   prefilledCustomerName: string
   prefilledInvoiceId: string
   prefilledAmount: string
-  returnTo?: string
+  returnTo: string
 }
 
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
@@ -55,6 +56,7 @@ export function NewPaymentForm({
   returnTo,
 }: Props) {
   const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/finance/payments'
   const [customerId, setCustomerId] = useState(prefilledCustomerId)
   const [customerName, setCustomerName] = useState(prefilledCustomerName)
   const [searchQuery, setSearchQuery] = useState('')
@@ -211,7 +213,7 @@ export function NewPaymentForm({
       // form must not stay in the history stack — otherwise Back lands the user
       // right back on the completed form. refresh() re-fetches the destination
       // so invoice balances reflect the payment just taken.
-      router.replace(returnTo ?? '/finance/payments')
+      router.replace(destination)
       router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -408,10 +410,13 @@ export function NewPaymentForm({
           className="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed">
           {loading ? 'Recording…' : selectedInvoiceIds.length > 1 ? `Record Payment (${selectedInvoiceIds.length})` : 'Record Payment'}
         </button>
-        <a href={returnTo ?? '/finance/payments'}
-          className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
+          className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
+        >
           Cancel
-        </a>
+        </button>
       </div>
     </form>
   )

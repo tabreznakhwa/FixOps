@@ -1,12 +1,16 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { safeReturnTo, withReturnTo } from '@/lib/backNav'
 
 const inputClass =
   'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
-export function NewInventoryItemForm() {
+export function NewInventoryItemForm({ returnTo }: { returnTo: string }) {
+  const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/inventory'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -46,7 +50,8 @@ export function NewInventoryItemForm() {
         setLoading(false)
         return
       }
-      window.location.href = `/inventory/${data.id}`
+      router.replace(withReturnTo(`/inventory/${data.id}`, destination))
+      router.refresh()
     } catch {
       setError('Network error. Please try again.')
       setLoading(false)
@@ -144,9 +149,13 @@ export function NewInventoryItemForm() {
         >
           {loading ? 'Adding…' : 'Add Item'}
         </button>
-        <a href="/inventory" className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors">
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
+          className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+        >
           Cancel
-        </a>
+        </button>
       </div>
     </form>
   )

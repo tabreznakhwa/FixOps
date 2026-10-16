@@ -156,7 +156,7 @@ export function LeaveApplicationsList({
             {initialStatusFilter !== 'pending' && <input type="hidden" name="status" value={initialStatusFilter} />}
             <div className="relative w-full lg:w-72">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input name="q" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee or reason…" className="w-full rounded-lg border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+              <input name="q" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee or reason…" className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
             </div>
             <button type="submit" className="rounded-lg bg-slate-700 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800">Search</button>
           </form>
@@ -275,7 +275,7 @@ export function LeaveApplicationsList({
 
             <div className="mt-4">
               <label className="mb-1.5 block text-xs font-semibold text-slate-600">{reviewing.decision === 'rejected' ? 'Reason for rejection' : 'Admin note (optional)'}</label>
-              <textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} rows={4} maxLength={1000} placeholder={reviewing.decision === 'rejected' ? 'Explain why this application is rejected…' : 'Add a note for the employee…'} className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+              <textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} rows={4} maxLength={1000} placeholder={reviewing.decision === 'rejected' ? 'Explain why this application is rejected…' : 'Add a note for the employee…'} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
             </div>
 
             <div className="mt-5 flex gap-2">

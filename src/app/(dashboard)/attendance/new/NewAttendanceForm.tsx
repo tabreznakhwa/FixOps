@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, dutyHints, DUTY_START, DUTY_END } from '@/lib/attendance'
 import { SickLeaveUsageNote } from '@/components/attendance/SickLeaveUsageNote'
+import { safeReturnTo } from '@/lib/backNav'
 
 interface StaffMember {
   id: string
@@ -17,6 +18,7 @@ interface Props {
   lockedStaffId?: string | null
   isKiosk?: boolean
   dateLockedToToday?: boolean
+  returnTo?: string
 }
 
 const inputClass =
@@ -27,8 +29,9 @@ function fmtHrs(h: number): string {
   return h % 1 === 0 ? `${h}h` : `${h.toFixed(2)}h`
 }
 
-export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToToday }: Props) {
+export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToToday, returnTo }: Props) {
   const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? (isKiosk ? '/my-attendance' : '/attendance')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('present')
@@ -112,7 +115,7 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
         setLoading(false)
         return
       }
-      router.replace(isKiosk ? '/my-attendance' : '/attendance')
+      router.replace(destination)
     } catch {
       setError('Network error. Please try again.')
       setLoading(false)
@@ -416,9 +419,13 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
         >
           {loading ? 'Saving…' : 'Save Attendance'}
         </button>
-        <a href={isKiosk ? '/my-attendance' : '/attendance'} className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors">
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
+          className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+        >
           Cancel
-        </a>
+        </button>
       </div>
     </form>
   )

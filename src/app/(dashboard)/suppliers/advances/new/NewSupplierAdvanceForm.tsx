@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, AlertCircle } from 'lucide-react'
+import { safeReturnTo } from '@/lib/backNav'
 
 interface Supplier {
   id: string
@@ -13,6 +14,7 @@ interface Supplier {
 interface Props {
   suppliers: Supplier[]
   defaultSupplierId?: string
+  returnTo: string
 }
 
 const PAYMENT_MODES = [
@@ -27,8 +29,9 @@ const PAYMENT_MODES = [
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
-export function NewSupplierAdvanceForm({ suppliers, defaultSupplierId }: Props) {
+export function NewSupplierAdvanceForm({ suppliers, defaultSupplierId, returnTo }: Props) {
   const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/suppliers/advances'
   const [supplierId, setSupplierId] = useState(defaultSupplierId ?? '')
   const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }))
   const [amount, setAmount] = useState('')
@@ -61,7 +64,8 @@ export function NewSupplierAdvanceForm({ suppliers, defaultSupplierId }: Props) 
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to record advance')
-      router.push('/suppliers/advances')
+      router.replace(destination)
+      router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to record advance')
       setLoading(false)
@@ -152,14 +156,23 @@ export function NewSupplierAdvanceForm({ suppliers, defaultSupplierId }: Props) 
         />
       </div>
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
-      >
-        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-        {loading ? 'Recording…' : 'Record Advance'}
-      </button>
+      <div className="flex gap-3">
+        <button
+          type="submit"
+          disabled={loading}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          {loading ? 'Recording…' : 'Record Advance'}
+        </button>
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
+          className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
+        >
+          Cancel
+        </button>
+      </div>
     </form>
   )
 }

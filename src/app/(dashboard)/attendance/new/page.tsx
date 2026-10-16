@@ -3,13 +3,17 @@ import { Header } from '@/components/layout/Header'
 import { BackButton } from '@/components/ui/BackButton'
 import { NewAttendanceForm } from './NewAttendanceForm'
 import { redirect } from 'next/navigation'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Mark Attendance' }
 
 export default async function NewAttendancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ locked_staff_id?: string }>
+  searchParams: Promise<{
+    locked_staff_id?: string
+    return_to?: string | string[]
+  }>
 }) {
   const params = await searchParams
   const supabase = await createClient()
@@ -63,18 +67,27 @@ export default async function NewAttendancePage({
   }>
 
   const dateLockedToToday = !['owner', 'admin', 'hr', 'manager'].includes(userRole)
+  const back = resolveBack(
+    params.return_to,
+    isKiosk ? '/my-attendance' : '/attendance',
+    isKiosk ? 'My Attendance' : 'Attendance'
+  )
 
   return (
     <div className="animate-fade-in">
       <Header
         title="Mark Attendance"
         subtitle="Record attendance for a staff member"
-        actions={
-          <BackButton fallbackHref={isKiosk ? '/my-attendance' : '/attendance'} label="Back" />
-        }
+        actions={<BackButton href={back.href} label={back.label} />}
       />
       <div className="p-6">
-        <NewAttendanceForm staff={staff} lockedStaffId={lockedStaffId} isKiosk={isKiosk} dateLockedToToday={dateLockedToToday} />
+        <NewAttendanceForm
+          staff={staff}
+          lockedStaffId={lockedStaffId}
+          isKiosk={isKiosk}
+          dateLockedToToday={dateLockedToToday}
+          returnTo={back.href}
+        />
       </div>
     </div>
   )

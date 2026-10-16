@@ -8,11 +8,18 @@ import { formatCurrency } from '@/lib/utils'
 import { AlertTriangle, TrendingUp, TrendingDown, Package, Wallet } from 'lucide-react'
 import { buildBusinessMetrics } from './businessMetrics'
 import { InsightsClient } from './InsightsClient'
+import { resolveBack } from '@/lib/backNav'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Business Insights' }
 
-export default async function InsightsPage() {
+export default async function InsightsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
+  const sp = await searchParams
+  const back = resolveBack(sp.return_to, '/dashboard', 'Dashboard')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -91,7 +98,7 @@ export default async function InsightsPage() {
         actions={
           <div className="flex items-center gap-2">
             <PrintActions label="Print" />
-            <BackButton fallbackHref="/dashboard" label="Dashboard" />
+            <BackButton href={back.href} label={back.label} />
           </div>
         }
       />

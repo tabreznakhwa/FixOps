@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AlertCircle, AlertTriangle } from 'lucide-react'
 import type { VendorWiseOutstanding } from './vendorWiseOutstanding'
+import { withReturnTo } from '@/lib/backNav'
 
 function IncompleteWarning({ sources }: { sources: string[] }) {
   if (sources.length === 0) return null
@@ -36,7 +37,7 @@ function intDaysClass(d: number): string {
   return 'text-red-800 font-bold'
 }
 
-export function VendorWiseOutstandingTable({ report }: { report: VendorWiseOutstanding }) {
+export function VendorWiseOutstandingTable({ report, returnTo }: { report: VendorWiseOutstanding; returnTo: string }) {
   const { groups, grandTotal, billCount, asOn, restated, failedSources } = report
 
   if (groups.length === 0) {
@@ -96,7 +97,7 @@ export function VendorWiseOutstandingTable({ report }: { report: VendorWiseOutst
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2">
                       {b.href ? (
-                        <Link href={b.href} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
+                        <Link href={withReturnTo(b.href, returnTo)} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
                           {b.billNo}
                         </Link>
                       ) : (

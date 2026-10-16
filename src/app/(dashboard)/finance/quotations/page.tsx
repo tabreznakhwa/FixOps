@@ -8,6 +8,7 @@ import { FileText, Plus, Search, Clock, CheckCircle2, XCircle, Send, RefreshCw }
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { formatCurrency, formatDate, formatStatus, getStatusColor } from '@/lib/utils'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Quotations' }
 
@@ -22,6 +23,7 @@ const statusIcons: Record<string, React.ReactNode> = {
 
 export default async function QuotationsPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; from?: string; to?: string }> }) {
   const params = await searchParams
+  const quotationsPath = currentPath('/finance/quotations', params)
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profileRaw } = user
@@ -77,7 +79,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
             <Suspense fallback={<div className="w-60 h-9 bg-slate-100 rounded-lg animate-pulse" />}>
               <SearchBar basePath="/finance/quotations" placeholder="Search quotation, customer…" />
             </Suspense>
-            <Link href="/finance/quotations/new" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+            <Link href={withReturnTo('/finance/quotations/new', quotationsPath)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
               <Plus className="w-4 h-4" /> New Quotation
             </Link>
           </div>
@@ -149,7 +151,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
                     <td className="px-4 py-3.5 hidden lg:table-cell text-sm text-slate-600">{q.valid_until ? formatDate(q.valid_until) : '—'}</td>
                     <td className="px-4 py-3.5 text-right text-sm font-bold text-slate-900">{formatCurrency(q.total_amount)}</td>
                     <td className="px-4 py-3.5"><span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusColor(q.status)}`}>{statusIcons[q.status]}{formatStatus(q.status)}</span></td>
-                    <td className="px-4 py-3.5 text-right"><Link href={`/finance/quotations/${q.id}`} className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1">View</Link></td>
+                    <td className="px-4 py-3.5 text-right"><Link href={withReturnTo(`/finance/quotations/${q.id}`, quotationsPath)} className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1">View</Link></td>
                   </tr>
                 ))}
               </tbody>

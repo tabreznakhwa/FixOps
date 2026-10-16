@@ -8,7 +8,7 @@ import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatD
 import { ComplaintActions } from './ComplaintActions'
 import { InternalNotes } from './InternalNotes'
 import { BackButton } from '@/components/ui/BackButton'
-import { resolveBack } from '@/lib/backNav'
+import { currentPath, resolveBack, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Complaint Detail' }
 
@@ -30,8 +30,10 @@ export default async function ComplaintDetailPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ return_to?: string }>
 }) {
-  const back = resolveBack((await searchParams).return_to, '/complaints', 'All Complaints')
   const { id } = await params
+  const query = await searchParams
+  const back = resolveBack(query.return_to, '/complaints', 'All Complaints')
+  const complaintPath = currentPath(`/complaints/${id}`, query)
   const supabase = await createClient()
   // Only non-sensitive staff directory fields cross this authorized server page.
   const admin = createAdminClient()
@@ -96,12 +98,12 @@ export default async function ComplaintDetailPage({
         actions={
           <div className="flex items-center gap-2">
             <Link
-              href={`/complaints/${complaint.id}/edit`}
+              href={withReturnTo(`/complaints/${complaint.id}/edit`, complaintPath)}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
             >
               <Edit className="w-4 h-4" /> Edit
             </Link>
-            <BackButton fallbackHref={back.href} label={back.label} />
+            <BackButton href={back.href} label={back.label} />
           </div>
         }
       />
@@ -205,7 +207,7 @@ export default async function ComplaintDetailPage({
                   <Link
                     key={wo.id}
                     prefetch={false}
-                    href={`/work-orders/${wo.id}?complaint_id=${complaint.id}`}
+                    href={withReturnTo(`/work-orders/${wo.id}?complaint_id=${complaint.id}`, complaintPath)}
                     className="flex items-center justify-between p-3 bg-slate-50 hover:bg-blue-50 rounded-lg transition group border border-slate-200"
                   >
                     <div>
@@ -307,7 +309,7 @@ export default async function ComplaintDetailPage({
                 <ClipboardList className="w-4 h-4 text-slate-500" /> Work Orders
               </h2>
               <Link
-                href={`/work-orders/new?complaint_id=${complaint.id}`}
+                href={withReturnTo(`/work-orders/new?complaint_id=${complaint.id}`, complaintPath)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition"
               >
                 <Plus className="w-3.5 h-3.5" /> Create WO
@@ -321,7 +323,7 @@ export default async function ComplaintDetailPage({
                   <Link
                     key={wo.id}
                     prefetch={false}
-                    href={`/work-orders/${wo.id}?complaint_id=${complaint.id}`}
+                    href={withReturnTo(`/work-orders/${wo.id}?complaint_id=${complaint.id}`, complaintPath)}
                     className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-blue-50 rounded-lg transition group"
                   >
                     <span className="text-sm font-mono font-semibold text-slate-700 group-hover:text-blue-700">

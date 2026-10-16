@@ -1,16 +1,24 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Loader2, AlertCircle, ChevronDown } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
+import { resolveBack } from '@/lib/backNav'
 
 const DEPARTMENTS = ['Operations', 'Technical', 'Administration', 'Finance', 'HR', 'Store', 'Sales']
 
-export default function NewStaffPage() {
+function NewStaffForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const returnToValues = searchParams.getAll('return_to')
+  const back = resolveBack(
+    returnToValues.length === 1 ? returnToValues[0] : null,
+    '/staff',
+    'Staff',
+  )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({
@@ -61,7 +69,7 @@ export default function NewStaffPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      router.push('/staff')
+      router.replace(back.href)
       router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to add staff member')
@@ -80,7 +88,7 @@ export default function NewStaffPage() {
         title="Add Staff Member"
         subtitle="Create a new employee record"
         actions={
-          <BackButton fallbackHref="/staff" label="Back" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
 
@@ -207,7 +215,7 @@ export default function NewStaffPage() {
           </div>
 
           <div className="flex items-center justify-end gap-3 pb-6">
-            <button type="button" onClick={() => router.back()} className="px-5 py-2.5 border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition">
+            <button type="button" onClick={() => router.replace(back.href)} className="px-5 py-2.5 border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition">
               Cancel
             </button>
             <button type="submit" disabled={submitting} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 transition">
@@ -217,5 +225,13 @@ export default function NewStaffPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function NewStaffPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewStaffForm />
+    </Suspense>
   )
 }

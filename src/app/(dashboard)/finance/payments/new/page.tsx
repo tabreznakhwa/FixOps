@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { NewPaymentForm } from './NewPaymentForm'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Record Payment' }
 
@@ -13,6 +13,7 @@ export default async function NewPaymentPage({
 }) {
   const params = await searchParams
   const supabase = await createClient()
+  const back = resolveBack(params.return_to, '/finance/payments', 'Payments')
 
   // Fetch invoice first to get customer_id
   let prefilledInvoice: {
@@ -60,7 +61,7 @@ export default async function NewPaymentPage({
         title="Record Payment"
         subtitle="Record a customer payment receipt"
         actions={
-          <BackButton fallbackHref={params.return_to ?? '/finance/payments'} label="Back" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6">
@@ -70,7 +71,7 @@ export default async function NewPaymentPage({
           prefilledCustomerName={prefilledCustomerName}
           prefilledInvoiceId={params.invoice_id ?? ''}
           prefilledAmount={params.amount ?? (prefilledInvoice ? String(prefilledInvoice.balance_due) : '')}
-          returnTo={params.return_to}
+          returnTo={back.href}
         />
       </div>
     </div>

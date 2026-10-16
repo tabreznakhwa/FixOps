@@ -1,6 +1,10 @@
+'use client'
+
 import Link from 'next/link'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime } from '@/lib/utils'
 import { ArrowRight } from 'lucide-react'
+import { withReturnTo } from '@/lib/backNav'
+import { useCurrentPath } from '@/lib/backNav.client'
 
 interface Complaint {
   id: string
@@ -13,6 +17,8 @@ interface Complaint {
 }
 
 export function RecentComplaints({ complaints }: { complaints: Complaint[] }) {
+  const dashboardPath = useCurrentPath()
+
   return (
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
@@ -30,7 +36,7 @@ export function RecentComplaints({ complaints }: { complaints: Complaint[] }) {
       ) : (
         <div className="divide-y divide-slate-50">
           {complaints.map((c) => (
-            <Link key={c.id} href={`/complaints/${c.id}`} className="flex items-start gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors group">
+            <Link key={c.id} href={withReturnTo(`/complaints/${c.id}`, dashboardPath)} className="flex items-start gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors group">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xs font-mono text-slate-400">{c.complaint_number}</span>

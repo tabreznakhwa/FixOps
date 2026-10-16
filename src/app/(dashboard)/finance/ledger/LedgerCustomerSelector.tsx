@@ -59,12 +59,12 @@ export function LedgerCustomerSelector({ customers, selectedId, fromDate, toDate
     if (localCustomerId) params.set('customer_id', localCustomerId)
     if (from) params.set('from_date', from)
     if (to) params.set('to_date', to)
-    router.push(`?${params.toString()}`)
+    router.replace(`?${params.toString()}`)
   }
 
   const clearCustomer = () => {
     setLocalCustomerId('')
-    router.push('?')
+    router.replace('?')
   }
 
   function applyPreset(preset: string) {
@@ -232,7 +232,7 @@ export function LedgerCustomerSelector({ customers, selectedId, fromDate, toDate
           {fromDate && <span className="bg-slate-100 px-2 py-0.5 rounded-full">From {fromDate}</span>}
           {toDate && <span className="bg-slate-100 px-2 py-0.5 rounded-full">To {toDate}</span>}
           <button
-            onClick={() => { setLocalFrom(''); setLocalTo(''); router.push(`?customer_id=${selectedId}`) }}
+            onClick={() => { setLocalFrom(''); setLocalTo(''); router.replace(`?customer_id=${selectedId}`) }}
             className="text-blue-500 hover:text-blue-700 underline"
           >
             Clear dates

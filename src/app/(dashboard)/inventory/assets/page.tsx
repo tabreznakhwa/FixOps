@@ -22,6 +22,7 @@ import {
   type AssetStatus,
   type AssetCondition,
 } from '@/lib/assets'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Company Assets' }
 
@@ -54,6 +55,7 @@ export default async function AssetsPage({
 }) {
   const params = await searchParams
   const supabase = await createClient()
+  const assetsPath = currentPath('/inventory/assets', params)
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -176,7 +178,7 @@ export default async function AssetsPage({
             <RefreshButton />
             {canEditAssets(profile.role) && (
               <Link
-                href="/inventory/assets/new"
+                href={withReturnTo('/inventory/assets/new', assetsPath)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Plus className="w-4 h-4" /> Record Asset
@@ -226,7 +228,7 @@ export default async function AssetsPage({
             <p className="text-slate-400 text-sm mt-1">Record a fixed asset and its linked purchase expense</p>
             {canEditAssets(profile.role) && (
               <Link
-                href="/inventory/assets/new"
+                href={withReturnTo('/inventory/assets/new', assetsPath)}
                 className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Plus className="w-4 h-4" /> Record Asset
@@ -252,7 +254,7 @@ export default async function AssetsPage({
                   {withBookValue.map(({ asset, bookValue }) => (
                     <tr key={asset.id} className="hover:bg-slate-50 transition-colors group">
                       <td className="px-5 py-3.5">
-                        <Link href={`/inventory/assets/${asset.id}`} className="block">
+                        <Link href={withReturnTo(`/inventory/assets/${asset.id}`, assetsPath)} className="block">
                           <p className="text-sm font-semibold text-slate-800 group-hover:text-blue-700 transition-colors">{asset.asset_name}</p>
                           <p className="text-xs text-slate-400 font-mono">{asset.asset_code}</p>
                           {asset.serial_number && <p className="text-xs text-slate-500">S/N {asset.serial_number}</p>}
@@ -288,7 +290,7 @@ export default async function AssetsPage({
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <Link
-                          href={`/inventory/assets/${asset.id}`}
+                          href={withReturnTo(`/inventory/assets/${asset.id}`, assetsPath)}
                           className="text-xs text-blue-600 hover:text-blue-700 font-medium opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           View →

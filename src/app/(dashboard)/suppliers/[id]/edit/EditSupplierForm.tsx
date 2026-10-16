@@ -1,9 +1,10 @@
 'use client'
 
 import { useActionState } from 'react'
+import { useRouter } from 'next/navigation'
 import { updateSupplier } from '../../actions'
-import Link from 'next/link'
 import { Loader2, AlertCircle } from 'lucide-react'
+import { safeReturnTo } from '@/lib/backNav'
 
 const inputCls = 'w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500'
 const labelCls = 'block text-sm font-medium text-slate-700 mb-1.5'
@@ -14,12 +15,15 @@ interface Supplier {
   address: string | null; payment_terms: number; notes: string | null; status: string;
 }
 
-export function EditSupplierForm({ supplier }: { supplier: Supplier }) {
+export function EditSupplierForm({ supplier, returnTo }: { supplier: Supplier; returnTo: string }) {
+  const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? `/suppliers/${supplier.id}`
   const [state, action, pending] = useActionState(updateSupplier, null)
 
   return (
     <form action={action} className="space-y-6">
       <input type="hidden" name="id" value={supplier.id} />
+      <input type="hidden" name="return_to" value={destination} />
 
       {state?.error && (
         <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
@@ -93,10 +97,13 @@ export function EditSupplierForm({ supplier }: { supplier: Supplier }) {
           className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors">
           {pending ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : 'Save Changes'}
         </button>
-        <Link href={`/suppliers/${supplier.id}`}
-          className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors">
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
+          className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+        >
           Cancel
-        </Link>
+        </button>
       </div>
     </form>
   )

@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, Search, CheckSquare, Square, AlertCircle } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { safeReturnTo, withReturnTo } from '@/lib/backNav'
 
 interface Customer {
   id: string
@@ -25,11 +26,17 @@ interface Invoice {
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
-export function MergeInvoiceForm({ customers }: { customers: Customer[] }) {
+export function MergeInvoiceForm({
+  customers,
+  returnTo,
+}: {
+  customers: Customer[]
+  returnTo: string
+}) {
   const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/finance/invoices'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
 
   // Customer selector
   const [customerSearch, setCustomerSearch] = useState('')
@@ -127,8 +134,8 @@ export function MergeInvoiceForm({ customers }: { customers: Customer[] }) {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Failed to merge invoices'); setLoading(false); return }
-      setSuccess(`Invoice ${data.invoice_number} created successfully. Source invoices have been cancelled.`)
-      setTimeout(() => router.push(`/finance/invoices/${data.id}`), 1500)
+      router.replace(withReturnTo(`/finance/invoices/${data.id}`, destination))
+      router.refresh()
     } catch {
       setError('Network error. Please try again.')
       setLoading(false)
@@ -143,12 +150,6 @@ export function MergeInvoiceForm({ customers }: { customers: Customer[] }) {
           {error}
         </div>
       )}
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm">
-          {success}
-        </div>
-      )}
-
       {/* Step 1: Select Customer */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
         <h2 className="font-semibold text-slate-900">Step 1 — Select Customer</h2>

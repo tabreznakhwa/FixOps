@@ -1,18 +1,36 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { NewInvoiceForm } from './NewInvoiceForm'
 import { fetchAllCustomers } from '@/lib/customers'
+import { resolveBackWithLegacy } from '@/lib/backNav'
 
 export const metadata = { title: 'New Invoice' }
 
 export default async function NewInvoicePage({
   searchParams,
 }: {
-  searchParams: Promise<{ work_order_id?: string }>
+  searchParams: Promise<{
+    work_order_id?: string | string[]
+    return_to?: string | string[]
+  }>
 }) {
   const params = await searchParams
+  const initialWorkOrderId = typeof params.work_order_id === 'string'
+    ? params.work_order_id
+    : undefined
+  const back = resolveBackWithLegacy({
+    returnTo: params.return_to,
+    legacy: [
+      {
+        when: params.work_order_id,
+        href: initialWorkOrderId ? `/work-orders/${initialWorkOrderId}` : '',
+        label: 'Work Order',
+      },
+    ],
+    fallbackHref: '/finance/invoices',
+    fallbackLabel: 'Invoices',
+  })
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -109,12 +127,19 @@ export default async function NewInvoicePage({
         title="New Invoice"
         subtitle="Create a new invoice"
         actions={
-          <BackButton fallbackHref={params.work_order_id ? `/work-orders/${params.work_order_id}` : '/finance/invoices'} label="Back" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
 
       <div className="p-6">
-        <NewInvoiceForm customers={customers} workOrders={workOrdersWithItems} inventoryItems={inventoryItems} customServices={customServices} initialWorkOrderId={params.work_order_id} />
+        <NewInvoiceForm
+          customers={customers}
+          workOrders={workOrdersWithItems}
+          inventoryItems={inventoryItems}
+          customServices={customServices}
+          initialWorkOrderId={initialWorkOrderId}
+          returnTo={back.href}
+        />
       </div>
     </div>
   )

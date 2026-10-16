@@ -5,6 +5,7 @@ import { ShoppingCart, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Purchase Invoice Register' }
 
@@ -22,6 +23,7 @@ export default async function PurchaseRegisterPage({
   searchParams: Promise<{ from?: string; to?: string; supplier?: string }>
 }) {
   const params = await searchParams
+  const purchaseRegisterPath = currentPath('/suppliers/purchase-register', params)
   const supabase = await createClient()
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
@@ -64,7 +66,7 @@ export default async function PurchaseRegisterPage({
       <Header title="Purchase Invoice Register" subtitle="All purchase orders and invoices from suppliers"
         actions={
           <div className="flex items-center gap-2 print:hidden">
-            <Link href="/suppliers/po/new?return_to=%2Fsuppliers%2Fpurchase-register" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+            <Link href={withReturnTo('/suppliers/po/new', purchaseRegisterPath)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
               <Plus className="w-4 h-4" /> New Purchase Order
             </Link>
             <PrintActions />
@@ -83,6 +85,7 @@ export default async function PurchaseRegisterPage({
             <input type="date" name="to" defaultValue={to}
               className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
+          {params.supplier && <input type="hidden" name="supplier" value={params.supplier} />}
           <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
             Apply
           </button>
@@ -130,7 +133,7 @@ export default async function PurchaseRegisterPage({
                   {pos.map((po) => (
                     <tr key={po.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-5 py-3">
-                        <Link href={`/suppliers/po/${po.id}`} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
+                        <Link href={withReturnTo(`/suppliers/po/${po.id}`, purchaseRegisterPath)} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
                           {po.po_number}
                         </Link>
                       </td>

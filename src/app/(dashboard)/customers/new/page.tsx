@@ -44,7 +44,7 @@ function NewCustomerPageInner() {
         title="Add Customer"
         subtitle="Create a new customer record"
         actions={
-          <BackButton fallbackHref={backHref} label={backLabel} />
+          <BackButton href={backHref} label={backLabel} />
         }
       />
 
@@ -300,7 +300,7 @@ function NewCustomerPageInner() {
               {pending ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : 'Save Customer'}
             </button>
             <Link
-              href="/customers"
+              href={backHref}
               className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors"
             >
               Cancel

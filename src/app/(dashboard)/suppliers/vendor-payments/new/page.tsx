@@ -1,17 +1,19 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { BackButton } from '@/components/ui/BackButton'
-import Link from 'next/link'
 import { VendorPaymentForm } from './VendorPaymentForm'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Record Vendor Payment' }
 
 export default async function NewVendorPaymentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ po?: string }>
+  searchParams: Promise<{ po?: string; return_to?: string }>
 }) {
-  const { po: poId } = await searchParams
+  const params = await searchParams
+  const poId = params.po
+  const back = resolveBack(params.return_to, '/suppliers/vendor-payments', 'Vendor Payments')
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -27,11 +29,11 @@ export default async function NewVendorPaymentPage({
   const suppliers = (suppliersRaw ?? []) as Array<{ id: string; supplier_name: string; supplier_code: string }>
 
   // Pre-fetch PO details if coming from a specific PO
-  let defaultPO: { id: string; po_number: string; supplier_id: string; balance_due: number } | null = null
+  let defaultPO: { id: string; po_number: string; supplier_id: string; balance_due: number; total_amount: number } | null = null
   if (poId) {
     const { data: poRaw } = await (supabase as any)
       .from('purchase_orders')
-      .select('id, po_number, supplier_id, balance_due')
+      .select('id, po_number, supplier_id, balance_due, total_amount')
       .eq('id', poId)
       .single()
     defaultPO = poRaw ?? null
@@ -48,6 +50,7 @@ export default async function NewVendorPaymentPage({
   const openPOs = (openPOsRaw ?? []) as Array<{
     id: string; po_number: string; supplier_id: string; balance_due: number; total_amount: number
   }>
+  if (defaultPO && !openPOs.some((po) => po.id === defaultPO!.id)) openPOs.unshift(defaultPO)
 
   // Fetch open purchase invoices (credit, with balance due) for the invoice checklist
   // Uses admin client: purchase_invoices only has service_role grants, not anon/authenticated
@@ -83,11 +86,11 @@ export default async function NewVendorPaymentPage({
         title="Record Vendor Payment"
         subtitle="Record a payment made to a supplier"
         actions={
-          <BackButton fallbackHref="/suppliers/vendor-payments" label="Back" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6 max-w-xl">
-        <VendorPaymentForm suppliers={suppliers} openPOs={openPOs} defaultPO={defaultPO} openInvoices={openInvoices} openPayables={openPayables} />
+        <VendorPaymentForm suppliers={suppliers} openPOs={openPOs} defaultPO={defaultPO} openInvoices={openInvoices} openPayables={openPayables} returnTo={back.href} />
       </div>
     </div>
   )

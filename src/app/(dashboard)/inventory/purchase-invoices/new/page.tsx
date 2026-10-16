@@ -1,12 +1,18 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { NewPurchaseInvoiceForm } from './NewPurchaseInvoiceForm'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'New Purchase Invoice' }
 
-export default async function NewPurchaseInvoicePage() {
+export default async function NewPurchaseInvoicePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return_to?: string }>
+}) {
+  const { return_to } = await searchParams
+  const back = resolveBack(return_to, '/inventory/purchase-invoices', 'Purchase Invoices')
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -40,11 +46,11 @@ export default async function NewPurchaseInvoicePage() {
         title="New Purchase Invoice"
         subtitle="Record a purchase and update inventory"
         actions={
-          <BackButton fallbackHref="/inventory/purchase-invoices" label="Back" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6">
-        <NewPurchaseInvoiceForm suppliers={suppliers} inventoryItems={inventoryItems} />
+        <NewPurchaseInvoiceForm suppliers={suppliers} inventoryItems={inventoryItems} returnTo={back.href} />
       </div>
     </div>
   )

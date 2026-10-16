@@ -24,7 +24,13 @@ interface Customer {
   payment_terms: number; credit_limit: number; notes: string | null; status: string;
 }
 
-export function EditCustomerForm({ customer }: { customer: Customer }) {
+export function EditCustomerForm({
+  customer,
+  destination,
+}: {
+  customer: Customer
+  destination: string
+}) {
   const [state, action, pending] = useActionState(updateCustomer, null)
   const [customerType, setCustomerType] = useState(customer.customer_type)
 
@@ -34,6 +40,7 @@ export function EditCustomerForm({ customer }: { customer: Customer }) {
   return (
     <form action={action} className="space-y-6">
       <input type="hidden" name="id" value={customer.id} />
+      <input type="hidden" name="return_to" value={destination} />
 
       {state?.error && (
         <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
@@ -194,7 +201,7 @@ export function EditCustomerForm({ customer }: { customer: Customer }) {
           className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors">
           {pending ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : 'Save Changes'}
         </button>
-        <Link href={`/customers/${customer.id}`}
+        <Link href={destination}
           className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors">
           Cancel
         </Link>

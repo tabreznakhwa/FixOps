@@ -1,14 +1,22 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { EditPurchaseInvoiceForm } from './EditPurchaseInvoiceForm'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Edit Purchase Invoice' }
 
-export default async function EditPurchaseInvoicePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditPurchaseInvoicePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string }>
+}) {
   const { id } = await params
+  const { return_to } = await searchParams
+  const destination = resolveBack(return_to, `/inventory/purchase-invoices/${id}`, 'Purchase Invoice')
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -50,7 +58,7 @@ export default async function EditPurchaseInvoicePage({ params }: { params: Prom
         title={`Edit ${invoice.invoice_number}`}
         subtitle={`Supplier: ${supplierDisplay}`}
         actions={
-          <BackButton fallbackHref={`/inventory/purchase-invoices/${id}`} label="Cancel" />
+          <BackButton href={destination.href} label="Cancel" />
         }
       />
       <div className="p-6 max-w-xl">
@@ -58,7 +66,7 @@ export default async function EditPurchaseInvoicePage({ params }: { params: Prom
           <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-5">
             Items and totals cannot be changed after creation. Use the Notes field to document the reason for any corrections.
           </p>
-          <EditPurchaseInvoiceForm invoice={invoice} suppliers={suppliers} />
+          <EditPurchaseInvoiceForm invoice={invoice} suppliers={suppliers} successHref={destination.href} />
         </div>
       </div>
     </div>

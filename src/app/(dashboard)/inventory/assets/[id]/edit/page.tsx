@@ -5,10 +5,18 @@ import { redirect, notFound } from 'next/navigation'
 import { canEditAssets } from '@/lib/assets'
 import { fetchAllActiveAssetStaff, fetchAllActiveAssetSuppliers } from '@/lib/assets.server'
 import { AssetForm, type AssetInitial } from '../../AssetForm'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Edit Asset' }
 
-export default async function EditAssetPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditAssetPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string }>
+}) {
+  const { return_to } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -25,6 +33,7 @@ export default async function EditAssetPage({ params }: { params: Promise<{ id: 
   if (!canEditAssets(profile.role)) redirect('/dashboard?error=unauthorized')
 
   const { id } = await params
+  const detail = resolveBack(return_to, `/inventory/assets/${id}`, 'Asset')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any
@@ -58,10 +67,10 @@ export default async function EditAssetPage({ params }: { params: Promise<{ id: 
       <Header
         title="Edit Asset"
         subtitle={asset.asset_name}
-        actions={<BackButton fallbackHref={`/inventory/assets/${asset.id}`} label="Back" />}
+        actions={<BackButton href={detail.href} label="Cancel" />}
       />
       <div className="p-6">
-        <AssetForm suppliers={suppliers} staff={staff} initial={asset} />
+        <AssetForm suppliers={suppliers} staff={staff} initial={asset} cancelHref={detail.href} returnTo={detail.href} />
       </div>
     </div>
   )

@@ -3,6 +3,8 @@
 import { useActionState, useState, useEffect, useRef } from 'react'
 import { createComplaint } from '@/app/(dashboard)/complaints/actions'
 import { Loader2, AlertCircle, Search, UserPlus, Pencil, X } from 'lucide-react'
+import Link from 'next/link'
+import { withReturnTo } from '@/lib/backNav'
 
 const SERVICE_CATEGORIES = [
   { value: 'ac_maintenance', label: '❄️ AC Maintenance' },
@@ -270,15 +272,23 @@ function QuickAddCustomerModal({
 
 interface Props {
   technicians: { id: string; full_name: string }[]
+  initialCustomer: Customer | null
+  destination: string
+  complaintCreatePath: string
 }
 
-export function NewComplaintForm({ technicians }: Props) {
+export function NewComplaintForm({
+  technicians,
+  initialCustomer,
+  destination,
+  complaintCreatePath,
+}: Props) {
   const [state, action, pending] = useActionState(createComplaint, null)
   const [priority, setPriority] = useState('medium')
   const [source, setSource] = useState('admin_entry')
   const [categories, setCategories] = useState<string[]>([])
   const [customerSearch, setCustomerSearch] = useState('')
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(initialCustomer)
   const [showDropdown, setShowDropdown] = useState(false)
   const [searchResults, setSearchResults] = useState<Customer[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
@@ -325,6 +335,7 @@ export function NewComplaintForm({ technicians }: Props) {
       />
     )}
     <form action={action} className="space-y-6">
+      <input type="hidden" name="return_to" value={destination} />
       {state?.error && (
         <div ref={errorRef} className="flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -349,12 +360,12 @@ export function NewComplaintForm({ technicians }: Props) {
                 {selectedCustomer.mobile_number && <p className="text-xs text-slate-500">{selectedCustomer.mobile_number}</p>}
               </div>
               <div className="flex items-center gap-2">
-                <a
-                  href={`/customers/${selectedCustomer.id}/edit`}
+                <Link
+                  href={withReturnTo(`/customers/${selectedCustomer.id}/edit`, complaintCreatePath)}
                   className="flex items-center gap-1 text-xs font-semibold text-slate-600 border border-slate-200 bg-white rounded-lg px-2.5 py-1.5 hover:bg-slate-50 transition-colors"
                 >
                   <Pencil className="w-3 h-3" /> Edit
-                </a>
+                </Link>
                 <button
                   type="button"
                   onClick={() => { setSelectedCustomer(null); setCustomerSearch(''); setSearchResults([]) }}
@@ -573,9 +584,9 @@ export function NewComplaintForm({ technicians }: Props) {
           >
             {pending ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : 'Log Complaint'}
           </button>
-          <a href="/complaints" className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors">
+          <Link href={destination} className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors">
             Cancel
-          </a>
+          </Link>
         </div>
       </div>
     </form>

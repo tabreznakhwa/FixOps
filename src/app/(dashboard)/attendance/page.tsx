@@ -9,6 +9,7 @@ import { isFriday, nowInKuwait } from '@/lib/attendance'
 import { StaffFilterSelect } from './StaffFilterSelect'
 import { MarkAbsentButton } from './MarkAbsentButton'
 import { redirect } from 'next/navigation'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Attendance' }
 
@@ -64,6 +65,8 @@ export default async function AttendancePage({
   }>
 }) {
   const params = await searchParams
+  const attendancePath = currentPath('/attendance', params)
+  const newAttendanceHref = withReturnTo('/attendance/new', attendancePath)
   const today = nowInKuwait()
   const pad = (n: number) => String(n).padStart(2, '0')
   const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
@@ -283,7 +286,7 @@ export default async function AttendancePage({
           <div className="flex items-center gap-2">
             <RefreshButton />
             <Link
-              href="/attendance/new"
+              href={newAttendanceHref}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" /> Mark Attendance
@@ -452,7 +455,7 @@ export default async function AttendancePage({
             )}
             {totalRecords === 0 && (
               <Link
-                href="/attendance/new"
+                href={newAttendanceHref}
                 className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Plus className="w-4 h-4" /> Mark Attendance
@@ -527,7 +530,7 @@ export default async function AttendancePage({
                           <span className="text-xs font-medium text-slate-400" title="This row is controlled by an approved leave application">Managed leave</span>
                         ) : (
                           <div className="flex items-center gap-3">
-                            <Link href={`/attendance/${r.id}/edit`}
+                            <Link href={withReturnTo(`/attendance/${r.id}/edit`, attendancePath)}
                               className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
                               <Pencil className="w-3.5 h-3.5" /> Edit
                             </Link>

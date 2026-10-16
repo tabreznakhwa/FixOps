@@ -5,6 +5,7 @@ import { formatCurrency } from '@/lib/utils'
 import { BarChart3, Users, Clock, BookOpen } from 'lucide-react'
 import { WPSExportButton } from './WPSExportButton'
 import Link from 'next/link'
+import { withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Payroll' }
 
@@ -62,7 +63,7 @@ export default async function PayrollPage() {
         actions={
           <div className="flex items-center gap-2">
             <RefreshButton />
-            <Link href="/payroll/guide"
+            <Link href={withReturnTo('/payroll/guide', '/payroll')}
               className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition">
               <BookOpen className="w-4 h-4" /> User Guide
             </Link>

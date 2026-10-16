@@ -5,10 +5,17 @@ import { redirect } from 'next/navigation'
 import { canEditAssets } from '@/lib/assets'
 import { fetchAllActiveAssetStaff, fetchAllActiveAssetSuppliers } from '@/lib/assets.server'
 import { AssetForm } from '../AssetForm'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Record Asset' }
 
-export default async function NewAssetPage() {
+export default async function NewAssetPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return_to?: string }>
+}) {
+  const { return_to } = await searchParams
+  const back = resolveBack(return_to, '/inventory/assets', 'Company Assets')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -46,10 +53,10 @@ export default async function NewAssetPage() {
       <Header
         title="Record Asset"
         subtitle="Add a fixed asset and its linked capital expense"
-        actions={<BackButton fallbackHref="/inventory/assets" label="Back" />}
+        actions={<BackButton href={back.href} label={back.label} />}
       />
       <div className="p-6">
-        <AssetForm suppliers={suppliers} staff={staff} />
+        <AssetForm suppliers={suppliers} staff={staff} cancelHref={back.href} returnTo={back.href} />
       </div>
     </div>
   )

@@ -10,6 +10,7 @@ import { PrintActions } from '@/components/print/PrintActions'
 import { InvoiceDateEditor } from './InvoiceDateEditor'
 import { InvoiceWorkOrderEditor } from './InvoiceWorkOrderEditor'
 import { InvoicePrintTemplate } from '@/components/print/InvoicePrintTemplate'
+import { currentPath, resolveBackWithLegacy, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Invoice Detail' }
 
@@ -21,7 +22,8 @@ export default async function InvoiceDetailPage({
   searchParams: Promise<{ work_order_id?: string; complaint_id?: string; return_to?: string }>
 }) {
   const { id } = await params
-  const { work_order_id, complaint_id, return_to } = await searchParams
+  const query = await searchParams
+  const { work_order_id, complaint_id, return_to } = query
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -141,42 +143,27 @@ export default async function InvoiceDetailPage({
   const workOrder = invoice.work_orders
   const createdBy = invoice.users
 
-  // For DISPLAY and contextual links only (the "Linked Work Order" panel and the
-  // "Back to Work Order" action). Falls back to the FK on the invoice, so it says
-  // nothing about where the user came from — never use it to pick a Back destination.
-  const resolvedWorkOrderId: string | undefined = work_order_id ?? (invoiceRaw as any).work_order_id ?? undefined
+  // Preserve this exact page (including its own parent origin) for every child
+  // route. Each child returns one immediate hop rather than flattening ancestry.
+  const invoicePath = currentPath(`/finance/invoices/${id}`, query)
+  const editHref = withReturnTo(`/finance/invoices/${id}/edit`, invoicePath)
+  const paymentHref = withReturnTo(
+    `/finance/payments/new?invoice_id=${encodeURIComponent(invoice.id)}&customer_id=${encodeURIComponent(customerId)}`,
+    invoicePath,
+  )
 
-  // Where the payment form should send the user back AFTER recording payment.
-  // Only use WO/complaint if the user explicitly navigated here from those pages
-  // (URL param set), not just because the invoice happens to have a linked WO.
-  const paymentReturnTo = complaint_id
-    ? `/complaints/${complaint_id}`
-    : work_order_id
-    ? `/work-orders/${work_order_id}`
-    : `/finance/invoices/${id}`
-
-  // Back destination = the route the user actually took. return_to wins, then the
-  // work_order_id/complaint_id set by whichever page linked here, then this
-  // module's own list. Never resolvedWorkOrderId — that falls back to the
-  // invoice's own FK and would send someone arriving from the list to a work
-  // order they never visited.
-  const backHref = return_to
-    ?? (complaint_id ? `/complaints/${complaint_id}`
-      : work_order_id ? `/work-orders/${work_order_id}`
-      : '/finance/invoices')
-
-  // Label is derived from the same value, so the button can never name one
-  // destination while navigating to another.
-  const backLabel = return_to
-    ? (return_to.startsWith('/finance/receivables') ? 'Receivables'
-      : return_to.startsWith('/finance/payments') ? 'Payment'
-      : return_to.startsWith('/work-orders') ? 'Work Order'
-      : return_to.startsWith('/complaints') ? 'Complaint'
-      : return_to.startsWith('/finance/invoices') ? 'Invoices'
-      : 'Back')
-    : complaint_id ? 'Complaint'
-    : work_order_id ? 'Work Order'
-    : 'Invoices'
+  // Explicit origin wins. Relationship parameters only support older links, and
+  // Work Order deliberately precedes Complaint because it is the immediate hop
+  // in Complaint → Work Order → Invoice chains.
+  const back = resolveBackWithLegacy({
+    returnTo: return_to,
+    legacy: [
+      { when: work_order_id, href: `/work-orders/${work_order_id}`, label: 'Work Order' },
+      { when: complaint_id, href: `/complaints/${complaint_id}`, label: 'Complaint' },
+    ],
+    fallbackHref: '/finance/invoices',
+    fallbackLabel: 'Invoices',
+  })
 
   return (
     <div className="animate-fade-in">
@@ -195,14 +182,14 @@ export default async function InvoiceDetailPage({
           <div className="flex items-center gap-2">
             {canEdit && (
               <Link
-                href={`/finance/invoices/${id}/edit`}
+                href={editHref}
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
               >
                 <Edit className="w-4 h-4" /> Edit
               </Link>
             )}
             <PrintActions label="Print Invoice" />
-            <BackButton fallbackHref={backHref} label={backLabel} />
+            <BackButton href={back.href} label={back.label} />
           </div>
         }
       />
@@ -480,11 +467,8 @@ export default async function InvoiceDetailPage({
               invoiceId={invoice.id}
               currentStatus={invoice.status}
               balanceDue={invoice.balance_due}
-              customerId={customer ? (invoiceRaw as any).customer_id : ''}
               advances={customerAdvances}
-              workOrderId={resolvedWorkOrderId}
-              complaintId={complaint_id}
-              paymentReturnTo={paymentReturnTo}
+              paymentHref={paymentHref}
             />
           </div>
         </div>

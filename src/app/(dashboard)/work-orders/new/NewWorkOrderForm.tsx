@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, AlertCircle, ChevronDown, X } from 'lucide-react'
+import { safeReturnTo, withReturnTo } from '@/lib/backNav'
 
 const PRIORITIES = ['low', 'medium', 'high', 'emergency'] as const
 const SERVICE_CATEGORIES = [
@@ -103,10 +104,12 @@ interface Props {
   technicians: Person[]
   complaints: Complaint[]
   prefill?: Prefill | null
+  returnTo: string
 }
 
-export function NewWorkOrderForm({ customers, technicians, complaints, prefill }: Props) {
+export function NewWorkOrderForm({ customers, technicians, complaints, prefill, returnTo }: Props) {
   const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/work-orders'
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({
@@ -191,11 +194,7 @@ export function NewWorkOrderForm({ customers, technicians, complaints, prefill }
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      if (prefill?.complaint_id) {
-        window.location.href = `/complaints/${prefill.complaint_id}`
-      } else {
-        window.location.href = `/work-orders/${data.id}`
-      }
+      router.replace(withReturnTo(`/work-orders/${data.id}`, destination))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create work order')
     } finally {
@@ -355,7 +354,7 @@ export function NewWorkOrderForm({ customers, technicians, complaints, prefill }
       </div>
 
       <div className="flex items-center justify-end gap-3 pb-6">
-        <button type="button" onClick={() => router.back()} className="px-5 py-2.5 border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition">
+        <button type="button" onClick={() => router.replace(destination)} className="px-5 py-2.5 border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition">
           Cancel
         </button>
         <button type="submit" disabled={submitting} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 transition">

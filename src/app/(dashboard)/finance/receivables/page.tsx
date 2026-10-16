@@ -4,10 +4,17 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { TrendingDown, Clock, Users } from 'lucide-react'
 import Link from 'next/link'
 import { ReceivablesClient } from './ReceivablesClient'
+import { currentPath, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Receivables' }
 
-export default async function ReceivablesPage() {
+export default async function ReceivablesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const receivablesPath = currentPath('/finance/receivables', params)
   const supabase = await createClient()
 
   const [receivablesRes, openingRes] = await Promise.all([
@@ -84,7 +91,7 @@ export default async function ReceivablesPage() {
     <div className="animate-fade-in">
       <Header title="Receivables" subtitle="Outstanding customer balances"
         actions={
-          <Link href="/finance/opening-receivables" className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
+          <Link href={withReturnTo('/finance/opening-receivables', receivablesPath)} className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
             Opening Receivables
           </Link>
         }

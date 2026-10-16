@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { CheckCircle, CreditCard, XCircle, AlertCircle, Loader2, Banknote } from 'lucide-react'
-import { BackButton } from '@/components/ui/BackButton'
 import Link from 'next/link'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
@@ -18,14 +18,12 @@ interface Props {
   invoiceId: string
   currentStatus: string
   balanceDue: number
-  customerId: string
   advances?: Advance[]
-  workOrderId?: string
-  complaintId?: string
-  paymentReturnTo?: string
+  paymentHref: string
 }
 
-export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerId, advances = [], workOrderId, complaintId, paymentReturnTo }: Props) {
+export function InvoiceActions({ invoiceId, currentStatus, balanceDue, advances = [], paymentHref }: Props) {
+  const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [showCancelDialog, setShowCancelDialog] = useState(false)
@@ -42,7 +40,7 @@ export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerI
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to apply advance')
-      window.location.reload()
+      router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to apply advance')
       setLoading(null)
@@ -65,7 +63,7 @@ export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerI
     setLoading('issue')
     try {
       await patch({ status: 'issued' })
-      window.location.reload()
+      router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to issue invoice')
       setLoading(null)
@@ -78,7 +76,7 @@ export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerI
     setLoading('cancel')
     try {
       await patch({ status: 'cancelled', cancelled_reason: cancelReason.trim() })
-      window.location.reload()
+      router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to cancel invoice')
       setLoading(null)
@@ -141,7 +139,7 @@ export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerI
 
       {canRecordPayment && (
         <Link
-          href={`/finance/payments/new?invoice_id=${invoiceId}&customer_id=${customerId}&return_to=${encodeURIComponent(paymentReturnTo ?? `/finance/invoices/${invoiceId}`)}`}
+          href={paymentHref}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition"
         >
           <CreditCard className="w-4 h-4" />
@@ -193,11 +191,6 @@ export function InvoiceActions({ invoiceId, currentStatus, balanceDue, customerI
           </div>
         </div>
       )}
-
-      <BackButton
-        fallbackHref={complaintId ? `/complaints/${complaintId}` : workOrderId ? `/work-orders/${workOrderId}` : '/finance/invoices'}
-        label={complaintId ? 'Back to Complaint' : workOrderId ? 'Back to Work Order' : 'Back to Invoices'}
-      />
     </div>
   )
 }

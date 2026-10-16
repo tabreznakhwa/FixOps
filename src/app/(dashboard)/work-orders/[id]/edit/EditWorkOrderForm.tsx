@@ -3,7 +3,6 @@
 import { useActionState, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateWorkOrder } from '../../actions'
-import Link from 'next/link'
 import { Loader2, AlertCircle, ChevronDown } from 'lucide-react'
 
 const SERVICE_CATEGORIES = [
@@ -36,16 +35,18 @@ interface Props {
   wo: WO
   technicians: Person[]
   currentAssigneeKey: string
+  detailHref: string
+  returnTo?: string
 }
 
-export function EditWorkOrderForm({ wo, technicians, currentAssigneeKey }: Props) {
+export function EditWorkOrderForm({ wo, technicians, currentAssigneeKey, detailHref, returnTo }: Props) {
   const router = useRouter()
   const [state, action, pending] = useActionState(updateWorkOrder, null)
   const [assignedKey, setAssignedKey] = useState(currentAssigneeKey)
 
   useEffect(() => {
     if ((state as any)?.success && (state as any)?.workOrderId) {
-      router.replace(`/work-orders/${(state as any).workOrderId}`)
+      router.replace((state as any).returnTo ?? detailHref)
     }
   }, [state, router])
 
@@ -59,6 +60,7 @@ export function EditWorkOrderForm({ wo, technicians, currentAssigneeKey }: Props
       <input type="hidden" name="id" value={wo.id} />
       <input type="hidden" name="assigned_key" value={assignedKey} />
       <input type="hidden" name="technician_name" value={selectedTech?.full_name ?? ''} />
+      <input type="hidden" name="return_to" value={returnTo ?? ''} />
 
       {state?.error && (
         <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
@@ -177,10 +179,13 @@ export function EditWorkOrderForm({ wo, technicians, currentAssigneeKey }: Props
           className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors">
           {pending ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : 'Save Changes'}
         </button>
-        <Link href={`/work-orders/${wo.id}`}
-          className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors">
+        <button
+          type="button"
+          onClick={() => router.replace(detailHref)}
+          className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+        >
           Cancel
-        </Link>
+        </button>
       </div>
     </form>
   )

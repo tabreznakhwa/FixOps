@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { formatCurrency } from '@/lib/utils'
+import { safeReturnTo } from '@/lib/backNav'
 
 interface Supplier { id: string; supplier_name: string; supplier_code: string }
 interface OpenPO { id: string; po_number: string; supplier_id: string; balance_due: number; total_amount: number }
@@ -16,9 +18,10 @@ interface OpenPayable {
 interface Props {
   suppliers: Supplier[]
   openPOs: OpenPO[]
-  defaultPO: { id: string; po_number: string; supplier_id: string; balance_due: number } | null
+  defaultPO: { id: string; po_number: string; supplier_id: string; balance_due: number; total_amount: number } | null
   openInvoices: OpenInvoice[]
   openPayables: OpenPayable[]
+  returnTo: string
 }
 
 interface PayableLine {
@@ -44,7 +47,9 @@ const PAYMENT_MODES = [
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
-export function VendorPaymentForm({ suppliers, openPOs, defaultPO, openInvoices, openPayables }: Props) {
+export function VendorPaymentForm({ suppliers, openPOs, defaultPO, openInvoices, openPayables, returnTo }: Props) {
+  const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/suppliers/vendor-payments'
   const [supplierId, setSupplierId] = useState(defaultPO?.supplier_id ?? '')
   const [poId, setPoId] = useState(defaultPO?.id ?? '')
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
@@ -170,7 +175,8 @@ export function VendorPaymentForm({ suppliers, openPOs, defaultPO, openInvoices,
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Failed to record payment'); return }
-      window.location.href = '/suppliers/vendor-payments'
+      router.replace(destination)
+      router.refresh()
     } catch { setError('Network error') }
     finally { setLoading(false) }
   }
@@ -302,10 +308,19 @@ export function VendorPaymentForm({ suppliers, openPOs, defaultPO, openInvoices,
           placeholder="Optional remarks…" className={inputClass} />
       </div>
 
-      <button type="submit" disabled={loading}
-        className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
-        {loading ? 'Recording…' : 'Record Payment'}
-      </button>
+      <div className="flex gap-3">
+        <button type="submit" disabled={loading}
+          className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+          {loading ? 'Recording…' : 'Record Payment'}
+        </button>
+        <button
+          type="button"
+          onClick={() => router.replace(destination)}
+          className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
+        >
+          Cancel
+        </button>
+      </div>
     </form>
   )
 }

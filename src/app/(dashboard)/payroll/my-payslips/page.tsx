@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Printer, FileText } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'My Payslips' }
 
@@ -167,7 +168,7 @@ export default async function MyPayslipsPage() {
                           // Carry the origin so Back returns here. Without it the slip
                           // page falls back to /payroll/process, which self-service
                           // roles cannot open — they'd land on the dashboard instead.
-                          href={`/payroll/slips/${s.salary_run_id}/${staff.id}?return_to=${encodeURIComponent('/payroll/my-payslips')}`}
+                          href={withReturnTo(`/payroll/slips/${s.salary_run_id}/${staff.id}`, '/payroll/my-payslips')}
                           className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
                         >
                           <Printer className="w-3.5 h-3.5" /> View Payslip

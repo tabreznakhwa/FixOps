@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2, Search, ChevronDown, X, AlertCircle, Loader2, Package, PackagePlus } from 'lucide-react'
+import { safeReturnTo, withReturnTo } from '@/lib/backNav'
 
 interface Supplier { id: string; supplier_name: string; supplier_code: string }
 interface InvItem {
@@ -258,11 +259,14 @@ function ItemCombobox({
 export function NewPurchaseInvoiceForm({
   suppliers,
   inventoryItems,
+  returnTo,
 }: {
   suppliers: Supplier[]
   inventoryItems: InvItem[]
+  returnTo: string
 }) {
   const router = useRouter()
+  const destination = safeReturnTo(returnTo) ?? '/inventory/purchase-invoices'
 
   const [supplierId, setSupplierId] = useState('')
   const [supplierName, setSupplierName] = useState('')
@@ -370,7 +374,8 @@ export function NewPurchaseInvoiceForm({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to create purchase invoice')
-      router.push(`/inventory/purchase-invoices/${data.id}`)
+      router.replace(withReturnTo(`/inventory/purchase-invoices/${data.id}`, destination))
+      router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save purchase invoice')
     } finally {
@@ -651,7 +656,7 @@ export function NewPurchaseInvoiceForm({
             className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors">
             {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : '✅ Save & Update Inventory'}
           </button>
-          <button type="button" onClick={() => router.back()}
+          <button type="button" onClick={() => router.replace(destination)}
             className="px-6 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors">
             Cancel
           </button>

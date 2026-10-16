@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Bell, X, ExternalLink, Volume2 } from 'lucide-react'
 import Link from 'next/link'
+import { withReturnTo } from '@/lib/backNav'
+import { useTabContext } from '@/contexts/TabContext'
 
 interface AssignmentNotif {
   id: string
@@ -56,6 +58,8 @@ async function playSound() {
 }
 
 export function AssignmentNotifier({ userId }: { userId: string }) {
+  const { tabs, activeTabId, openTab } = useTabContext()
+  const activeSource = tabs.find((tab) => tab.id === activeTabId)?.url ?? '/dashboard'
   const [notifs, setNotifs] = useState<AssignmentNotif[]>([])
   const [audioReady, setAudioReady] = useState(false)
   const audioUnlocked = useRef(false)
@@ -145,26 +149,38 @@ export function AssignmentNotifier({ userId }: { userId: string }) {
 
       {notifs.length > 0 && (
         <div className="fixed top-4 right-4 z-50 space-y-2 w-80">
-          {notifs.map((n) => (
-            <div key={n.id}
-              className="animate-slide-in bg-white border border-blue-200 rounded-xl shadow-2xl p-4 flex items-start gap-3">
-              <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Bell className="w-4 h-4 text-blue-600" />
+          {notifs.map((n) => {
+            const complaintHref = withReturnTo(`/complaints/${n.complaintId}`, activeSource)
+            return (
+              <div key={n.id}
+                className="animate-slide-in bg-white border border-blue-200 rounded-xl shadow-2xl p-4 flex items-start gap-3">
+                <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Bell className="w-4 h-4 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-slate-900">New Job Assigned</p>
+                  <p className="text-xs font-mono text-blue-600 mt-0.5">{n.complaintNumber}</p>
+                  <p className="text-xs text-slate-600 mt-1 line-clamp-2">{n.description}</p>
+                  <Link
+                    href={complaintHref}
+                    onClick={(event) => {
+                      dismiss(n.id)
+                      if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+                        event.preventDefault()
+                        openTab(complaintHref, n.complaintNumber)
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                  >
+                    View complaint <ExternalLink className="w-3 h-3" />
+                  </Link>
+                </div>
+                <button type="button" onClick={() => dismiss(n.id)} className="text-slate-400 hover:text-slate-600 flex-shrink-0">
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-slate-900">New Job Assigned</p>
-                <p className="text-xs font-mono text-blue-600 mt-0.5">{n.complaintNumber}</p>
-                <p className="text-xs text-slate-600 mt-1 line-clamp-2">{n.description}</p>
-                <Link href={`/complaints/${n.complaintId}`} onClick={() => dismiss(n.id)}
-                  className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700">
-                  View complaint <ExternalLink className="w-3 h-3" />
-                </Link>
-              </div>
-              <button type="button" onClick={() => dismiss(n.id)} className="text-slate-400 hover:text-slate-600 flex-shrink-0">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </>

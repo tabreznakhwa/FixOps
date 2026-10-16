@@ -1,41 +1,54 @@
 /**
- * Resolves a Back button's destination and label from one value.
+ * Deterministic navigation origins for dashboard pages.
  *
- * The rule this app follows: Back goes where the user came from, never to
- * whatever the record happens to be related to. Origin travels as a `return_to`
- * query param set by the page that linked here; without one, Back falls back to
- * the destination module's own list.
- *
- * Both href and label come out of a single call so a button can never name one
- * destination while navigating to another — a bug that shipped once already,
- * where an invoice reached from a payment read "Invoices" but went back to the
- * payment.
- *
- * `return_to` is only ever honoured as a same-site relative path. It reaches
- * server-side `redirect()` calls in places, and an unchecked value there is an
- * open redirect.
+ * Back goes where the user came from, never to whatever the record happens to
+ * be related to. Browser history is not an origin in this app because modules
+ * run inside persistent iframes. Callers carry the immediate source URL in a
+ * `return_to` query parameter and resolve it here.
  */
 
+export type ReturnToValue = string | string[] | null | undefined
+export type SearchParamValue = string | string[] | undefined
+export type SearchParamsInput =
+  | URLSearchParams
+  | { entries(): IterableIterator<[string, string]> }
+  | Record<string, SearchParamValue>
+
 /** Longest prefix wins, so `/finance/invoices` beats `/finance`. */
-const LABELS: [string, string][] = [
+export const NAVIGATION_LABELS = [
+  ['/finance/opening-receivables', 'Opening Receivables'],
+  ['/finance/owner-withdrawals', 'Owner Withdrawals'],
   ['/finance/receivables', 'Receivables'],
   ['/finance/outstanding', 'Outstanding'],
   ['/finance/quotations', 'Quotations'],
   ['/finance/invoices', 'Invoices'],
   ['/finance/payments', 'Payments'],
   ['/finance/expenses', 'Expenses'],
-  ['/finance/ledger', 'Ledger'],
+  ['/finance/cash-book', 'Cash Book'],
+  ['/finance/bank-book', 'Bank Book'],
+  ['/finance/transfers', 'Fund Transfers'],
+  ['/finance/ledger', 'Customer Ledger'],
   ['/inventory/purchase-invoices', 'Purchase Invoices'],
+  ['/inventory/opening-stock', 'Opening Stock'],
+  ['/inventory/stock-trial', 'Stock Trial'],
+  ['/inventory/parts-used', 'Parts Used'],
   ['/inventory/assets', 'Company Assets'],
   ['/suppliers/vendor-outstanding', 'Vendor Outstanding'],
   ['/suppliers/purchase-register', 'Purchase Register'],
   ['/suppliers/vendor-payments', 'Vendor Payments'],
+  ['/suppliers/vendor-ledger', 'Vendor Ledger'],
+  ['/suppliers/opening-payables', 'Opening Payables'],
   ['/suppliers/advances', 'Supplier Advances'],
   ['/payroll/my-payslips', 'My Payslips'],
+  ['/payroll/leave-settlement', 'Leave Settlement'],
   ['/leave-applications', 'Leave Approvals'],
+  ['/my-attendance', 'My Attendance'],
   ['/my-leave', 'My Leave'],
   ['/payroll/process', 'Payslips'],
+  ['/staff/locations', 'Tech Locations'],
   ['/staff/ledger', 'Staff Ledger'],
+  ['/settings/audit-trail', 'Audit Trail'],
+  ['/settings/company', 'Company'],
   ['/work-orders', 'Work Orders'],
   ['/complaints', 'Complaints'],
   ['/customers', 'Customers'],
@@ -44,37 +57,152 @@ const LABELS: [string, string][] = [
   ['/attendance', 'Attendance'],
   ['/payroll', 'Payroll'],
   ['/staff', 'Staff'],
-  ['/amc', 'AMC'],
+  ['/settings', 'Settings'],
+  ['/user-guide', 'User Guide'],
+  ['/insights', 'Business Insights'],
+  ['/amc', 'AMC Contracts'],
   ['/reports', 'Reports'],
   ['/dashboard', 'Dashboard'],
-]
+] as const
 
-/** A usable origin, or null. Rejects absolute URLs and protocol-relative paths. */
-export function safeReturnTo(value: string | null | undefined): string | null {
-  if (!value) return null
-  if (!value.startsWith('/')) return null
-  if (value.startsWith('//')) return null
-  return value
+const INTERNAL_ORIGIN = 'https://fixops.internal'
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/
+const MAX_RETURN_TO_LENGTH = 8192
+
+function normalizedInternalPath(value: string): string | null {
+  if (!value || value !== value.trim()) return null
+  if (value.length > MAX_RETURN_TO_LENGTH) return null
+  if (!value.startsWith('/') || value.startsWith('//')) return null
+  if (value.includes('\\') || CONTROL_CHARACTERS.test(value)) return null
+
+  try {
+    const url = new URL(value, INTERNAL_ORIGIN)
+    if (url.origin !== INTERNAL_ORIGIN) return null
+
+    // `__tab` is iframe rendering state, not navigation origin. The proxy and
+    // iframe Referer restore tab mode when the destination is opened.
+    url.searchParams.delete('__tab')
+    return `${url.pathname}${url.search}${url.hash}`
+  } catch {
+    return null
+  }
 }
 
-export function labelForPath(path: string): string {
-  const match = LABELS.filter(([prefix]) => path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`))
+/** A normalized same-site origin, or null. Repeated values are rejected. */
+export function safeReturnTo(value: ReturnToValue): string | null {
+  return typeof value === 'string' ? normalizedInternalPath(value) : null
+}
+
+/** Remove iframe-only state from a known internal path. */
+export function stripTabParam(path: string): string | null {
+  return normalizedInternalPath(path)
+}
+
+export function labelForPath(path: string, fallback = 'Back'): string {
+  const safe = safeReturnTo(path)
+  if (!safe) return fallback
+
+  const pathname = new URL(safe, INTERNAL_ORIGIN).pathname
+  const match = NAVIGATION_LABELS
+    .filter(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`))
     .sort((a, b) => b[0].length - a[0].length)[0]
-  return match ? match[1] : 'Back'
+
+  return match?.[1] ?? fallback
+}
+
+/** Build the exact current dashboard URL while excluding iframe-only state. */
+export function currentPath(
+  pathname: string,
+  searchParams?: SearchParamsInput | null,
+): string {
+  const base = safeReturnTo(pathname) ?? '/dashboard'
+  const url = new URL(base, INTERNAL_ORIGIN)
+
+  if (searchParams && typeof (searchParams as { entries?: unknown }).entries === 'function') {
+    for (const [key, value] of (searchParams as { entries(): IterableIterator<[string, string]> }).entries()) {
+      if (key !== '__tab') url.searchParams.append(key, value)
+    }
+  } else if (searchParams) {
+    for (const [key, value] of Object.entries(searchParams)) {
+      if (key === '__tab' || value === undefined) continue
+      if (Array.isArray(value)) {
+        value.forEach((item) => url.searchParams.append(key, item))
+      } else {
+        url.searchParams.append(key, value)
+      }
+    }
+  }
+
+  return `${url.pathname}${url.search}${url.hash}`
+}
+
+/** Add or replace a validated immediate origin on an internal destination. */
+export function withReturnTo(destination: string, origin: ReturnToValue): string {
+  const safeDestination = safeReturnTo(destination)
+  if (!safeDestination) throw new Error(`Invalid internal destination: ${destination}`)
+
+  const safeOrigin = safeReturnTo(origin)
+  if (!safeOrigin) return safeDestination
+
+  const url = new URL(safeDestination, INTERNAL_ORIGIN)
+  url.searchParams.set('return_to', safeOrigin)
+  return `${url.pathname}${url.search}${url.hash}`
 }
 
 /**
- * @param returnTo  raw `return_to` param, if any
- * @param fallbackHref  where Back goes when there is no origin — normally this
- *                      module's own list
- * @param fallbackLabel label to use with that fallback
+ * Resolve one validated origin. The href and label always describe the same
+ * destination so they cannot drift independently.
  */
 export function resolveBack(
-  returnTo: string | null | undefined,
+  returnTo: ReturnToValue,
   fallbackHref: string,
-  fallbackLabel = 'Back'
+  fallbackLabel = 'Back',
 ): { href: string; label: string } {
   const safe = safeReturnTo(returnTo)
   if (!safe) return { href: fallbackHref, label: fallbackLabel }
   return { href: safe, label: labelForPath(safe) }
+}
+
+export function detailPath(
+  pathname: string,
+  returnTo: ReturnToValue,
+): string {
+  return withReturnTo(pathname, returnTo)
+}
+
+export type LegacyBackCandidate = {
+  when: string | string[] | null | undefined
+  href: string
+  label: string
+}
+
+/** Explicit origin wins; ordered legacy relationship params remain fallbacks. */
+export function resolveBackWithLegacy({
+  returnTo,
+  legacy,
+  fallbackHref,
+  fallbackLabel = 'Back',
+}: {
+  returnTo: ReturnToValue
+  legacy: LegacyBackCandidate[]
+  fallbackHref: string
+  fallbackLabel?: string
+}): { href: string; label: string } {
+  const explicit = safeReturnTo(returnTo)
+  if (explicit) return { href: explicit, label: labelForPath(explicit) }
+
+  for (const candidate of legacy) {
+    if (typeof candidate.when !== 'string' || !candidate.when) continue
+    const href = safeReturnTo(candidate.href)
+    if (href) return { href, label: candidate.label }
+  }
+
+  return { href: fallbackHref, label: fallbackLabel }
+}
+
+export function returnToFromFormData(formData: FormData): string | null {
+  const values = formData.getAll('return_to')
+  return values.length === 1 && typeof values[0] === 'string'
+    ? safeReturnTo(values[0])
+    : null
 }

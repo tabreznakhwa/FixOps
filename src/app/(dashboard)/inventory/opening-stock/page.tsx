@@ -30,7 +30,7 @@ export default async function OpeningStockPage() {
         title="Opening Stock"
         subtitle="Set quantities for all inventory items at go-live"
         actions={
-          <BackButton fallbackHref="/inventory" label="Back to Inventory" />
+          <BackButton href="/inventory" label="Back to Inventory" />
         }
       />
       <div className="p-6">

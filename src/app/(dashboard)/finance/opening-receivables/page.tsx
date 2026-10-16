@@ -1,14 +1,19 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { OpeningReceivablesForm } from './OpeningReceivablesForm'
 import { fetchAllCustomers } from '@/lib/customers'
+import { resolveBack } from '@/lib/backNav'
 
 export const metadata = { title: 'Opening Receivables' }
 
-export default async function OpeningReceivablesPage() {
+export default async function OpeningReceivablesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ return_to?: string | string[] }>
+}) {
+  const back = resolveBack((await searchParams).return_to, '/finance/outstanding', 'Outstanding')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -37,7 +42,7 @@ export default async function OpeningReceivablesPage() {
         title="Opening Receivables"
         subtitle="Customer bills outstanding before go-live"
         actions={
-          <BackButton fallbackHref="/finance/outstanding" label="Back" />
+          <BackButton href={back.href} label={back.label} />
         }
       />
       <div className="p-6">

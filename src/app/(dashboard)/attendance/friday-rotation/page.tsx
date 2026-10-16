@@ -7,6 +7,7 @@ import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { CalendarClock, Info } from 'lucide-react'
 import { rankFridayRotation } from '@/lib/attendance/fridayRotation'
+import { resolveBack } from '@/lib/backNav'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Friday Rotation' }
@@ -26,9 +27,10 @@ function nextFriday(from: Date): string {
 export default async function FridayRotationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ needed?: string }>
+  searchParams: Promise<{ needed?: string; return_to?: string | string[] }>
 }) {
   const params = await searchParams
+  const back = resolveBack(params.return_to, '/attendance', 'Attendance')
   // How many people a Friday normally takes — highlights that many suggestions.
   const needed = Math.min(20, Math.max(1, Number(params.needed) || 3))
 
@@ -36,6 +38,8 @@ export default async function FridayRotationPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Attendance is not represented in the hand-maintained Database type.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any
   const { data: profileRaw } = await admin
     .from('users').select('organization_id, role').eq('id', user.id).single()
@@ -97,7 +101,7 @@ export default async function FridayRotationPage({
         actions={
           <div className="flex items-center gap-2">
             <PrintActions label="Print" />
-            <BackButton fallbackHref="/attendance" label="Attendance" />
+            <BackButton href={back.href} label={back.label} />
           </div>
         }
       />
@@ -222,6 +226,7 @@ export default async function FridayRotationPage({
         )}
 
         <form method="get" className="flex items-end gap-2 print:hidden">
+          <input type="hidden" name="return_to" value={back.href} />
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">
               People needed per Friday

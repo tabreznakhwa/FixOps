@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { labelForPath } from '@/lib/backNav'
 
 export interface Tab { id: string; url: string; label: string }
 
@@ -21,67 +22,11 @@ export function useTabContext() {
   return ctx
 }
 
-const LABEL_MAP: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/complaints': 'Complaints',
-  '/work-orders': 'Work Orders',
-  '/customers': 'Customers',
-  '/finance/quotations': 'Quotations',
-  '/finance/invoices': 'Invoices',
-  '/finance/payments': 'Payments',
-  '/finance/receivables': 'Receivables',
-  '/finance/ledger': 'Customer Ledger',
-  '/finance/outstanding': 'Outstanding',
-  '/finance/opening-receivables': 'Opening Receivables',
-  '/finance/expenses': 'Expenses',
-  '/finance/cash-book': 'Cash Book',
-  '/finance/bank-book': 'Bank Book',
-  '/finance/transfers': 'Fund Transfers',
-  '/finance/owner-withdrawals': 'Owner Withdrawals',
-  '/amc': 'AMC Contracts',
-  '/inventory': 'Inventory',
-  '/inventory/assets': 'Company Assets',
-  '/inventory/purchase-invoices': 'Purchase Invoices',
-  '/inventory/opening-stock': 'Opening Stock',
-  '/inventory/stock-trial': 'Stock Trial',
-  '/suppliers': 'Suppliers',
-  '/suppliers/purchase-register': 'Purchase Register',
-  '/suppliers/advances': 'Supplier Advances',
-  '/suppliers/vendor-payments': 'Vendor Payments',
-  '/suppliers/vendor-outstanding': 'Vendor Outstanding',
-  '/suppliers/vendor-ledger': 'Vendor Ledger',
-  '/suppliers/opening-payables': 'Opening Payables',
-  '/staff': 'Staff',
-  '/staff/locations': 'Tech Locations',
-  '/staff/ledger': 'Staff Ledger',
-  '/my-attendance': 'My Attendance',
-  '/my-leave': 'My Leave',
-  '/leave-applications': 'Leave Approvals',
-  '/attendance': 'Attendance',
-  '/payroll': 'Payroll',
-  '/payroll/process': 'Payslips',
-  '/payroll/my-payslips': 'My Payslips',
-  '/reports': 'Reports',
-  '/settings': 'Settings',
-  '/settings/company': 'Company',
-  '/settings/audit-trail': 'Audit Trail',
-  '/user-guide': 'User Guide',
-}
-
-export function labelForPath(path: string): string {
-  const clean = path.split('?')[0]
-  if (LABEL_MAP[clean]) return LABEL_MAP[clean]
-  for (const [prefix, label] of Object.entries(LABEL_MAP)) {
-    if (clean.startsWith(prefix + '/')) return label
-  }
-  return 'Page'
-}
-
 let _id = 0
 function nextId() { return String(++_id) }
 
 export function TabProvider({ children, initialPath }: { children: ReactNode; initialPath: string }) {
-  const first: Tab = { id: nextId(), url: initialPath, label: labelForPath(initialPath) }
+  const first: Tab = { id: nextId(), url: initialPath, label: labelForPath(initialPath, 'Page') }
   const [tabs, setTabs] = useState<Tab[]>([first])
   const [activeTabId, setActiveTabId] = useState<string>(first.id)
 

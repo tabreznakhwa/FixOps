@@ -5,15 +5,21 @@ import Link from 'next/link'
 import { Building2, FileText, Plus, Edit } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
+import { currentPath, resolveBack, withReturnTo } from '@/lib/backNav'
 
 export const metadata = { title: 'Supplier' }
 
 export default async function SupplierDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ return_to?: string }>
 }) {
   const { id } = await params
+  const query = await searchParams
+  const supplierPath = currentPath(`/suppliers/${id}`, query)
+  const back = resolveBack(query.return_to, '/suppliers', 'Suppliers')
   const supabase = await createClient()
 
   const { data: supplierRaw } = await (supabase as any)
@@ -66,18 +72,18 @@ export default async function SupplierDetailPage({
         actions={
           <div className="flex items-center gap-2">
             <Link
-              href={`/suppliers/po/new?supplier_id=${supplier.id}`}
+              href={withReturnTo(`/suppliers/po/new?supplier_id=${encodeURIComponent(supplier.id)}`, supplierPath)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" /> Create PO
             </Link>
             <Link
-              href={`/suppliers/${supplier.id}/edit`}
+              href={withReturnTo(`/suppliers/${supplier.id}/edit`, supplierPath)}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
             >
               <Edit className="w-4 h-4" /> Edit
             </Link>
-            <BackButton fallbackHref="/suppliers" label="Back" />
+            <BackButton href={back.href} label={back.label} />
           </div>
         }
       />
@@ -167,7 +173,7 @@ export default async function SupplierDetailPage({
                   <h3 className="font-semibold text-slate-900">Purchase Orders</h3>
                 </div>
                 <Link
-                  href={`/suppliers/po/new?supplier_id=${supplier.id}`}
+                  href={withReturnTo(`/suppliers/po/new?supplier_id=${encodeURIComponent(supplier.id)}`, supplierPath)}
                   className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                 >
                   + New PO

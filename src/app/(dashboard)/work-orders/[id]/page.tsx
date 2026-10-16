@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { Edit } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
 import { getPriorityColor, getStatusColor, formatStatus, formatDate, formatCurrency } from '@/lib/utils'
+import { currentPath, resolveBackWithLegacy, withReturnTo } from '@/lib/backNav'
 import { WorkOrderActions } from './WorkOrderActions'
 import { WorkOrderParts } from './WorkOrderParts'
 
@@ -12,7 +13,8 @@ export const metadata = { title: 'Work Order' }
 
 export default async function WorkOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ complaint_id?: string; return_to?: string }> }) {
   const { id } = await params
-  const { complaint_id, return_to } = await searchParams
+  const query = await searchParams
+  const { complaint_id, return_to } = query
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
@@ -87,6 +89,15 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   const existingInvoiceId = existingInvoice?.id ?? null
   const existingInvoiceStatus = existingInvoice?.status ?? null
 
+  const workOrderPath = currentPath(`/work-orders/${id}`, query)
+  const editHref = withReturnTo(`/work-orders/${id}/edit`, workOrderPath)
+  const back = resolveBackWithLegacy({
+    returnTo: return_to,
+    legacy: [{ when: complaint_id, href: `/complaints/${complaint_id}`, label: 'Complaint' }],
+    fallbackHref: '/work-orders',
+    fallbackLabel: 'Work Orders',
+  })
+
   return (
     <div className="animate-fade-in">
       <Header
@@ -98,15 +109,12 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
               {formatStatus(wo.status)}
             </span>
             <Link
-              href={`/work-orders/${wo.id}/edit`}
+              href={editHref}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
             >
               <Edit className="w-4 h-4" /> Edit
             </Link>
-            <BackButton
-              fallbackHref={return_to ?? (complaint_id ? `/complaints/${complaint_id}` : '/work-orders')}
-              label={return_to?.startsWith('/finance/invoices') ? 'Invoices' : (return_to?.startsWith('/complaints') || complaint_id) ? 'Complaint' : 'Back'}
-            />
+            <BackButton href={back.href} label={back.label} />
           </div>
         }
       />
@@ -242,7 +250,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
             paymentStatus={wo.payment_status}
             existingInvoiceId={existingInvoiceId}
             existingInvoiceStatus={existingInvoiceStatus}
-            complaintId={complaint_id}
+            workOrderHref={workOrderPath}
           />
         </div>
       </div>

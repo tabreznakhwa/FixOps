@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 export function StaffFilterSelect({
   staffList,
@@ -12,14 +12,17 @@ export function StaffFilterSelect({
   currentMonth: string
 }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   return (
     <select
       value={selectedStaffId}
       onChange={(e) => {
-        const qs = new URLSearchParams()
-        qs.set('month', currentMonth)
+        const qs = new URLSearchParams(searchParams.toString())
+        if (!qs.has('month')) qs.set('month', currentMonth)
         if (e.target.value) qs.set('staff_id', e.target.value)
+        else qs.delete('staff_id')
+        qs.delete('page')
         router.push(`/attendance?${qs.toString()}`)
       }}
       className="px-3 py-2 rounded-xl text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
