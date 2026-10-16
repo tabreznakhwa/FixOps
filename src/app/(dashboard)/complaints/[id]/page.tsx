@@ -43,7 +43,7 @@ export default async function ComplaintDetailPage({
 
   const { data: raw } = await supabase
     .from('complaints')
-    .select('*, customers(full_name, mobile_number, email, area, city), users!complaints_assigned_to_fkey(id, full_name)')
+    .select('*, customers(full_name, mobile_number, email, address, block, street, avenue, house_number, area, city), users!complaints_assigned_to_fkey(id, full_name)')
     .eq('id', id)
     .single()
 
@@ -55,7 +55,11 @@ export default async function ComplaintDetailPage({
     created_at: string; preferred_date: string | null; preferred_time: string | null
     location: string | null; complaint_source: string | null; notes: string | null
     technician_name: string | null; assigned_staff_id: string | null; visit_order: number | null
-    customers: { full_name: string; mobile_number: string; email: string | null; area: string | null; city: string | null } | null
+    customers: {
+      full_name: string; mobile_number: string; email: string | null; address: string | null
+      block: string | null; street: string | null; avenue: string | null; house_number: string | null
+      area: string | null; city: string | null
+    } | null
     users: { id: string; full_name: string } | null
   }
 
@@ -280,7 +284,27 @@ export default async function ComplaintDetailPage({
                   📱 {complaint.customers.mobile_number}
                 </a>
                 {complaint.customers.email && <p className="text-slate-600">✉️ {complaint.customers.email}</p>}
-                {complaint.customers.area && <p className="text-slate-600">📍 {complaint.customers.area}{complaint.customers.city ? `, ${complaint.customers.city}` : ''}</p>}
+                {(complaint.customers.address || complaint.customers.block || complaint.customers.street || complaint.customers.avenue || complaint.customers.house_number || complaint.customers.area || complaint.customers.city) && (
+                  <div className="flex items-start gap-1.5 text-slate-600">
+                    <span className="flex-shrink-0">📍</span>
+                    <div className="space-y-0.5">
+                      {complaint.customers.address && <p>{complaint.customers.address}</p>}
+                      {(complaint.customers.block || complaint.customers.street || complaint.customers.avenue || complaint.customers.house_number) && (
+                        <p>
+                          {[
+                            complaint.customers.block && `Block ${complaint.customers.block}`,
+                            complaint.customers.street && `Street ${complaint.customers.street}`,
+                            complaint.customers.avenue && `Ave ${complaint.customers.avenue}`,
+                            complaint.customers.house_number && `House ${complaint.customers.house_number}`,
+                          ].filter(Boolean).join(', ')}
+                        </p>
+                      )}
+                      {(complaint.customers.area || complaint.customers.city) && (
+                        <p>{[complaint.customers.area, complaint.customers.city].filter(Boolean).join(', ')}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : <p className="text-sm text-slate-400">No customer linked</p>}
           </div>

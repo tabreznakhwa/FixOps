@@ -7,6 +7,10 @@ import { notFound } from 'next/navigation'
 import { FileText } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { resolveBack } from '@/lib/backNav'
+import { getAuthedProfile } from '@/lib/auth/session'
+import { getRoleAccess } from '@/lib/orgPermissions'
+
+const MAX_BATCH_PRINT = 100
 
 export const metadata = { title: 'Print Invoices' }
 
@@ -23,33 +27,44 @@ export default async function PrintBatchInvoicesPage({
   searchParams: Promise<{ ids?: string; return_to?: string }>
 }) {
   const { ids: idsParam, return_to } = await searchParams
-  const ids = (idsParam ?? '').split(',').map(s => s.trim()).filter(Boolean)
-  if (ids.length === 0) notFound()
+  const ids = [...new Set((idsParam ?? '').split(',').map(s => s.trim()).filter(Boolean))]
+  if (ids.length === 0 || ids.length > MAX_BATCH_PRINT) notFound()
 
+  const { profile } = await getAuthedProfile()
+  if (!profile?.organization_id || profile.status !== 'active') notFound()
+  const financeAccess = await getRoleAccess(profile.organization_id, profile.role)
+  if (financeAccess.finance === 'none') notFound()
+
+  const orgId = profile.organization_id
+  // Finance relations still trail the generated Database type.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any
 
   const [{ data: invoicesRaw }, { data: orgRaw }] = await Promise.all([
     admin
       .from('invoices')
       .select('*, customers(full_name, print_name, company_name, mobile_number, email, address, block, street, avenue, house_number, area, city), work_orders(work_order_number)')
+      .eq('organization_id', orgId)
       .in('id', ids),
     admin
       .from('organizations')
       .select('name, logo_url, address, city, phone, email, vat_number')
-      .limit(1).single(),
+      .eq('id', orgId)
+      .single(),
   ])
 
   const invoicesById = new Map(((invoicesRaw ?? []) as PrintableInvoice[]).map(inv => [inv.id, inv]))
   // Preserve the order the user selected them in, not whatever order the DB returns.
   const invoices = ids.map(id => invoicesById.get(id)).filter((inv): inv is PrintableInvoice => !!inv)
 
-  if (invoices.length === 0) notFound()
+  if (invoices.length !== ids.length) notFound()
 
   const org = orgRaw as { name: string; logo_url: string | null; address: string | null; city: string | null; phone: string | null; email: string | null; vat_number: string | null } | null
 
   const { data: itemsRaw } = await admin
     .from('invoice_items')
     .select('*')
+    .eq('organization_id', orgId)
     .in('invoice_id', ids)
     .order('sort_order')
 
@@ -110,7 +125,7 @@ export default async function PrintBatchInvoicesPage({
             </div>
           </div>
           <p className="text-xs text-slate-400 mt-4">
-            Use "Print All" or your browser's print dialog (Ctrl/Cmd+P) — choose "Save as PDF" to download instead of printing.
+            Use &quot;Print All&quot; or your browser&apos;s print dialog (Ctrl/Cmd+P) — choose &quot;Save as PDF&quot; to download instead of printing.
           </p>
         </div>
       </div>

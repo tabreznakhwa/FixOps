@@ -1,21 +1,20 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, ChevronDown, ChevronRight, Printer, Search, X } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { useCurrentPath } from '@/lib/backNav.client'
 import { withReturnTo } from '@/lib/backNav'
+import {
+  sortReceivableRows,
+  type ReceivableDirection,
+  type ReceivableRow,
+  type ReceivableSort,
+} from './receivablesSort'
 
-interface Invoice {
-  id: string
-  invoice_number: string
-  balance_due: number
-  due_date: string | null
-  status: string
-  invoice_date: string
-}
+const MAX_BATCH_PRINT = 100
 
 interface Customer {
   customer_id: string
@@ -23,31 +22,80 @@ interface Customer {
   mobile_number: string
   area: string | null
   total_balance: number
-  invoices: Invoice[]
+  invoices: ReceivableRow[]
 }
 
-export function ReceivablesClient({ customers }: { customers: Customer[] }) {
+export function ReceivablesClient({
+  customers,
+  sort,
+  direction,
+}: {
+  customers: Customer[]
+  sort: ReceivableSort
+  direction: ReceivableDirection
+}) {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const receivablesPath = useCurrentPath()
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [pendingSort, setPendingSort] = useState<{
+    sort: ReceivableSort
+    direction: ReceivableDirection
+  } | null>(null)
+  const previousServerSort = useRef({ sort, direction })
+  useEffect(() => {
+    const previous = previousServerSort.current
+    previousServerSort.current = { sort, direction }
+    if (previous.sort !== sort || previous.direction !== direction) {
+      queueMicrotask(() => setPendingSort(null))
+    }
+  }, [sort, direction])
+  const activeSort = pendingSort?.sort ?? sort
+  const activeDirection = pendingSort?.direction ?? direction
 
+  const sortedCustomers = customers.map(customer => ({
+    ...customer,
+    invoices: sortReceivableRows(customer.invoices, activeSort, activeDirection),
+  }))
   const filtered = search.trim()
-    ? customers.filter(c =>
+    ? sortedCustomers.filter(c =>
         c.full_name.toLowerCase().includes(search.toLowerCase()) ||
         (c.mobile_number ?? '').includes(search) ||
         (c.area ?? '').toLowerCase().includes(search.toLowerCase())
       )
-    : customers
+    : sortedCustomers
 
   const maxBalance = customers[0]?.total_balance ?? 1
+
+  const updateSort = (next: {
+    sort?: ReceivableSort
+    direction?: ReceivableDirection
+  }) => {
+    const currentState = pendingSort ?? previousServerSort.current
+    const nextState = {
+      sort: next.sort ?? currentState.sort,
+      direction: next.direction ?? currentState.direction,
+    }
+    setPendingSort(nextState)
+
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('sort', nextState.sort)
+    params.set('dir', nextState.direction)
+    const query = params.toString()
+    router.push(`${pathname}${query ? `?${query}` : ''}`, { scroll: false })
+  }
 
   const toggleInvoice = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(id)) {
+        next.delete(id)
+      } else if (next.size < MAX_BATCH_PRINT) {
+        next.add(id)
+      }
       return next
     })
   }
@@ -56,7 +104,14 @@ export function ReceivablesClient({ customers }: { customers: Customer[] }) {
     const allSelected = invoiceIds.every(id => selected.has(id))
     setSelected(prev => {
       const next = new Set(prev)
-      invoiceIds.forEach(id => allSelected ? next.delete(id) : next.add(id))
+      if (allSelected) {
+        invoiceIds.forEach(id => next.delete(id))
+      } else {
+        for (const id of invoiceIds) {
+          if (next.size >= MAX_BATCH_PRINT) break
+          next.add(id)
+        }
+      }
       return next
     })
   }
@@ -70,9 +125,35 @@ export function ReceivablesClient({ customers }: { customers: Customer[] }) {
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+      <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
         <h3 className="font-semibold text-slate-900 flex-shrink-0">Customer Balances</h3>
-        <div className="relative flex items-center flex-1 max-w-xs">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            Sort by
+            <select
+              value={activeSort}
+              onChange={event => updateSort({ sort: event.target.value as ReceivableSort })}
+              aria-label="Sort receivables by"
+              className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="date">Invoice date</option>
+              <option value="amount">Amount</option>
+              <option value="invoice">Invoice / reference</option>
+            </select>
+          </label>
+          <label className="sr-only" htmlFor="receivables-sort-direction">Sort direction</label>
+          <select
+            id="receivables-sort-direction"
+            value={activeDirection}
+            onChange={event => updateSort({ direction: event.target.value as ReceivableDirection })}
+            aria-label="Receivables sort direction"
+            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+          </select>
+        </div>
+        <div className="relative flex items-center flex-1 min-w-[12rem] max-w-xs">
           <Search className="absolute left-3 w-4 h-4 text-slate-400 pointer-events-none" />
           <input
             type="text"
@@ -82,7 +163,7 @@ export function ReceivablesClient({ customers }: { customers: Customer[] }) {
             className="w-full pl-9 pr-8 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           />
           {search && (
-            <button onClick={() => setSearch('')} className="absolute right-2 p-0.5 text-slate-400 hover:text-slate-600">
+            <button onClick={() => setSearch('')} className="absolute right-2 p-0.5 text-slate-400 hover:text-slate-600" aria-label="Clear customer search">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
@@ -141,7 +222,9 @@ export function ReceivablesClient({ customers }: { customers: Customer[] }) {
 
                 {/* Expandable invoice list */}
                 {isOpen && (() => {
-                  const selectableIds = c.invoices.filter(inv => inv.id).map(inv => inv.id)
+                  const selectableIds = c.invoices.flatMap(inv => (
+                    inv.source === 'invoice' && inv.invoiceId ? [inv.invoiceId] : []
+                  ))
                   const allSelected = selectableIds.length > 0 && selectableIds.every(id => selected.has(id))
                   return (
                   <div className="bg-slate-50 border-t border-slate-100 px-5 py-3">
@@ -152,28 +235,30 @@ export function ReceivablesClient({ customers }: { customers: Customer[] }) {
                           <input
                             type="checkbox"
                             checked={allSelected}
+                            disabled={!allSelected && selected.size >= MAX_BATCH_PRINT}
                             onChange={() => toggleAllForCustomer(selectableIds)}
-                            className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-40"
                           />
                           Select all
                         </label>
                       )}
                     </div>
                     <div className="space-y-1.5">
-                      {c.invoices.map((inv, i) => (
-                        <div key={inv.id ?? i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-slate-100">
+                      {c.invoices.map(inv => (
+                        <div key={inv.rowKey} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-slate-100">
                           <div className="flex items-center gap-3">
-                            {inv.id && (
+                            {inv.source === 'invoice' && inv.invoiceId && (
                               <input
                                 type="checkbox"
-                                checked={selected.has(inv.id)}
-                                onChange={() => toggleInvoice(inv.id)}
+                                checked={selected.has(inv.invoiceId)}
+                                disabled={!selected.has(inv.invoiceId) && selected.size >= MAX_BATCH_PRINT}
+                                onChange={() => toggleInvoice(inv.invoiceId!)}
                                 onClick={e => e.stopPropagation()}
-                                className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                                className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 flex-shrink-0 disabled:opacity-40"
                               />
                             )}
-                            {inv.id ? (
-                              <Link href={withReturnTo(`/finance/invoices/${inv.id}`, receivablesPath)}
+                            {inv.source === 'invoice' && inv.invoiceId ? (
+                              <Link href={withReturnTo(`/finance/invoices/${inv.invoiceId}`, receivablesPath)}
                                 className="text-xs font-mono font-semibold text-blue-600 hover:underline"
                                 onClick={e => e.stopPropagation()}>
                                 {inv.invoice_number}
@@ -192,6 +277,7 @@ export function ReceivablesClient({ customers }: { customers: Customer[] }) {
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-bold text-amber-600">{formatCurrency(inv.balance_due)}</p>
+                            <p className="text-[10px] text-slate-400">Invoice {formatDate(inv.invoice_date)}</p>
                             {inv.due_date && (
                               <p className="text-[10px] text-slate-400">Due {formatDate(inv.due_date)}</p>
                             )}
@@ -210,7 +296,12 @@ export function ReceivablesClient({ customers }: { customers: Customer[] }) {
 
       {selected.size > 0 && (
         <div className="sticky bottom-0 left-0 right-0 bg-slate-900 text-white px-5 py-3 flex items-center justify-between shadow-lg">
-          <span className="text-sm font-medium">{selected.size} invoice{selected.size === 1 ? '' : 's'} selected</span>
+          <div>
+            <span className="text-sm font-medium">{selected.size} invoice{selected.size === 1 ? '' : 's'} selected</span>
+            {selected.size === MAX_BATCH_PRINT && (
+              <p className="text-[11px] text-slate-300">Maximum {MAX_BATCH_PRINT} invoices per print batch</p>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSelected(new Set())}

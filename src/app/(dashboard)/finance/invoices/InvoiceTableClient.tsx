@@ -22,6 +22,8 @@ interface Invoice {
   customers: { full_name: string; mobile_number: string } | null
 }
 
+const MAX_BATCH_PRINT = 100
+
 const statusIcons: Record<string, React.ReactNode> = {
   paid: <CheckCircle2 className="w-3.5 h-3.5" />,
   overdue: <AlertCircle className="w-3.5 h-3.5" />,
@@ -51,14 +53,19 @@ export function InvoiceTableClient({
   const toggleOne = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(id)) {
+        next.delete(id)
+      } else if (next.size < MAX_BATCH_PRINT) {
+        next.add(id)
+      }
       return next
     })
   }
 
   const toggleAll = () => {
-    setSelected(allSelected ? new Set() : new Set(invoices.map(inv => inv.id)))
+    setSelected(allSelected
+      ? new Set()
+      : new Set(invoices.slice(0, MAX_BATCH_PRINT).map(inv => inv.id)))
   }
 
   const printSelected = () => {
@@ -78,6 +85,7 @@ export function InvoiceTableClient({
                 type="checkbox"
                 checked={allSelected}
                 onChange={toggleAll}
+                title={invoices.length > MAX_BATCH_PRINT ? `Select first ${MAX_BATCH_PRINT} invoices` : undefined}
                 className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
               />
             </th>
@@ -104,8 +112,9 @@ export function InvoiceTableClient({
                   <input
                     type="checkbox"
                     checked={selected.has(inv.id)}
+                    disabled={!selected.has(inv.id) && selected.size >= MAX_BATCH_PRINT}
                     onChange={() => toggleOne(inv.id)}
-                    className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-40"
                   />
                 </td>
                 <td className="px-5 py-3.5">
@@ -180,7 +189,12 @@ export function InvoiceTableClient({
 
       {selected.size > 0 && (
         <div className="sticky bottom-0 left-0 right-0 bg-slate-900 text-white px-5 py-3 flex items-center justify-between shadow-lg">
-          <span className="text-sm font-medium">{selected.size} invoice{selected.size === 1 ? '' : 's'} selected</span>
+          <div>
+            <span className="text-sm font-medium">{selected.size} invoice{selected.size === 1 ? '' : 's'} selected</span>
+            {selected.size === MAX_BATCH_PRINT && (
+              <p className="text-[11px] text-slate-300">Maximum {MAX_BATCH_PRINT} invoices per print batch</p>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSelected(new Set())}

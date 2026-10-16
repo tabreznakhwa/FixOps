@@ -19,7 +19,17 @@ export interface ComplaintListItem {
   preferred_time: string | null
   customer_id: string | null
   visit_order: number | null
-  customers: { full_name: string; mobile_number: string } | null
+  customers: {
+    full_name: string
+    mobile_number: string
+    address: string | null
+    block: string | null
+    street: string | null
+    avenue: string | null
+    house_number: string | null
+    area: string | null
+    city: string | null
+  } | null
   users: { full_name: string } | null
   internalNotesCount?: number
   latestInternalNote?: string | null
@@ -219,6 +229,18 @@ export function ComplaintList({ complaints, sourcePath, isTechnician, canReorder
         const style = statusStyles[c.status] ?? 'border-l-slate-400 bg-white hover:bg-slate-50'
         const firstCategory = Array.isArray(c.service_category) ? c.service_category[0] : c.service_category ?? ''
         const canDragRow = canReorder && !completed
+        const customerAddress = customer
+          ? [
+              customer.address,
+              [
+                customer.block && `Block ${customer.block}`,
+                customer.street && `Street ${customer.street}`,
+                customer.avenue && `Ave ${customer.avenue}`,
+                customer.house_number && `House ${customer.house_number}`,
+              ].filter(Boolean).join(', '),
+              [customer.area, customer.city].filter(Boolean).join(', '),
+            ].filter(Boolean).join(' · ')
+          : ''
 
         return (
           <div
@@ -292,6 +314,7 @@ export function ComplaintList({ complaints, sourcePath, isTechnician, canReorder
               </p>
               <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-600 flex-wrap">
                 <span>👤 {customer?.full_name ?? 'No customer'}</span>
+                {customerAddress && <span>📍 {customerAddress}</span>}
                 {assignee && <span>🔧 {assignee.full_name}</span>}
                 <span>🕒 {formatDateTime(c.created_at)}</span>
                 {c.preferred_date && (

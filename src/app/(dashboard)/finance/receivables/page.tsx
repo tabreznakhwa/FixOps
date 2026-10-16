@@ -1,10 +1,24 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
-import { formatCurrency, formatDate } from '@/lib/utils'
-import { TrendingDown, Clock, Users } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
+import { AlertTriangle, TrendingDown, Clock, Users } from 'lucide-react'
 import Link from 'next/link'
 import { ReceivablesClient } from './ReceivablesClient'
+import {
+  resolveReceivableSort,
+  sortReceivableRows,
+  type ReceivableRow,
+} from './receivablesSort'
+import {
+  fetchAllOpeningReceivables,
+  fetchAllReceivableInvoices,
+} from './receivables.server'
 import { currentPath, withReturnTo } from '@/lib/backNav'
+import { kuwaitISODate } from '@/lib/attendance'
+import { buildReceivableAging } from './receivablesAging'
+import { getAuthedProfile } from '@/lib/auth/session'
+import { getRoleAccess } from '@/lib/orgPermissions'
 
 export const metadata = { title: 'Receivables' }
 
@@ -14,37 +28,31 @@ export default async function ReceivablesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const params = await searchParams
-  const receivablesPath = currentPath('/finance/receivables', params)
+  const { sort, direction } = resolveReceivableSort(params.sort, params.dir)
+  const canonicalParams = { ...params, sort, dir: direction }
+  const receivablesPath = currentPath('/finance/receivables', canonicalParams)
   const supabase = await createClient()
+  const { profile } = await getAuthedProfile()
+  if (!profile?.organization_id || profile.status !== 'active') redirect('/login')
+  const financeAccess = await getRoleAccess(profile.organization_id, profile.role)
+  if (financeAccess.finance === 'none') redirect('/dashboard?error=unauthorized')
 
-  const [receivablesRes, openingRes] = await Promise.all([
-    (supabase as any)
-      .from('invoices')
-      .select('id, invoice_number, customer_id, balance_due, due_date, status, invoice_date, customers(id, full_name, mobile_number, area)')
-      .in('status', ['issued', 'partial', 'overdue'])
-      .gt('balance_due', 0)
-      .order('balance_due', { ascending: false }),
-    (supabase as any)
-      .from('opening_receivables')
-      .select('id, bill_ref, customer_id, balance_due, due_date, invoice_date, customers(id, full_name, mobile_number, area)')
-      .gt('balance_due', 0),
+  const [invoiceResult, openingResult] = await Promise.all([
+    fetchAllReceivableInvoices(supabase),
+    fetchAllOpeningReceivables(supabase),
   ])
+  const receivables = invoiceResult.rows
+  const openingReceivables = openingResult.rows
+  const failedSources = [invoiceResult.error, openingResult.error].filter(
+    (error): error is string => Boolean(error),
+  )
 
-  const receivables = (receivablesRes.data ?? []) as Array<{
-    id: string; invoice_number: string; customer_id: string; balance_due: number; due_date: string | null; status: string; invoice_date: string;
-    customers: { id: string; full_name: string; mobile_number: string; area: string | null } | null
-  }>
-
-  const openingReceivables = (openingRes.data ?? []) as Array<{
-    id: string; bill_ref: string | null; customer_id: string; balance_due: number; due_date: string | null; invoice_date: string;
-    customers: { id: string; full_name: string; mobile_number: string; area: string | null } | null
-  }>
-
-  // Group by customer
+  // Group by customer. Customer rank always follows total outstanding balance;
+  // the URL-backed sort applies only within each customer's rows.
   const customerMap: Record<string, {
     customer_id: string; full_name: string; mobile_number: string; area: string | null
     total_balance: number
-    invoices: { id: string; invoice_number: string; balance_due: number; due_date: string | null; status: string; invoice_date: string }[]
+    invoices: ReceivableRow[]
   }> = {}
 
   receivables.forEach((inv) => {
@@ -54,7 +62,16 @@ export default async function ReceivablesPage({
       customerMap[inv.customer_id] = { customer_id: inv.customer_id, full_name: customer.full_name, mobile_number: customer.mobile_number, area: customer.area, total_balance: 0, invoices: [] }
     }
     customerMap[inv.customer_id].total_balance += inv.balance_due
-    customerMap[inv.customer_id].invoices.push({ id: inv.id, invoice_number: inv.invoice_number, balance_due: inv.balance_due, due_date: inv.due_date, status: inv.status, invoice_date: inv.invoice_date })
+    customerMap[inv.customer_id].invoices.push({
+      rowKey: `invoice:${inv.id}`,
+      invoiceId: inv.id,
+      source: 'invoice',
+      invoice_number: inv.invoice_number,
+      balance_due: inv.balance_due,
+      due_date: inv.due_date,
+      status: inv.status,
+      invoice_date: inv.invoice_date,
+    })
   })
 
   openingReceivables.forEach((op) => {
@@ -64,26 +81,33 @@ export default async function ReceivablesPage({
       customerMap[op.customer_id] = { customer_id: op.customer_id, full_name: customer.full_name, mobile_number: customer.mobile_number, area: customer.area, total_balance: 0, invoices: [] }
     }
     customerMap[op.customer_id].total_balance += op.balance_due
-    customerMap[op.customer_id].invoices.push({ id: '', invoice_number: op.bill_ref ?? 'Opening', balance_due: op.balance_due, due_date: op.due_date, status: 'opening', invoice_date: op.invoice_date })
+    customerMap[op.customer_id].invoices.push({
+      rowKey: `opening:${op.id}`,
+      invoiceId: null,
+      source: 'opening',
+      invoice_number: op.invoice_ref ?? 'Opening',
+      balance_due: op.balance_due,
+      due_date: op.due_date,
+      status: 'opening',
+      invoice_date: op.invoice_date,
+    })
   })
 
-  const customers = Object.values(customerMap).sort((a, b) => b.total_balance - a.total_balance)
+  const customers = Object.values(customerMap)
+    .map(customer => ({
+      ...customer,
+      invoices: sortReceivableRows(customer.invoices, sort, direction),
+    }))
+    .sort((a, b) => {
+      const balanceComparison = b.total_balance - a.total_balance
+      return balanceComparison || a.customer_id.localeCompare(b.customer_id)
+    })
 
-  // Aging buckets
-  const now = new Date()
-  const aging = { current: 0, '30': 0, '60': 0, '90+': 0 }
-  const allForAging = [
+  // Aging follows Kuwait calendar dates rather than elapsed UTC hours.
+  const aging = buildReceivableAging([
     ...receivables.map(i => ({ balance_due: i.balance_due, due_date: i.due_date })),
     ...openingReceivables.map(i => ({ balance_due: i.balance_due, due_date: i.due_date })),
-  ]
-  allForAging.forEach((inv) => {
-    if (!inv.due_date) { aging.current += inv.balance_due; return }
-    const daysPast = Math.floor((now.getTime() - new Date(inv.due_date).getTime()) / (1000 * 60 * 60 * 24))
-    if (daysPast <= 0) aging.current += inv.balance_due
-    else if (daysPast <= 30) aging['30'] += inv.balance_due
-    else if (daysPast <= 60) aging['60'] += inv.balance_due
-    else aging['90+'] += inv.balance_due
-  })
+  ], kuwaitISODate())
 
   const totalReceivables = customers.reduce((s, c) => s + c.total_balance, 0)
 
@@ -98,6 +122,20 @@ export default async function ReceivablesPage({
       />
 
       <div className="p-6 space-y-6">
+        {failedSources.length > 0 && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold">Receivables are incomplete</p>
+                <p className="mt-0.5 text-xs">
+                  {failedSources.join('; ')}. Totals and aging below should not be relied on until the data reloads successfully.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Total + Aging */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-5 text-white">
@@ -118,7 +156,7 @@ export default async function ReceivablesPage({
                 { label: 'Current (not due)', value: aging.current, color: 'bg-green-500' },
                 { label: '1–30 days overdue', value: aging['30'], color: 'bg-yellow-500' },
                 { label: '31–60 days overdue', value: aging['60'], color: 'bg-orange-500' },
-                { label: '60+ days overdue', value: aging['90+'], color: 'bg-red-500' },
+                { label: '61+ days overdue', value: aging['90+'], color: 'bg-red-500' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="flex items-center gap-3">
                   <div className={`w-2.5 h-2.5 rounded-full ${color} flex-shrink-0`} />
@@ -138,7 +176,11 @@ export default async function ReceivablesPage({
             <p className="text-slate-400 text-sm">All invoices are paid up!</p>
           </div>
         ) : (
-          <ReceivablesClient customers={customers} />
+          <ReceivablesClient
+            customers={customers}
+            sort={sort}
+            direction={direction}
+          />
         )}
       </div>
     </div>

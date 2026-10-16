@@ -27,7 +27,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
 
   let query = supabase
     .from('complaints')
-    .select('id, complaint_number, description, priority, status, service_category, created_at, preferred_date, preferred_time, customer_id, visit_order, customers(full_name, mobile_number), users!complaints_assigned_to_fkey(full_name)')
+    .select('id, complaint_number, description, priority, status, service_category, created_at, preferred_date, preferred_time, customer_id, visit_order, customers(full_name, mobile_number, address, block, street, avenue, house_number, area, city), users!complaints_assigned_to_fkey(full_name)')
 
   if (isTechnician) {
     query = query.order('visit_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false })
@@ -74,18 +74,28 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
     const workOrdersMap: Record<string, string[]> = {}
 
     if (notesRes.data) {
-      (notesRes.data as any[]).forEach((n: any) => {
-        if (!notesMap[n.complaint_id]) {
-          notesMap[n.complaint_id] = { count: 0, latestNote: n.note, latestAuthor: n.author_name }
+      const notes = notesRes.data as Array<{
+        complaint_id: string
+        note: string
+        author_name: string | null
+      }>
+      notes.forEach((note) => {
+        if (!notesMap[note.complaint_id]) {
+          notesMap[note.complaint_id] = {
+            count: 0,
+            latestNote: note.note,
+            latestAuthor: note.author_name,
+          }
         }
-        notesMap[n.complaint_id].count++
+        notesMap[note.complaint_id].count++
       })
     }
 
     if (woRes.data) {
-      (woRes.data as any[]).forEach(wo => {
-        if (!workOrdersMap[wo.complaint_id]) workOrdersMap[wo.complaint_id] = []
-        workOrdersMap[wo.complaint_id].push(wo.status)
+      const workOrders = woRes.data as Array<{ complaint_id: string; status: string }>
+      workOrders.forEach((workOrder) => {
+        if (!workOrdersMap[workOrder.complaint_id]) workOrdersMap[workOrder.complaint_id] = []
+        workOrdersMap[workOrder.complaint_id].push(workOrder.status)
       })
     }
 
