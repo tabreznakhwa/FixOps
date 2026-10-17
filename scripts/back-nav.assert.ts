@@ -12,25 +12,25 @@ import {
 } from '../src/lib/backNav'
 
 assert.equal(safeReturnTo('/complaints?status=open#today'), '/complaints?status=open#today')
-assert.equal(safeReturnTo('/inventory/assets?__tab=1&status=active'), '/inventory/assets?status=active')
-assert.equal(safeReturnTo('/dashboard?__tab=1'), '/dashboard')
+assert.equal(safeReturnTo('/inventory/assets?__popup=1&status=active'), '/inventory/assets?status=active')
+assert.equal(safeReturnTo('/dashboard?__popup=1'), '/dashboard')
 assert.equal(safeReturnTo(['/complaints', '/work-orders']), null)
 assert.equal(safeReturnTo('https://example.com'), null)
 assert.equal(safeReturnTo('//example.com'), null)
 assert.equal(safeReturnTo('/\\example.com'), null)
 assert.equal(safeReturnTo('/complaints\n'), null)
 assert.equal(safeReturnTo(' /complaints'), null)
-assert.equal(stripTabParam('/complaints?__tab=1&q=AC#open'), '/complaints?q=AC#open')
+assert.equal(stripTabParam('/complaints?__popup=1&q=AC#open'), '/complaints?q=AC#open')
 
 assert.equal(
-  currentPath('/finance/invoices', { status: 'overdue', page: '2', __tab: '1' }),
+  currentPath('/finance/invoices', { status: 'overdue', page: '2', __popup: '1' }),
   '/finance/invoices?status=overdue&page=2',
 )
 assert.equal(
   currentPath('/complaints', { status: ['new', 'assigned'], q: 'a&b' }),
   '/complaints?status=new&status=assigned&q=a%26b',
 )
-const params = new URLSearchParams('q=AC&status=open&__tab=1')
+const params = new URLSearchParams('q=AC&status=open&__popup=1')
 assert.equal(currentPath('/work-orders', params), '/work-orders?q=AC&status=open')
 
 assert.equal(labelForPath('/inventory/assets/123?return_to=x'), 'Company Assets')

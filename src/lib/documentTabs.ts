@@ -7,6 +7,7 @@ export type DocumentKind =
   | 'purchase-order'
   | 'payslip'
   | 'work-order'
+  | 'complaint'
 
 export interface DocumentRoute {
   href: string
@@ -15,30 +16,10 @@ export interface DocumentRoute {
   fallbackLabel: string
 }
 
-export const DOCUMENT_TAB_OPEN = 'fixops:document-tab/open' as const
-export const DOCUMENT_TAB_ACK = 'fixops:document-tab/ack' as const
-export const DOCUMENT_TAB_PROTOCOL_VERSION = 1 as const
 export const MAX_DOCUMENT_LABEL_LENGTH = 120
 export const MAX_DOCUMENT_HREF_LENGTH = 8192
-export const MAX_DOCUMENT_REQUEST_ID_LENGTH = 100
-
-export interface DocumentTabOpenRequest {
-  type: typeof DOCUMENT_TAB_OPEN
-  version: typeof DOCUMENT_TAB_PROTOCOL_VERSION
-  requestId: string
-  href: string
-  label: string
-}
-
-export interface DocumentTabAck {
-  type: typeof DOCUMENT_TAB_ACK
-  version: typeof DOCUMENT_TAB_PROTOCOL_VERSION
-  requestId: string
-  accepted: true
-}
 
 const INTERNAL_ORIGIN = 'https://fixops.internal'
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/
 const CONTROL_CHARACTERS_GLOBAL = /[\u0000-\u001f\u007f]/g
 const SAFE_SEGMENT = /^[A-Za-z0-9_-]+$/
 const RESERVED_SEGMENTS = new Set(['new', 'edit', 'merge', 'print-batch'])
@@ -87,11 +68,13 @@ const DOCUMENT_ROUTES: RouteDefinition[] = [
     fallbackLabel: 'Work Order',
     key: ([id]) => `document:work-order:${id}`,
   },
+  {
+    kind: 'complaint',
+    pattern: /^\/complaints\/([^/]+)\/?$/,
+    fallbackLabel: 'Complaint',
+    key: ([id]) => `document:complaint:${id}`,
+  },
 ]
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 function safeRouteSegments(match: RegExpMatchArray): string[] | null {
   const segments: string[] = []
@@ -158,53 +141,4 @@ export function sanitizeDocumentLabel(value: unknown, fallback: string): string 
   if (typeof value !== 'string') return fallback
   const normalized = value.replace(CONTROL_CHARACTERS_GLOBAL, ' ').replace(/\s+/g, ' ').trim()
   return normalized ? normalized.slice(0, MAX_DOCUMENT_LABEL_LENGTH) : fallback
-}
-
-export function isDocumentTabOpenRequest(value: unknown): value is DocumentTabOpenRequest {
-  if (!isPlainObject(value)) return false
-  return value.type === DOCUMENT_TAB_OPEN &&
-    value.version === DOCUMENT_TAB_PROTOCOL_VERSION &&
-    typeof value.requestId === 'string' &&
-    value.requestId.length > 0 &&
-    value.requestId.length <= MAX_DOCUMENT_REQUEST_ID_LENGTH &&
-    !CONTROL_CHARACTERS.test(value.requestId) &&
-    typeof value.href === 'string' &&
-    value.href.length > 0 &&
-    value.href.length <= MAX_DOCUMENT_HREF_LENGTH &&
-    typeof value.label === 'string' &&
-    value.label.length <= MAX_DOCUMENT_LABEL_LENGTH * 2
-}
-
-export function isDocumentTabAck(value: unknown): value is DocumentTabAck {
-  if (!isPlainObject(value)) return false
-  return value.type === DOCUMENT_TAB_ACK &&
-    value.version === DOCUMENT_TAB_PROTOCOL_VERSION &&
-    value.accepted === true &&
-    typeof value.requestId === 'string' &&
-    value.requestId.length > 0 &&
-    value.requestId.length <= MAX_DOCUMENT_REQUEST_ID_LENGTH &&
-    !CONTROL_CHARACTERS.test(value.requestId)
-}
-
-export function createDocumentTabRequest(
-  requestId: string,
-  route: DocumentRoute,
-  label: string,
-): DocumentTabOpenRequest {
-  return {
-    type: DOCUMENT_TAB_OPEN,
-    version: DOCUMENT_TAB_PROTOCOL_VERSION,
-    requestId,
-    href: route.href,
-    label: sanitizeDocumentLabel(label, route.fallbackLabel),
-  }
-}
-
-export function createDocumentTabAck(requestId: string): DocumentTabAck {
-  return {
-    type: DOCUMENT_TAB_ACK,
-    version: DOCUMENT_TAB_PROTOCOL_VERSION,
-    requestId,
-    accepted: true,
-  }
 }

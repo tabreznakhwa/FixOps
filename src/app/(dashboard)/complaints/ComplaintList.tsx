@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { CheckCircle, GripVertical, Loader2, MessageSquare, RotateCcw, Save } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
 import { withReturnTo } from '@/lib/backNav'
@@ -285,7 +285,7 @@ export function ComplaintList({ complaints, sourcePath, isTechnician, canReorder
               <div className="text-xl leading-none">{categoryIcons[firstCategory] ?? '🔧'}</div>
             </div>
 
-            <Link href={withReturnTo(`/complaints/${c.id}`, sourcePath)} prefetch={false} className="flex-1 min-w-0">
+            <DocumentLink href={withReturnTo(`/complaints/${c.id}`, sourcePath)} tabLabel={c.complaint_number} className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="text-xs font-mono text-slate-500">{c.complaint_number}</span>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getPriorityColor(c.priority)}`}>
@@ -347,7 +347,7 @@ export function ComplaintList({ complaints, sourcePath, isTechnician, canReorder
                   ))}
                 </div>
               )}
-            </Link>
+            </DocumentLink>
           </div>
         )
       })}

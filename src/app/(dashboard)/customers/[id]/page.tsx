@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { notFound } from 'next/navigation'
 import { Phone, MessageCircle, Mail, MapPin, Edit, Plus, Building2, User, Printer } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
@@ -252,9 +253,10 @@ export default async function CustomerDetailPage({
               {complaints.map((c) => {
                 const cats = Array.isArray(c.service_category) ? c.service_category : [c.service_category]
                 return (
-                  <Link
+                  <DocumentLink
                     key={c.id}
                     href={withReturnTo(`/complaints/${c.id}`, customerPath)}
+                    tabLabel={c.complaint_number}
                     className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors group"
                   >
                     <span className="text-xl flex-shrink-0 mt-0.5">{categoryIcons[cats[0]] ?? '🔧'}</span>
@@ -272,7 +274,7 @@ export default async function CustomerDetailPage({
                     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0 ${getStatusColor(c.status)}`}>
                       {formatStatus(c.status)}
                     </span>
-                  </Link>
+                  </DocumentLink>
                 )
               })}
             </div>

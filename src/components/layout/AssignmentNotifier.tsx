@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Bell, X, ExternalLink, Volume2 } from 'lucide-react'
-import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { withReturnTo } from '@/lib/backNav'
-import { useTabContext } from '@/contexts/TabContext'
 
 interface AssignmentNotif {
   id: string
@@ -58,8 +58,9 @@ async function playSound() {
 }
 
 export function AssignmentNotifier({ userId }: { userId: string }) {
-  const { tabs, activeTabId, openTab } = useTabContext()
-  const activeSource = tabs.find((tab) => tab.id === activeTabId)?.url ?? '/dashboard'
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const activeSource = searchParams.toString() ? `${pathname}?${searchParams}` : pathname
   const [notifs, setNotifs] = useState<AssignmentNotif[]>([])
   const [audioReady, setAudioReady] = useState(false)
   const audioUnlocked = useRef(false)
@@ -161,19 +162,14 @@ export function AssignmentNotifier({ userId }: { userId: string }) {
                   <p className="text-sm font-bold text-slate-900">New Job Assigned</p>
                   <p className="text-xs font-mono text-blue-600 mt-0.5">{n.complaintNumber}</p>
                   <p className="text-xs text-slate-600 mt-1 line-clamp-2">{n.description}</p>
-                  <Link
+                  <DocumentLink
                     href={complaintHref}
-                    onClick={(event) => {
-                      dismiss(n.id)
-                      if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-                        event.preventDefault()
-                        openTab(complaintHref, n.complaintNumber)
-                      }
-                    }}
+                    tabLabel={n.complaintNumber}
+                    onClick={() => dismiss(n.id)}
                     className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
                   >
                     View complaint <ExternalLink className="w-3 h-3" />
-                  </Link>
+                  </DocumentLink>
                 </div>
                 <button type="button" onClick={() => dismiss(n.id)} className="text-slate-400 hover:text-slate-600 flex-shrink-0">
                   <X className="w-4 h-4" />

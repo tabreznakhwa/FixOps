@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime } from '@/lib/utils'
 import { ArrowRight } from 'lucide-react'
 import { withReturnTo } from '@/lib/backNav'
@@ -36,7 +37,7 @@ export function RecentComplaints({ complaints }: { complaints: Complaint[] }) {
       ) : (
         <div className="divide-y divide-slate-50">
           {complaints.map((c) => (
-            <Link key={c.id} href={withReturnTo(`/complaints/${c.id}`, dashboardPath)} className="flex items-start gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors group">
+            <DocumentLink key={c.id} href={withReturnTo(`/complaints/${c.id}`, dashboardPath)} tabLabel={c.complaint_number} className="flex items-start gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors group">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xs font-mono text-slate-400">{c.complaint_number}</span>
@@ -54,7 +55,7 @@ export function RecentComplaints({ complaints }: { complaints: Complaint[] }) {
               <span className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${getStatusColor(c.status)}`}>
                 {formatStatus(c.status)}
               </span>
-            </Link>
+            </DocumentLink>
           ))}
         </div>
       )}

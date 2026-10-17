@@ -86,9 +86,15 @@ Back destination = **where the user came from**, never what the record relates t
 Origin travels as `return_to` / `work_order_id` / `complaint_id` URL params.
 `resolveBack()` in `src/lib/backNav.ts` returns href **and** label together so a
 button cannot name one destination and navigate to another. `BackButton` never
-consults history — every module renders inside an iframe with a patched history
-API (`TabModeGuard` + `IFRAME_GUARD` in `(dashboard)/layout.tsx`), so the stack is
-meaningless. After a successful submit use `router.replace()`, never `push()` or
+consults history — formal documents (invoices, work orders, complaints, etc.)
+each open in their own OS popup window via `DocumentLink`
+(`src/components/ui/DocumentLink.tsx`, `window.open()` keyed by a stable
+`tabKey` so reopening the same document focuses one window instead of
+stacking more), so there is no shared history to go back through. The popup's
+own page renders without the sidebar via a `?__popup=1` flag threaded through
+`proxy.ts` → `x-popup-mode` header → `(dashboard)/layout.tsx`, whose injected
+script keeps that flag on subsequent client-side navigations inside the same
+popup. After a successful submit use `router.replace()`, never `push()` or
 `window.location.href`, or the completed form stays in the stack.
 
 ### Supabase row limits
@@ -215,7 +221,8 @@ appearing, suspect a schema mismatch, not the caller.
 ## Testing
 
 Focused assertions for customer/vendor ledgers, vendor outstanding, document
-tabs/tab state, and unpaid annual leave now live under `scripts/*.assert.ts`.
+routing (`document-tabs.assert.ts`), back navigation, and unpaid annual leave
+now live under `scripts/*.assert.ts`.
 Additional older suites may still live in the session scratchpad. Run assertion
 files with `npx tsx --tsconfig tsconfig.json <file>` **from the project root** —
 the path alias breaks otherwise. Anything money- or stock-related should get a
@@ -224,6 +231,7 @@ test before it ships.
 ## Verifying UI changes
 
 The user's Chrome is signed in and reachable through the claude-in-chrome tools.
-Append `?__tab=1` to load a page outside the tab shell. **Verify changes there
-rather than asking the user to check** — several bugs in this app looked fixed and
-were not. Never click anything that writes money or deletes data.
+Append `?__popup=1` to load a page the way a `DocumentLink` popup window would
+(no sidebar). **Verify changes there rather than asking the user to check** —
+several bugs in this app looked fixed and were not. Never click anything that
+writes money or deletes data.

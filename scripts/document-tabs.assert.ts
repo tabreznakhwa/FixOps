@@ -1,14 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   parseDocumentRoute,
-  isDocumentTabOpenRequest,
-  isDocumentTabAck,
   sanitizeDocumentLabel,
-  createDocumentTabRequest,
-  createDocumentTabAck,
-  DOCUMENT_TAB_OPEN,
-  DOCUMENT_TAB_ACK,
-  DOCUMENT_TAB_PROTOCOL_VERSION,
 } from '../src/lib/documentTabs'
 
 // --- Accepted formal-document routes ---------------------------------------
@@ -39,6 +32,11 @@ assert.equal(workOrder?.kind, 'work-order')
 assert.equal(workOrder?.tabKey, 'document:work-order:wo-1')
 assert.equal(workOrder?.href, '/work-orders/wo-1')
 
+const complaint = parseDocumentRoute('/complaints/c-1')
+assert.equal(complaint?.kind, 'complaint')
+assert.equal(complaint?.tabKey, 'document:complaint:c-1')
+assert.equal(complaint?.href, '/complaints/c-1')
+
 // Trailing slash is accepted and canonicalized.
 assert.equal(parseDocumentRoute('/finance/invoices/abc123/')?.href, '/finance/invoices/abc123')
 
@@ -68,7 +66,10 @@ for (const bad of [
   '/work-orders/new',
   '/work-orders/wo-1/edit',
   '/work-orders/wo-1/extra',
-  '/complaints/c-1',
+  '/complaints',
+  '/complaints/new',
+  '/complaints/c-1/edit',
+  '/complaints/c-1/extra',
   '/customers',
   'javascript:alert(1)',
   'https://example.com/finance/invoices/abc123',
@@ -81,16 +82,16 @@ for (const bad of [
   assert.equal(parseDocumentRoute(bad), null, `should reject: ${bad}`)
 }
 
-// --- Identity: query, fragment, return_to and __tab never change tabKey -----
+// --- Identity: query, fragment, return_to and __popup never change tabKey ---
 
 const base = parseDocumentRoute('/finance/invoices/abc123')!
 const withOrigin = parseDocumentRoute('/finance/invoices/abc123?return_to=%2Ffinance%2Finvoices%3Fstatus%3Doverdue')!
 assert.equal(withOrigin.tabKey, base.tabKey)
 assert.equal(withOrigin.href, '/finance/invoices/abc123?return_to=%2Ffinance%2Finvoices%3Fstatus%3Doverdue')
 
-const withTab = parseDocumentRoute('/finance/invoices/abc123?__tab=1&return_to=x')!
-assert.equal(withTab.tabKey, base.tabKey)
-assert.equal(withTab.href, '/finance/invoices/abc123?return_to=x')
+const withPopup = parseDocumentRoute('/finance/invoices/abc123?__popup=1&return_to=x')!
+assert.equal(withPopup.tabKey, base.tabKey)
+assert.equal(withPopup.href, '/finance/invoices/abc123?return_to=x')
 
 const withFragment = parseDocumentRoute('/finance/invoices/abc123#summary')!
 assert.equal(withFragment.tabKey, base.tabKey)
@@ -103,7 +104,7 @@ const otherStaff = parseDocumentRoute('/payroll/slips/run-1/staff-3')!
 assert.notEqual(otherStaff.tabKey, payslip!.tabKey)
 
 const workOrderFromComplaint = parseDocumentRoute(
-  '/work-orders/wo-1?complaint_id=c-1&return_to=%2Fcomplaints%2Fc-1&__tab=1',
+  '/work-orders/wo-1?complaint_id=c-1&return_to=%2Fcomplaints%2Fc-1&__popup=1',
 )!
 assert.equal(workOrderFromComplaint.tabKey, workOrder!.tabKey)
 assert.equal(workOrderFromComplaint.href, '/work-orders/wo-1?complaint_id=c-1&return_to=%2Fcomplaints%2Fc-1')
@@ -111,32 +112,14 @@ assert.equal(workOrderFromComplaint.href, '/work-orders/wo-1?complaint_id=c-1&re
 const otherWorkOrder = parseDocumentRoute('/work-orders/wo-2')!
 assert.notEqual(otherWorkOrder.tabKey, workOrder!.tabKey)
 
-// --- Protocol type guards ----------------------------------------------------
+const complaintFromList = parseDocumentRoute(
+  '/complaints/c-1?return_to=%2Fcomplaints%3Fstatus%3Dnew&__popup=1',
+)!
+assert.equal(complaintFromList.tabKey, complaint!.tabKey)
+assert.equal(complaintFromList.href, '/complaints/c-1?return_to=%2Fcomplaints%3Fstatus%3Dnew')
 
-const request = createDocumentTabRequest('req-1', base, '  INV-001\n ')
-assert.equal(request.type, DOCUMENT_TAB_OPEN)
-assert.equal(request.version, DOCUMENT_TAB_PROTOCOL_VERSION)
-assert.equal(request.href, '/finance/invoices/abc123')
-assert.equal(request.label, 'INV-001') // sanitized
-assert.ok(isDocumentTabOpenRequest(request))
-
-const ack = createDocumentTabAck('req-1')
-assert.equal(ack.type, DOCUMENT_TAB_ACK)
-assert.equal(ack.accepted, true)
-assert.ok(isDocumentTabAck(ack))
-
-assert.equal(isDocumentTabOpenRequest({ ...request, version: 2 }), false)
-assert.equal(isDocumentTabOpenRequest({ ...request, type: 'other' }), false)
-assert.equal(isDocumentTabOpenRequest({ ...request, requestId: '' }), false)
-assert.equal(isDocumentTabOpenRequest({ ...request, requestId: 'bad\nid' }), false)
-assert.equal(isDocumentTabOpenRequest({ ...request, label: null }), false)
-assert.equal(isDocumentTabOpenRequest(null), false)
-assert.equal(isDocumentTabOpenRequest('nope'), false)
-
-assert.equal(isDocumentTabAck({ ...ack, accepted: false }), false)
-assert.equal(isDocumentTabAck({ ...ack, version: 2 }), false)
-assert.equal(isDocumentTabAck({ ...ack, requestId: '' }), false)
-assert.equal(isDocumentTabAck(null), false)
+const otherComplaint = parseDocumentRoute('/complaints/c-2')!
+assert.notEqual(otherComplaint.tabKey, complaint!.tabKey)
 
 // --- Label sanitization -----------------------------------------------------
 

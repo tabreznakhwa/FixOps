@@ -58,17 +58,13 @@ export async function proxy(request: NextRequest) {
   }
 
 
-  // Pass tab-mode flag to the layout so it can strip the sidebar for iframe content.
-  // Three signals: explicit ?__tab=1 param, browser Sec-Fetch-Dest header for the initial
-  // iframe load, or Referer containing __tab= (catches router.push RSC fetches where
-  // Next.js's internal router strips ?__tab but the browser Referer still has it).
+  // Pass popup-mode flag to the layout so it can render without the sidebar
+  // for a document opened in its own window (DocumentLink sets ?__popup=1).
+  // A popup is a normal top-level navigation, so it always carries its own
+  // query string faithfully — no iframe-style Referer/Sec-Fetch-Dest sniffing
+  // is needed here.
   const baseHeaders = new Headers(request.headers)
-  const referer = request.headers.get('referer') ?? ''
-  const isTabRequest =
-    request.nextUrl.searchParams.has('__tab') ||
-    request.headers.get('sec-fetch-dest') === 'iframe' ||
-    referer.includes('__tab=')
-  if (isTabRequest) baseHeaders.set('x-tab-mode', '1')
+  if (request.nextUrl.searchParams.has('__popup')) baseHeaders.set('x-popup-mode', '1')
 
   let supabaseResponse = NextResponse.next({ request: { headers: baseHeaders } })
 

@@ -171,13 +171,13 @@ export function WorkOrderActions({
       {!isCancelled && !isPaid && customerId && (
         <div className="border-t border-slate-100 pt-4">
           {existingInvoiceId ? (
-            <Link
+            <DocumentLink
               href={withReturnTo(`/finance/invoices/${existingInvoiceId}`, workOrderHref)}
               className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
             >
               <Banknote className="w-4 h-4" />
               Collect Payment
-            </Link>
+            </DocumentLink>
           ) : !showPayForm ? (
             <button
               onClick={() => {

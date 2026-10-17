@@ -2,9 +2,10 @@
  * Deterministic navigation origins for dashboard pages.
  *
  * Back goes where the user came from, never to whatever the record happens to
- * be related to. Browser history is not an origin in this app because modules
- * run inside persistent iframes. Callers carry the immediate source URL in a
- * `return_to` query parameter and resolve it here.
+ * be related to. Browser history is not a reliable origin in this app because
+ * formal documents open in their own popup window (see DocumentLink), so
+ * there's no shared history to go back through. Callers carry the immediate
+ * source URL in a `return_to` query parameter and resolve it here.
  */
 
 export type ReturnToValue = string | string[] | null | undefined
@@ -79,9 +80,9 @@ function normalizedInternalPath(value: string): string | null {
     const url = new URL(value, INTERNAL_ORIGIN)
     if (url.origin !== INTERNAL_ORIGIN) return null
 
-    // `__tab` is iframe rendering state, not navigation origin. The proxy and
-    // iframe Referer restore tab mode when the destination is opened.
-    url.searchParams.delete('__tab')
+    // `__popup` is popup-window rendering state, not navigation origin.
+    // DocumentLink sets it when opening the destination in a new window.
+    url.searchParams.delete('__popup')
     return `${url.pathname}${url.search}${url.hash}`
   } catch {
     return null
@@ -93,7 +94,7 @@ export function safeReturnTo(value: ReturnToValue): string | null {
   return typeof value === 'string' ? normalizedInternalPath(value) : null
 }
 
-/** Remove iframe-only state from a known internal path. */
+/** Remove popup-only state from a known internal path. */
 export function stripTabParam(path: string): string | null {
   return normalizedInternalPath(path)
 }
@@ -110,7 +111,7 @@ export function labelForPath(path: string, fallback = 'Back'): string {
   return match?.[1] ?? fallback
 }
 
-/** Build the exact current dashboard URL while excluding iframe-only state. */
+/** Build the exact current dashboard URL while excluding popup-only state. */
 export function currentPath(
   pathname: string,
   searchParams?: SearchParamsInput | null,
@@ -120,11 +121,11 @@ export function currentPath(
 
   if (searchParams && typeof (searchParams as { entries?: unknown }).entries === 'function') {
     for (const [key, value] of (searchParams as { entries(): IterableIterator<[string, string]> }).entries()) {
-      if (key !== '__tab') url.searchParams.append(key, value)
+      if (key !== '__popup') url.searchParams.append(key, value)
     }
   } else if (searchParams) {
     for (const [key, value] of Object.entries(searchParams)) {
-      if (key === '__tab' || value === undefined) continue
+      if (key === '__popup' || value === undefined) continue
       if (Array.isArray(value)) {
         value.forEach((item) => url.searchParams.append(key, item))
       } else {
