@@ -482,6 +482,19 @@ begin
       end if;
     end loop;
 
+    -- The bypass must still be on for this update too: guard_approved_leave_application
+    -- blocks a pending->approved status change unless it reads as on, and restoring the
+    -- flag beforehand (as an earlier revision of this function did) left that update
+    -- blocked by the same trigger it had just been granted write access around.
+    update public.leave_applications set
+      status = 'approved',
+      reviewed_by = p_reviewer_id,
+      reviewed_at = now(),
+      review_note = nullif(btrim(p_review_note), ''),
+      updated_at = now()
+    where id = v_request.id
+    returning * into v_request;
+
     perform set_config(
       'fixops.allow_leave_attendance_write',
       v_previous_bypass,
@@ -496,15 +509,6 @@ begin
       );
       raise;
   end;
-
-  update public.leave_applications set
-    status = 'approved',
-    reviewed_by = p_reviewer_id,
-    reviewed_at = now(),
-    review_note = nullif(btrim(p_review_note), ''),
-    updated_at = now()
-  where id = v_request.id
-  returning * into v_request;
 
   return query select v_request, true;
   return;

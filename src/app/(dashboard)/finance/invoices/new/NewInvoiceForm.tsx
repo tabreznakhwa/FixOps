@@ -582,6 +582,32 @@ export function NewInvoiceForm({ customers, workOrders, inventoryItems, customSe
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to create invoice')
 
+      // Invoices created from inside a work order's popup window (DocumentLink
+      // opens it via window.open, so window.opener stays set through this
+      // in-window "Create Invoice" navigation) are meant to finish the job and
+      // close, not sit around as a draft the user has to come back and issue.
+      // Everywhere else — standalone creation from the Invoices list — keeps
+      // the normal draft-then-issue workflow unchanged.
+      const isWorkOrderPopup =
+        Boolean(workOrderId) && typeof window !== 'undefined' && Boolean(window.opener)
+
+      if (isWorkOrderPopup) {
+        const issueRes = await fetch(`/api/invoices/${data.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'issued' }),
+        })
+        if (issueRes.ok) {
+          window.close()
+          return
+        }
+        // The invoice was created but couldn't be auto-issued (e.g. a posting
+        // rule rejected it). Don't close the window over an unissued draft —
+        // surface the error and land on the invoice so it can be issued by hand.
+        const issueData = await issueRes.json().catch(() => ({}))
+        setError(issueData.error ?? 'Invoice saved as a draft — could not be issued automatically')
+      }
+
       const relationship = workOrderId
         ? `?work_order_id=${encodeURIComponent(workOrderId)}`
         : ''
