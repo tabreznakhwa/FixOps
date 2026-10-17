@@ -48,3 +48,12 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# claude code local tooling/worktrees
+/.claude/
+
+# graphify skill output
+/graphify-out/
+
+# supabase CLI local state
+/supabase/.temp/
