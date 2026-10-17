@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { FileText, Plus, Search, Clock, CheckCircle2, XCircle, Send, RefreshCw } from 'lucide-react'
@@ -151,7 +152,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
                     <td className="px-4 py-3.5 hidden lg:table-cell text-sm text-slate-600">{q.valid_until ? formatDate(q.valid_until) : '—'}</td>
                     <td className="px-4 py-3.5 text-right text-sm font-bold text-slate-900">{formatCurrency(q.total_amount)}</td>
                     <td className="px-4 py-3.5"><span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusColor(q.status)}`}>{statusIcons[q.status]}{formatStatus(q.status)}</span></td>
-                    <td className="px-4 py-3.5 text-right"><Link href={withReturnTo(`/finance/quotations/${q.id}`, quotationsPath)} className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1">View</Link></td>
+                    <td className="px-4 py-3.5 text-right"><DocumentLink href={withReturnTo(`/finance/quotations/${q.id}`, quotationsPath)} tabLabel={q.quotation_number} className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1">View</DocumentLink></td>
                   </tr>
                 ))}
               </tbody>

@@ -1,6 +1,6 @@
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AlertTriangle, BookOpen, TrendingDown, TrendingUp } from 'lucide-react'
-import type { VendorLedger } from './vendorLedger'
+import { roundCurrency, type VendorLedger } from './vendorLedger'
 
 /**
  * Payables ledger in Cash Book form: Dr / Cr / running balance with an
@@ -71,20 +71,25 @@ export function VendorLedgerTable({
           <h3 className="font-semibold text-slate-900">
             Vendor Ledger{supplierName ? ` — ${supplierName}` : ''}
           </h3>
-          <span className="text-xs text-slate-500">{entries.length} entries · {periodLabel}</span>
+          <div className="text-right">
+            <span className="text-xs text-slate-500">{entries.length} entries · {periodLabel}</span>
+            {!allTime && entries.length === 0 && (
+              <p className="mt-0.5 text-xs text-slate-400">No transactions posted in this period</p>
+            )}
+          </div>
         </div>
 
-        {entries.length === 0 ? (
+        {entries.length === 0 && allTime ? (
           <div className="p-10 text-center">
             <BookOpen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-400">No vendor transactions in this period</p>
+            <p className="text-sm text-slate-400">No vendor transactions found</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Date</th>
+                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Posting Date</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Narration</th>
                   {showSupplier && (
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Supplier</th>
@@ -106,20 +111,34 @@ export function VendorLedgerTable({
                       <td className="px-4 py-3 text-sm font-semibold text-blue-700">Opening Balance b/f</td>
                       {showSupplier && <td className="px-4 py-3 text-sm text-slate-400">—</td>}
                       <td className="px-4 py-3 text-xs text-slate-400 font-mono">—</td>
-                      <td className="px-4 py-3 text-right text-sm text-slate-400">—</td>
-                      <td className="px-4 py-3 text-right text-sm font-semibold text-blue-700">
-                        {formatCurrency(periodOpeningBalance)}
+                      <td className="px-4 py-3 text-right text-sm font-semibold text-green-700">
+                        {periodOpeningBalance < 0 ? formatCurrency(Math.abs(periodOpeningBalance)) : '—'}
                       </td>
-                      <td className="px-5 py-3 text-right text-sm font-bold text-blue-700">
-                        {formatCurrency(periodOpeningBalance)}
+                      <td className="px-4 py-3 text-right text-sm font-semibold text-blue-700">
+                        {periodOpeningBalance > 0 ? formatCurrency(periodOpeningBalance) : '—'}
+                      </td>
+                      <td className={`px-5 py-3 text-right text-sm font-bold ${periodOpeningBalance >= 0 ? 'text-blue-700' : 'text-green-700'}`}>
+                        {formatCurrency(Math.abs(periodOpeningBalance))}
                       </td>
                     </tr>,
-                    ...entries.map((e, i) => {
-                      running += e.credit - e.debit
+                    ...entries.map((e) => {
+                      running = roundCurrency(running + e.credit - e.debit)
                       return (
-                        <tr key={i} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{formatDate(e.date)}</td>
-                          <td className="px-4 py-3 text-sm text-slate-800">{e.narration}</td>
+                        <tr key={e.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">
+                            <p>{formatDate(e.date)}</p>
+                            {e.provenance === 'inferred' && (
+                              <span className="mt-1 inline-flex rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                                Inferred legacy date
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-800">
+                            <p>{e.narration}</p>
+                            {e.documentDate && e.documentDate !== e.date && (
+                              <p className="mt-0.5 text-xs text-slate-400">Document date: {formatDate(e.documentDate)}</p>
+                            )}
+                          </td>
                           {showSupplier && (
                             <td className="px-4 py-3 text-sm text-slate-600">{e.supplier}</td>
                           )}
@@ -145,7 +164,7 @@ export function VendorLedgerTable({
                   <td className="px-4 py-3 text-right text-sm font-bold text-green-700">{formatCurrency(periodDebit)}</td>
                   <td className="px-4 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(periodCredit)}</td>
                   {(() => {
-                    const pb = periodOpeningBalance + periodCredit - periodDebit
+                    const pb = roundCurrency(periodOpeningBalance + periodCredit - periodDebit)
                     return (
                       <td className={`px-5 py-3 text-right text-sm font-bold ${pb >= 0 ? 'text-blue-700' : 'text-green-600'}`}>
                         {formatCurrency(pb)}
@@ -160,8 +179,8 @@ export function VendorLedgerTable({
 
         <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/60">
           <p className="text-xs text-slate-400">
-            Purchases (opening payables, POs and purchase invoices) are credited; payments, discounts
-            and advances are debited. Balance = amount owed to the vendor.
+            Posted liabilities (opening payables and purchase invoices) are credited; posted payments,
+            discounts, advances and reversals are debited. Purchase orders are excluded. Balance = amount owed to the vendor.
           </p>
         </div>
       </div>

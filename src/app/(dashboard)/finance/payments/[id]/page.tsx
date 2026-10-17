@@ -2,33 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
-import { AlertCircle, Loader2, Save } from 'lucide-react'
+import { DocumentLink } from '@/components/ui/DocumentLink'
+import { AlertCircle, Loader2 } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
 import { useCurrentPath } from '@/lib/backNav.client'
 import { resolveBack, withReturnTo } from '@/lib/backNav'
 
-const PAYMENT_MODES = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'card', label: 'Card' },
-  { value: 'pos', label: 'POS' },
-  { value: 'cheque', label: 'Cheque' },
-  { value: 'online', label: 'Online' },
-  { value: 'other', label: 'Other' },
-]
-
-const MODE_ICONS: Record<string, string> = {
-  cash: '💵', bank_transfer: '🏦', card: '💳', pos: '🖥️',
-  cheque: '📄', online: '🌐', other: '💰',
-}
-
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white'
-const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
-
-function fmt(n: number) {
-  return `KWD ${n.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`
-}
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -65,17 +45,7 @@ export default function PaymentDetailPage() {
   const [payment, setPayment] = useState<Payment | null>(null)
   const [loadError, setLoadError] = useState('')
 
-  // Edit form state
-  const [paymentDate, setPaymentDate] = useState('')
-  const [amount, setAmount] = useState('')
-  const [mode, setMode] = useState('')
-  const [reference, setReference] = useState('')
-  const [notes, setNotes] = useState('')
-
-  const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
-  const [saveSuccess, setSaveSuccess] = useState(false)
-
   const [cancelling, setCancelling] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [showCancel, setShowCancel] = useState(false)
@@ -86,46 +56,9 @@ export default function PaymentDetailPage() {
       .then(data => {
         if (data.error) { setLoadError(data.error); return }
         setPayment(data.payment)
-        setPaymentDate(data.payment.payment_date ?? '')
-        setAmount(String(data.payment.amount_received ?? ''))
-        setMode(data.payment.payment_mode ?? 'cash')
-        setReference(data.payment.reference_number ?? '')
-        setNotes(data.payment.notes ?? '')
       })
       .catch(() => setLoadError('Failed to load payment'))
   }, [id])
-
-  const handleSave = async () => {
-    setSaveError('')
-    setSaveSuccess(false)
-    if (!paymentDate) { setSaveError('Payment date is required'); return }
-    const amt = parseFloat(amount)
-    if (isNaN(amt) || amt <= 0) { setSaveError('Amount must be greater than zero'); return }
-    setSaving(true)
-    try {
-      const res = await fetch(`/api/payments/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          payment_date: paymentDate,
-          amount_received: amt,
-          payment_mode: mode,
-          reference_number: reference.trim() || null,
-          notes: notes.trim() || null,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Update failed')
-      setSaveSuccess(true)
-      // Refresh payment data
-      const fresh = await fetch(`/api/payments/${id}`).then(r => r.json())
-      if (fresh.payment) setPayment(fresh.payment)
-    } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : 'Failed to save')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   const handleCancel = async () => {
     if (!cancelReason.trim()) { setSaveError('Please enter a cancellation reason'); return }
@@ -195,12 +128,13 @@ export default function PaymentDetailPage() {
             <div>
               <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Invoice</p>
               {payment.invoices ? (
-                <Link
+                <DocumentLink
                   href={withReturnTo(`/finance/invoices/${payment.invoices.id}`, paymentPath)}
+                  tabLabel={payment.invoices.invoice_number}
                   className="font-semibold text-blue-600 hover:underline font-mono"
                 >
                   {payment.invoices.invoice_number}
-                </Link>
+                </DocumentLink>
               ) : (
                 <p className="text-slate-400 italic text-xs">Advance — no invoice</p>
               )}
@@ -208,59 +142,15 @@ export default function PaymentDetailPage() {
           </div>
         </div>
 
-        {/* Edit form */}
         {!payment.is_cancelled && (
-          <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-            <h2 className="font-semibold text-slate-900 text-sm">Edit Payment</h2>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+            Posted payment details are locked. To correct this receipt, cancel it and record a replacement payment.
+          </div>
+        )}
 
-            {saveError && (
-              <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2.5 rounded-lg text-sm">
-                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /><span>{saveError}</span>
-              </div>
-            )}
-            {saveSuccess && (
-              <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2.5 rounded-lg text-sm font-medium">
-                Payment updated successfully.
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className={labelClass}>Payment Date *</label>
-                <input type="date" className={inputClass} value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
-              </div>
-              <div>
-                <label className={labelClass}>Amount (KWD) *</label>
-                <input type="number" min="0.001" step="0.001" className={inputClass} value={amount} onChange={e => setAmount(e.target.value)} />
-              </div>
-              <div>
-                <label className={labelClass}>Payment Mode *</label>
-                <select className={inputClass} value={mode} onChange={e => setMode(e.target.value)}>
-                  {PAYMENT_MODES.map(m => (
-                    <option key={m.value} value={m.value}>{MODE_ICONS[m.value]} {m.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Reference Number</label>
-                <input type="text" placeholder="Cheque no., transfer ref., etc." className={inputClass} value={reference} onChange={e => setReference(e.target.value)} />
-              </div>
-              <div className="md:col-span-2">
-                <label className={labelClass}>Notes</label>
-                <textarea className={`${inputClass} resize-none`} rows={3} value={notes} onChange={e => setNotes(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 pt-1">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-60"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                {saving ? 'Saving…' : 'Save Changes'}
-              </button>
-            </div>
+        {saveError && (
+          <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2.5 rounded-lg text-sm">
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /><span>{saveError}</span>
           </div>
         )}
 
@@ -277,7 +167,7 @@ export default function PaymentDetailPage() {
             ) : (
               <div className="space-y-3">
                 <p className="text-sm font-semibold text-red-700">Cancel Payment</p>
-                <p className="text-xs text-slate-500">This will restore the invoice balance by {fmt(parseFloat(amount) || 0)}.</p>
+                <p className="text-xs text-slate-500">This records an equal-and-opposite posting and restores any linked allocation.</p>
                 <input
                   type="text"
                   placeholder="Reason for cancellation *"

@@ -183,7 +183,7 @@ export default async function PayrollGuidePage({
                 </div>
                 <div className="divide-y divide-slate-50 px-4">
                   <Field label="Attendance complete" desc="Every working day marked for every employee. Missing days are simply not counted." />
-                  <Field label="Absences marked" desc="Status Absent counts as 1 day, Half Day as 0.5 day." />
+                  <Field label="Absences marked" desc="Status Absent counts as 1 day, Half Day as 0.5 day. Approved annual leave appears separately as Unpaid Leave." />
                   <Field label="Public holidays flagged" desc="Tick Public Holiday on those attendance records. Fridays are detected automatically; other holidays are not." />
                   <Field label="Missing clock-outs fixed" desc="A record with no clock-out contributes no overtime hours." />
                   <Field label="Advances recorded" desc="Add any advance or loan on the staff profile so its balance is available to recover." />
@@ -205,7 +205,7 @@ export default async function PayrollGuidePage({
                 </Step>
 
                 <Step n={2} title="Review the auto-calculated table">
-                  <p>Every active employee is listed with Basic, Allowance, Food, Fixed OT, Normal OT, Fri/Hol OT, Absent days and Absent Deduction.</p>
+                  <p>Every active employee is listed with Basic, Allowance, Food, Fixed OT, Normal OT, Fri/Hol OT, Absent days and deductions, plus separate Unpaid Annual Leave days and deduction columns.</p>
                   <p>All of these are pulled from the staff profile and that month&apos;s attendance — they are read-only here.</p>
                   <p>Coloured banners at the top tell you what was detected: absent days, normal OT, Friday/holiday OT, or that no attendance exists at all.</p>
                   <Note type="warn">
@@ -283,8 +283,8 @@ export default async function PayrollGuidePage({
                 />
                 <Formula
                   label="Fixed monthly overtime"
-                  expr="Paid only if the employee is OT-eligible AND worked at least one Friday or public holiday that month"
-                  note="It is not an unconditional monthly amount — a month with no Friday/holiday work pays no fixed OT."
+                  expr="Paid March–September when the employee is OT-eligible"
+                  note="The applicable seasonal amount comes from the employee's salary profile. Friday/public-holiday OT is calculated separately."
                 />
                 <Formula
                   label="Absence deduction"
@@ -292,12 +292,17 @@ export default async function PayrollGuidePage({
                   note="Allowance here means housing + transport + other. The food allowance is not part of this deduction."
                 />
                 <Formula
+                  label="Unpaid annual-leave deduction"
+                  expr="(Basic + Allowance + Food + Fixed OT) ÷ 30 × unpaid annual-leave days"
+                  note="This is separate from ordinary absence. Annual-leave days never increment Absent days, and food is included only in the annual-leave daily rate."
+                />
+                <Formula
                   label="Gross"
                   expr="Basic + Allowance + Food + Fixed OT + Normal OT + Friday/Holiday OT"
                 />
                 <Formula
                   label="Net"
-                  expr="Gross − Absence deduction − Food deduction − Advance recovery"
+                  expr="Gross − Absence deduction − Unpaid annual-leave deduction − Food deduction − Advance recovery"
                 />
               </div>
 
@@ -325,7 +330,7 @@ export default async function PayrollGuidePage({
                   <Field label="Food Allowance" desc="Paid as its own line on the payslip. Excluded from the absence deduction." />
                   <Field label="Other Allowance" desc="Any additional allowance. Label it using the Allowance Name field." />
                   <Field label="Allowance Name" desc="Custom label — e.g. Housing Allowance, Transport Allowance." />
-                  <Field label="Fixed Overtime Monthly" desc="Paid only in summer months (March–September) where the employee is OT-eligible and worked a Friday or public holiday. Off during winter (October–February)." />
+                  <Field label="Fixed Overtime Monthly" desc="Paid in summer months (March–September) when the employee is OT-eligible. Off during winter (October–February)." />
                   <Field label="Overtime Eligible" desc="Gates daily overtime and fixed OT only. Friday/holiday OT is unaffected." />
                   <Field label="Friday OT Amount" desc="Flat KWD amount per Friday or public holiday worked." />
                 </div>
@@ -345,9 +350,9 @@ export default async function PayrollGuidePage({
                 <div className="border border-slate-200 rounded-lg p-4">
                   <p className="font-semibold text-slate-800 text-sm mb-2">Regular Weekday (Sat – Thu)</p>
                   <ul className="text-sm text-slate-600 space-y-1 list-disc list-inside">
-                    <li><strong>From 1 Oct 2026:</strong> the 8-hour duty starts at the employee's clock-in time — clock in at 12 PM and the duty runs to 8 PM, clock in at 1 PM and it runs to 9 PM</li>
+                    <li><strong>From 1 Oct 2026:</strong> the 8-hour duty starts at the employee&apos;s clock-in time — clock in at 12 PM and the duty runs to 8 PM, clock in at 1 PM and it runs to 9 PM</li>
                     <li>Overtime = any time worked beyond those 8 hours from clock-in, paid at 1.25×</li>
-                    <li><strong>Summer (Mar–Sep):</strong> the flat Fixed Overtime Monthly is also paid (eligible staff who worked a Friday or holiday)</li>
+                    <li><strong>Summer (Mar–Sep):</strong> the flat Fixed Overtime Monthly is also paid to OT-eligible staff</li>
                     <li><strong>Winter (Oct–Feb):</strong> no fixed overtime — only the after-8-hours normal overtime</li>
                   </ul>
                 </div>
@@ -399,8 +404,8 @@ export default async function PayrollGuidePage({
             {/* Fixing mistakes */}
             <Section id="fixing" icon={RotateCcw} title="Fixing Mistakes">
               <p className="text-sm text-slate-600 mb-4">
-                A payslip is a snapshot taken at the moment you processed. Editing attendance, salary components or
-                advances afterwards does <strong>not</strong> change an existing payslip.
+                A payslip is a protected snapshot taken at the moment you processed. Editing attendance, salary components or
+                advances afterwards does <strong>not</strong> change it. Annual-leave days and their deduction are frozen separately.
               </p>
               <div className="border border-amber-200 bg-amber-50 rounded-lg p-4 mb-4">
                 <p className="font-semibold text-amber-800 text-sm mb-2">To correct a processed run</p>
@@ -409,7 +414,8 @@ export default async function PayrollGuidePage({
                   <li>Open the run&apos;s month on the Payslips page</li>
                   <li>Click <strong>Reset &amp; Re-process</strong> and confirm</li>
                   <li>All payslips for the run are deleted and any advance recovery is added back to each balance</li>
-                  <li>Process the month again with the corrected figures</li>
+                  <li>Any annual-leave attendance grandfathered as paid by that legacy run is changed to Unpaid Leave in the same reset transaction</li>
+                  <li>Process the month again with the corrected figures; the new payslips freeze annual-leave days and deduction separately</li>
                 </ol>
               </div>
               <Note type="warn">
@@ -432,7 +438,7 @@ export default async function PayrollGuidePage({
                   },
                   {
                     q: 'Why is Fixed OT showing as zero for someone?',
-                    a: 'Fixed monthly OT is paid only when the employee is overtime-eligible and worked at least one Friday or public holiday in that month. With no Friday or holiday worked, it is zero.',
+                    a: 'Fixed monthly OT is paid only from March through September when the employee is overtime-eligible. It is zero in winter or when the profile is not OT-eligible.',
                   },
                   {
                     q: 'Why is there no Friday OT on a Friday record?',

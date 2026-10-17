@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/Header'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
 import { currentPath, withReturnTo } from '@/lib/backNav'
@@ -180,9 +181,9 @@ export default async function OutstandingPage({
                     return (
                       <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-5 py-3">
-                          <Link href={withReturnTo(`/finance/invoices/${inv.id}`, outstandingPath)} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
+                          <DocumentLink href={withReturnTo(`/finance/invoices/${inv.id}`, outstandingPath)} tabLabel={inv.invoice_number} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
                             {inv.invoice_number}
-                          </Link>
+                          </DocumentLink>
                         </td>
                         <td className="px-4 py-3">
                           <p className="text-sm font-semibold text-slate-800">{inv.customers?.full_name}</p>

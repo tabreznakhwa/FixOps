@@ -87,17 +87,62 @@ export async function POST(request: NextRequest) {
       }, { status: 409 })
     }
 
-    const { data: attendanceRaw } = await admin
+    const { data: attendanceRaw, error: attendanceError } = await admin
       .from('attendance')
-      .select('date, status, overtime_hours, friday_ot_amount, is_public_holiday')
+      .select('date, status, leave_application_id, overtime_hours, friday_ot_amount, is_public_holiday')
       .eq('organization_id', profile.organization_id)
       .eq('staff_id', staff_id)
       .gte('date', monthStart)
       .lte('date', settlement_date)
+    if (attendanceError) {
+      console.error('Leave settlement attendance query error:', attendanceError)
+      return NextResponse.json({ error: 'Unable to read attendance for this settlement' }, { status: 500 })
+    }
+
+    const leaveApplicationIds = Array.from(new Set(
+      (attendanceRaw ?? [])
+        .map((row: { leave_application_id: string | null }) => row.leave_application_id)
+        .filter((id: string | null): id is string => Boolean(id)),
+    ))
+    const approvedAnnualLeaveIds = new Set<string>()
+    if (leaveApplicationIds.length > 0) {
+      const { data: approvedApplications, error: applicationsError } = await admin
+        .from('leave_applications')
+        .select('id')
+        .eq('organization_id', profile.organization_id)
+        .eq('staff_id', staff_id)
+        .eq('status', 'approved')
+        .eq('leave_type', 'annual_leave')
+        .in('id', leaveApplicationIds)
+      if (applicationsError) {
+        console.error('Leave settlement application validation error:', applicationsError)
+        return NextResponse.json({ error: 'Unable to validate annual leave attendance' }, { status: 500 })
+      }
+      for (const application of approvedApplications ?? []) {
+        approvedAnnualLeaveIds.add(application.id)
+      }
+    }
+
+    const attendance = (attendanceRaw ?? []).map((row: {
+      date: string
+      status: string
+      leave_application_id: string | null
+      overtime_hours: number | null
+      friday_ot_amount: number | null
+      is_public_holiday: boolean | null
+    }) => ({
+      date: row.date,
+      status: row.status,
+      isApprovedAnnualLeave: row.leave_application_id !== null
+        && approvedAnnualLeaveIds.has(row.leave_application_id),
+      overtime_hours: row.overtime_hours,
+      friday_ot_amount: row.friday_ot_amount,
+      is_public_holiday: row.is_public_holiday,
+    }))
 
     const result = calcLeaveSettlement(
       staff,
-      attendanceRaw ?? [],
+      attendance,
       monthStart,
       settlement_date,
       today

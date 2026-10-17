@@ -88,6 +88,14 @@ export function LeaveApplicationsList({
     return queryString ? `/leave-applications?${queryString}` : '/leave-applications'
   }
 
+  function leaveApprovalEffect(leaveType: string) {
+    return leaveType === 'annual_leave'
+      ? 'unpaid leave'
+      : leaveType === 'sick_leave'
+        ? 'paid sick leave'
+        : 'paid compensation leave'
+  }
+
   function beginReview(application: LeaveApplication, decision: 'approved' | 'rejected') {
     setReviewing({ application, decision })
     setReviewNote('')
@@ -263,7 +271,7 @@ export function LeaveApplicationsList({
 
             {reviewing.decision === 'approved' && (
               <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
-                Approval will add paid leave to attendance for each working day. Existing worked attendance will block approval rather than be overwritten.
+                Approval will add {leaveApprovalEffect(reviewing.application.leave_type)} to attendance for each working day. Existing worked attendance will block approval rather than be overwritten.
               </div>
             )}
 
@@ -274,7 +282,7 @@ export function LeaveApplicationsList({
             )}
 
             <div className="mt-4">
-              <label className="mb-1.5 block text-xs font-semibold text-slate-600">{reviewing.decision === 'rejected' ? 'Reason for rejection' : 'Admin note (optional)'}</label>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-600">{reviewing.decision === 'rejected' ? 'Reason for rejection' : 'Review note (optional)'}</label>
               <textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} rows={4} maxLength={1000} placeholder={reviewing.decision === 'rejected' ? 'Explain why this application is rejected…' : 'Add a note for the employee…'} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
             </div>
 

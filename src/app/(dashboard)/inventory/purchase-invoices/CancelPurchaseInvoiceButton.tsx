@@ -10,6 +10,8 @@ export function CancelPurchaseInvoiceButton({ id, redirectHref }: { id: string; 
   const router = useRouter()
 
   async function handleCancel() {
+    const reason = prompt('Reason for cancelling this purchase invoice:')?.trim()
+    if (!reason) return
     if (!confirm('Cancel this purchase invoice? This action cannot be undone.')) return
 
     setError('')
@@ -18,7 +20,7 @@ export function CancelPurchaseInvoiceButton({ id, redirectHref }: { id: string; 
       const response = await fetch(`/api/purchase-invoices/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'cancel' }),
+        body: JSON.stringify({ action: 'cancel', reason }),
       })
       const payload = await response.json().catch(() => null) as { error?: string } | null
 

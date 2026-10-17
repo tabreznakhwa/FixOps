@@ -2,6 +2,7 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { Plus, Package, Pencil, Eye } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
@@ -132,10 +133,11 @@ export default async function PurchaseInvoicesPage({
                   return (
                     <tr key={inv.id} className={`hover:bg-slate-50 transition-colors group ${isCancelled ? 'opacity-50' : ''}`}>
                       <td className="px-4 py-3.5">
-                        <Link href={withReturnTo(`/inventory/purchase-invoices/${inv.id}`, invoicesPath)}
+                        <DocumentLink href={withReturnTo(`/inventory/purchase-invoices/${inv.id}`, invoicesPath)}
+                          tabLabel={inv.invoice_number}
                           className="text-sm font-mono font-semibold text-blue-600 hover:text-blue-800">
                           {inv.invoice_number}
-                        </Link>
+                        </DocumentLink>
                       </td>
                       <td className="px-4 py-3.5 text-sm text-slate-600">{formatDate(inv.invoice_date)}</td>
                       <td className="px-4 py-3.5 text-sm text-slate-700 hidden md:table-cell">{supplierDisplay}</td>
@@ -161,10 +163,11 @@ export default async function PurchaseInvoicesPage({
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Link href={withReturnTo(`/inventory/purchase-invoices/${inv.id}`, invoicesPath)}
+                          <DocumentLink href={withReturnTo(`/inventory/purchase-invoices/${inv.id}`, invoicesPath)}
+                            tabLabel={inv.invoice_number}
                             className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View">
                             <Eye className="w-4 h-4" />
-                          </Link>
+                          </DocumentLink>
                           {!isCancelled && (
                             <>
                               <Link href={withReturnTo(`/inventory/purchase-invoices/${inv.id}/edit`, invoicesPath)}

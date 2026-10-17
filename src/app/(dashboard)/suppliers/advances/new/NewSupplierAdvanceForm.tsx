@@ -21,6 +21,8 @@ const PAYMENT_MODES = [
   { value: 'bank_transfer', label: 'Bank Transfer' },
   { value: 'cheque', label: 'Cheque' },
   { value: 'cash', label: 'Cash' },
+  { value: 'knet', label: 'KNET' },
+  { value: 'pos', label: 'POS' },
   { value: 'online', label: 'Online' },
   { value: 'card', label: 'Card' },
   { value: 'other', label: 'Other' },
@@ -46,7 +48,10 @@ export function NewSupplierAdvanceForm({ suppliers, defaultSupplierId, returnTo 
     setError('')
 
     if (!supplierId) { setError('Please select a supplier'); return }
-    if (!amount || Number(amount) <= 0) { setError('Amount must be greater than zero'); return }
+    if (!/^\d{1,9}(\.\d{1,3})?$/.test(amount) || Number(amount) <= 0) {
+      setError('Amount must be greater than zero with up to three decimal places')
+      return
+    }
 
     setLoading(true)
     try {
@@ -56,7 +61,7 @@ export function NewSupplierAdvanceForm({ suppliers, defaultSupplierId, returnTo 
         body: JSON.stringify({
           supplier_id: supplierId,
           advance_date: date,
-          amount: Number(amount),
+          amount,
           payment_mode: mode,
           reference_number: reference.trim() || null,
           notes: notes.trim() || null,

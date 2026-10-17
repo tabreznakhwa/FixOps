@@ -1,22 +1,28 @@
-import { createAdminClient, createClient } from '@/lib/supabase/server'
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Banknote, Plus } from 'lucide-react'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { currentPath, withReturnTo } from '@/lib/backNav'
+import { getAuthedProfile } from '@/lib/auth/session'
+import { SupplierAdvanceActions } from './SupplierAdvanceActions'
 
 export const metadata = { title: 'Supplier Advances' }
 
 const MODE_LABELS: Record<string, string> = {
-  cash: 'Cash', bank_transfer: 'Bank Transfer', cheque: 'Cheque',
-  online: 'Online', card: 'Card', other: 'Other',
+  cash: 'Cash', bank_transfer: 'Bank Transfer', cheque: 'Cheque', knet: 'KNET',
+  pos: 'POS', online: 'Online', card: 'Card', other: 'Other',
 }
 
 const MODE_COLORS: Record<string, string> = {
   cash: 'bg-green-100 text-green-700',
   bank_transfer: 'bg-blue-100 text-blue-700',
   cheque: 'bg-purple-100 text-purple-700',
+  knet: 'bg-teal-100 text-teal-700',
+  pos: 'bg-amber-100 text-amber-700',
   online: 'bg-cyan-100 text-cyan-700',
   card: 'bg-indigo-100 text-indigo-700',
   other: 'bg-slate-100 text-slate-600',
@@ -29,11 +35,16 @@ export default async function SupplierAdvancesPage({
 }) {
   const params = await searchParams
   const advancesPath = currentPath('/suppliers/advances', params)
-  const admin = createAdminClient() as any
+  const { profile } = await getAuthedProfile()
+  if (!profile || profile.status !== 'active') redirect('/login')
+  if (!['owner', 'admin', 'manager', 'accounts'].includes(profile.role)) redirect('/suppliers')
 
+  const canManageAdvances = ['owner', 'admin', 'manager'].includes(profile.role)
+  const admin = createAdminClient() as any
   const { data: advancesRaw } = await admin
     .from('supplier_advances')
     .select('id, advance_number, advance_date, amount, amount_utilized, balance, payment_mode, reference_number, is_cancelled, suppliers(supplier_name, supplier_code)')
+    .eq('organization_id', profile.organization_id)
     .order('advance_date', { ascending: false })
     .limit(500)
 
@@ -63,18 +74,19 @@ export default async function SupplierAdvancesPage({
         actions={
           <div className="flex items-center gap-2">
             <RefreshButton />
-            <Link
-              href={withReturnTo('/suppliers/advances/new', advancesPath)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> New Advance
-            </Link>
+            {canManageAdvances && (
+              <Link
+                href={withReturnTo('/suppliers/advances/new', advancesPath)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> New Advance
+              </Link>
+            )}
           </div>
         }
       />
 
       <div className="p-6 space-y-5">
-        {/* Summary */}
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Total Advances</p>
@@ -102,12 +114,14 @@ export default async function SupplierAdvancesPage({
             <div className="p-10 text-center">
               <Banknote className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="text-sm text-slate-400">No supplier advances recorded yet</p>
-              <Link
-                href={withReturnTo('/suppliers/advances/new', advancesPath)}
-                className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700"
-              >
-                <Plus className="w-3.5 h-3.5" /> Record First Advance
-              </Link>
+              {canManageAdvances && (
+                <Link
+                  href={withReturnTo('/suppliers/advances/new', advancesPath)}
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Record First Advance
+                </Link>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -122,6 +136,7 @@ export default async function SupplierAdvancesPage({
                     <th className="text-right text-xs font-semibold text-amber-600 uppercase tracking-wider px-4 py-3">Utilized</th>
                     <th className="text-right text-xs font-semibold text-green-600 uppercase tracking-wider px-5 py-3">Balance</th>
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Status</th>
+                    <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -161,6 +176,13 @@ export default async function SupplierAdvancesPage({
                         ) : (
                           <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Available</span>
                         )}
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <SupplierAdvanceActions
+                          advanceId={adv.id}
+                          advanceNumber={adv.advance_number}
+                          canCancel={canManageAdvances && !adv.is_cancelled && Number(adv.amount_utilized) === 0}
+                        />
                       </td>
                     </tr>
                   ))}

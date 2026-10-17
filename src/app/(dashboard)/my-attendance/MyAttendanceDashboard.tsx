@@ -31,6 +31,7 @@ const STATUS_COLOR: Record<string, string> = {
   half_day: 'bg-amber-100 text-amber-700',
   leave: 'bg-blue-100 text-blue-700',
   sick_leave: 'bg-teal-100 text-teal-700',
+  unpaid_leave: 'bg-orange-100 text-orange-700',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -39,6 +40,7 @@ const STATUS_LABEL: Record<string, string> = {
   half_day: 'Half Day',
   leave: 'Leave',
   sick_leave: 'Sick Leave',
+  unpaid_leave: 'Unpaid Leave',
 }
 
 export function MyAttendanceDashboard({
@@ -112,12 +114,18 @@ export function MyAttendanceDashboard({
             </div>
           )}
 
-          {attendance && ['leave', 'sick_leave'].includes(attendance.status) ? (
+          {attendance && ['leave', 'sick_leave', 'unpaid_leave'].includes(attendance.status) ? (
             <>
               <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle2 className="w-10 h-10 text-blue-600" />
               </div>
-              <p className="font-bold text-slate-900 text-lg mb-1">{attendance.status === 'sick_leave' ? 'Approved Sick Leave' : 'Approved Leave'}</p>
+              <p className="font-bold text-slate-900 text-lg mb-1">
+                {attendance.status === 'sick_leave'
+                  ? 'Approved Sick Leave'
+                  : attendance.status === 'unpaid_leave'
+                    ? 'Approved Unpaid Annual Leave'
+                    : 'Approved Leave'}
+              </p>
               <p className="text-slate-500 text-sm">Contact an administrator if your plans change and you need to work today.</p>
             </>
           ) : attendance?.status === 'absent' && !attendance.check_in ? (

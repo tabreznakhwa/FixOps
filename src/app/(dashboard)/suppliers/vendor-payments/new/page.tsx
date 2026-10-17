@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { BackButton } from '@/components/ui/BackButton'
@@ -9,88 +10,81 @@ export const metadata = { title: 'Record Vendor Payment' }
 export default async function NewVendorPaymentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ po?: string; return_to?: string }>
+  searchParams: Promise<{ invoice?: string; supplier?: string; return_to?: string }>
 }) {
   const params = await searchParams
-  const poId = params.po
   const back = resolveBack(params.return_to, '/suppliers/vendor-payments', 'Vendor Payments')
   const supabase = await createClient()
-  const admin = createAdminClient() as any
-
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileRaw } = await admin.from('users').select('organization_id').eq('id', user!.id).single()
-  const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
+  if (!user) redirect('/login')
 
-  // Fetch all suppliers for dropdown
-  const { data: suppliersRaw } = await (supabase as any)
-    .from('suppliers')
-    .select('id, supplier_name, supplier_code')
-    .order('supplier_name')
-  const suppliers = (suppliersRaw ?? []) as Array<{ id: string; supplier_name: string; supplier_code: string }>
-
-  // Pre-fetch PO details if coming from a specific PO
-  let defaultPO: { id: string; po_number: string; supplier_id: string; balance_due: number; total_amount: number } | null = null
-  if (poId) {
-    const { data: poRaw } = await (supabase as any)
-      .from('purchase_orders')
-      .select('id, po_number, supplier_id, balance_due, total_amount')
-      .eq('id', poId)
-      .single()
-    defaultPO = poRaw ?? null
+  const { data: profileRaw } = await (supabase as any)
+    .from('users')
+    .select('organization_id, role')
+    .eq('id', user.id)
+    .single()
+  const profile = profileRaw as { organization_id: string; role: string } | null
+  if (!profile || !['owner', 'admin', 'manager', 'accounts'].includes(profile.role)) {
+    redirect('/dashboard')
   }
 
-  // Fetch open POs (with balance due) for the PO dropdown
-  const { data: openPOsRaw } = await (supabase as any)
-    .from('purchase_orders')
-    .select('id, po_number, supplier_id, balance_due, total_amount')
-    .gt('balance_due', 0)
-    .not('status', 'eq', 'cancelled')
-    .order('purchase_date', { ascending: false })
-    .limit(100)
-  const openPOs = (openPOsRaw ?? []) as Array<{
-    id: string; po_number: string; supplier_id: string; balance_due: number; total_amount: number
-  }>
-  if (defaultPO && !openPOs.some((po) => po.id === defaultPO!.id)) openPOs.unshift(defaultPO)
+  const admin = createAdminClient() as any
+  const [{ data: suppliersRaw }, { data: openInvoicesRaw }] = await Promise.all([
+    admin
+      .from('suppliers')
+      .select('id, supplier_name, supplier_code')
+      .eq('organization_id', profile.organization_id)
+      .order('supplier_name'),
+    admin
+      .from('purchase_invoices')
+      .select('id, invoice_number, supplier_invoice_number, supplier_id, invoice_date, balance_due, total_amount')
+      .eq('organization_id', profile.organization_id)
+      .gt('balance_due', 0)
+      .eq('payment_type', 'credit')
+      .eq('status', 'confirmed')
+      .not('posting_sequence', 'is', null)
+      .order('invoice_date', { ascending: true })
+      .limit(1000),
+  ])
 
-  // Fetch open purchase invoices (credit, with balance due) for the invoice checklist
-  // Uses admin client: purchase_invoices only has service_role grants, not anon/authenticated
-  const { data: openInvoicesRaw } = await admin
-    .from('purchase_invoices')
-    .select('id, invoice_number, supplier_invoice_number, supplier_id, invoice_date, balance_due, total_amount')
-    .eq('organization_id', orgId)
-    .gt('balance_due', 0)
-    .eq('payment_type', 'credit')
-    .eq('status', 'confirmed')
-    .order('invoice_date', { ascending: true })
-    .limit(200)
+  const suppliers = (suppliersRaw ?? []) as Array<{
+    id: string
+    supplier_name: string
+    supplier_code: string
+  }>
   const openInvoices = (openInvoicesRaw ?? []) as Array<{
-    id: string; invoice_number: string; supplier_invoice_number: string | null
-    supplier_id: string; invoice_date: string; balance_due: number; total_amount: number
+    id: string
+    invoice_number: string
+    supplier_invoice_number: string | null
+    supplier_id: string
+    invoice_date: string
+    balance_due: number
+    total_amount: number
   }>
 
-  // Fetch open opening payables (pre-system / brought-forward balances) for the checklist
-  const { data: openPayablesRaw } = await admin
-    .from('opening_payables')
-    .select('id, bill_ref, supplier_id, bill_date, balance_due, amount')
-    .eq('organization_id', orgId)
-    .gt('balance_due', 0)
-    .order('bill_date', { ascending: true })
-    .limit(200)
-  const openPayables = (openPayablesRaw ?? []) as Array<{
-    id: string; bill_ref: string; supplier_id: string; bill_date: string; balance_due: number; amount: number
-  }>
+  const defaultInvoice = params.invoice
+    ? openInvoices.find((invoice) => invoice.id === params.invoice) ?? null
+    : null
+  const defaultSupplierId = defaultInvoice?.supplier_id
+    ?? (params.supplier && suppliers.some((supplier) => supplier.id === params.supplier)
+      ? params.supplier
+      : null)
 
   return (
     <div className="animate-fade-in">
       <Header
         title="Record Vendor Payment"
-        subtitle="Record a payment made to a supplier"
-        actions={
-          <BackButton href={back.href} label={back.label} />
-        }
+        subtitle="Settle one posted purchase invoice; use Supplier Advances for unallocated payments"
+        actions={<BackButton href={back.href} label={back.label} />}
       />
       <div className="p-6 max-w-xl">
-        <VendorPaymentForm suppliers={suppliers} openPOs={openPOs} defaultPO={defaultPO} openInvoices={openInvoices} openPayables={openPayables} returnTo={back.href} />
+        <VendorPaymentForm
+          suppliers={suppliers}
+          openInvoices={openInvoices}
+          defaultInvoiceId={defaultInvoice?.id ?? null}
+          defaultSupplierId={defaultSupplierId}
+          returnTo={back.href}
+        />
       </div>
     </div>
   )

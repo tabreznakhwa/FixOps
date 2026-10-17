@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { Loader2, ChevronDown, CheckCircle, Banknote, X, FileText } from 'lucide-react'
 import { withReturnTo } from '@/lib/backNav'
 
@@ -256,13 +257,13 @@ export function WorkOrderActions({
         <div className="border-t border-slate-100 pt-4 space-y-2">
           {existingInvoiceId ? (
             <>
-              <Link
+              <DocumentLink
                 href={withReturnTo(`/finance/invoices/${existingInvoiceId}`, workOrderHref)}
                 className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
               >
                 <FileText className="w-4 h-4" />
                 View Invoice
-              </Link>
+              </DocumentLink>
               {existingInvoiceStatus !== 'paid' && (
                 <Link
                   href={withReturnTo(`/finance/invoices/${existingInvoiceId}/edit`, workOrderHref)}

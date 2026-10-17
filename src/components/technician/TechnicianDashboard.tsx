@@ -286,12 +286,18 @@ export function TechnicianDashboard({
         /* Job List */
         <div className="p-4 space-y-6 max-w-lg mx-auto">
           {/* Big Clock-In CTA when technician hasn't started their day */}
-          {staffLinked !== false && attendance && ['leave', 'sick_leave'].includes(attendance.status) ? (
+          {staffLinked !== false && attendance && ['leave', 'sick_leave', 'unpaid_leave'].includes(attendance.status) ? (
             <div className="bg-blue-950 border border-blue-700/50 rounded-2xl p-6 text-center">
               <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle2 className="w-8 h-8 text-white" />
               </div>
-              <h2 className="text-lg font-bold text-white mb-1">{attendance.status === 'sick_leave' ? 'Approved Sick Leave' : 'Approved Leave'}</h2>
+              <h2 className="text-lg font-bold text-white mb-1">
+                {attendance.status === 'sick_leave'
+                  ? 'Approved Sick Leave'
+                  : attendance.status === 'unpaid_leave'
+                    ? 'Approved Unpaid Annual Leave'
+                    : 'Approved Leave'}
+              </h2>
               <p className="text-sm text-slate-400">Contact an administrator if your plans change and you need to work today.</p>
             </div>
           ) : staffLinked !== false && attendance?.status === 'absent' && !attendance.check_in ? (

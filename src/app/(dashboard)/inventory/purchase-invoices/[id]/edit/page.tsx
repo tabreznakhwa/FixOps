@@ -1,6 +1,6 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { EditPurchaseInvoiceForm } from './EditPurchaseInvoiceForm'
 import { resolveBack } from '@/lib/backNav'
@@ -21,14 +21,24 @@ export default async function EditPurchaseInvoicePage({
   const admin = createAdminClient() as any
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileRaw } = await admin.from('users').select('organization_id').eq('id', user!.id).single()
-  const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
+  if (!user) redirect('/login')
+  const { data: profileRaw } = await (supabase as any)
+    .from('users')
+    .select('organization_id, role')
+    .eq('id', user.id)
+    .single()
+  const profile = profileRaw as { organization_id: string; role: string } | null
+  if (!profile || !['owner', 'admin', 'manager'].includes(profile.role)) {
+    redirect('/inventory/purchase-invoices')
+  }
+  const orgId = profile.organization_id
 
   const [{ data: invoiceRaw }, { data: suppliersRaw }] = await Promise.all([
     admin
       .from('purchase_invoices')
-      .select('id, invoice_number, invoice_date, due_date, payment_type, payment_mode, payment_status, notes, status, supplier_id, supplier_name, suppliers(supplier_name)')
+      .select('id, invoice_number, invoice_date, due_date, payment_type, payment_mode, payment_status, notes, status, supplier_id, supplier_name, posting_sequence, suppliers(supplier_name)')
       .eq('id', id)
+      .eq('organization_id', orgId)
       .single(),
     admin
       .from('suppliers')
@@ -44,6 +54,7 @@ export default async function EditPurchaseInvoicePage({
     id: string; invoice_number: string; supplier_id: string | null; supplier_name: string | null
     invoice_date: string; due_date: string | null; payment_type: string
     payment_mode: string | null; payment_status: string; notes: string | null; status: string
+    posting_sequence: number | null
     suppliers: { supplier_name: string } | null
   }
 
@@ -64,7 +75,9 @@ export default async function EditPurchaseInvoicePage({
       <div className="p-6 max-w-xl">
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-5">
-            Items and totals cannot be changed after creation. Use the Notes field to document the reason for any corrections.
+            {invoice.posting_sequence !== null
+              ? 'This invoice has been posted. Accounting details are locked; only the due date can be changed.'
+              : 'Items and totals cannot be changed after creation.'}
           </p>
           <EditPurchaseInvoiceForm invoice={invoice} suppliers={suppliers} successHref={destination.href} />
         </div>

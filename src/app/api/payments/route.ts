@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,88 +39,34 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient()
 
-    const { data: seqData } = await (supabase as any).rpc('generate_sequence_number', {
-      p_org_id: profile.organization_id,
-      p_type: 'payment',
-      p_prefix: 'PMT',
-    })
-    const paymentNumber = seqData ?? `PMT-${Date.now()}`
-
     const isAdvance = Boolean(is_advance)
 
-    const { data: payment, error: payError } = await (supabase as any)
-      .from('payments')
-      .insert({
-        organization_id: profile.organization_id,
-        payment_number: paymentNumber,
-        customer_id,
-        invoice_id: invoice_id ?? null,
-        payment_date,
-        amount_received: Number(amount_received),
-        payment_mode,
-        reference_number: reference_number?.trim() ?? null,
-        notes: notes?.trim() ?? null,
-        is_advance: isAdvance,
-        advance_used_amount: 0,
-        is_cancelled: false,
-        received_by: user.id,
-      })
-      .select('id, payment_number')
-      .single()
+    // Transactional, tenant-validating posting. The RPC validates the actor,
+    // customer and invoice ownership/relationship, generates the sequence, posts
+    // the payment + posting event + invoice/work-order status atomically.
+    const { data: result, error: rpcError } = await (supabase as any).rpc('record_customer_payment', {
+      p_org_id: profile.organization_id,
+      p_actor_id: user.id,
+      p_customer_id: customer_id,
+      p_invoice_id: invoice_id ?? null,
+      p_work_order_id: null,
+      p_payment_date: payment_date,
+      p_amount_received: Number(amount_received),
+      p_payment_mode: payment_mode,
+      p_reference_number: reference_number?.trim() ?? null,
+      p_notes: notes?.trim() ?? null,
+      p_is_advance: isAdvance,
+    })
 
-    if (payError) throw payError
+    if (rpcError) throw rpcError
 
-    // Create ledger entry
-    const { error: ledgerError } = await (supabase as any)
-      .from('customer_ledger_entries')
-      .insert({
-        organization_id: profile.organization_id,
-        customer_id,
-        entry_date: payment_date,
-        entry_type: isAdvance ? 'advance' : 'payment',
-        debit_amount: 0,
-        credit_amount: Number(amount_received),
-        description: `${isAdvance ? 'Advance Payment' : 'Payment'} ${paymentNumber}${invoice_id ? '' : ''}`,
-        reference_type: 'payment',
-        reference_id: payment.id,
-        created_by: user.id,
-      })
-
-    if (ledgerError) throw ledgerError
-
-    // If this payment is against an invoice, check if it's now fully paid and sync statuses
-    if (invoice_id) {
-      const { data: invoiceData } = await (supabase as any)
-        .from('invoices')
-        .select('id, total_amount, status, work_order_id')
-        .eq('id', invoice_id)
-        .single()
-
-      if (invoiceData && invoiceData.status !== 'paid') {
-        const { data: paymentsData } = await (supabase as any)
-          .from('payments')
-          .select('amount_received')
-          .eq('invoice_id', invoice_id)
-          .eq('is_cancelled', false)
-
-        const totalPaid = ((paymentsData ?? []) as Array<{ amount_received: number }>)
-          .reduce((sum, p) => sum + p.amount_received, 0)
-
-        if (totalPaid >= invoiceData.total_amount) {
-          await (supabase as any).from('invoices').update({ status: 'paid' }).eq('id', invoice_id)
-          if (invoiceData.work_order_id) {
-            await (supabase as any).from('work_orders').update({ payment_status: 'paid', status: 'paid' }).eq('id', invoiceData.work_order_id)
-          }
-        } else if (totalPaid > 0 && invoiceData.status !== 'partial') {
-          await (supabase as any).from('invoices').update({ status: 'partial' }).eq('id', invoice_id)
-          if (invoiceData.work_order_id) {
-            await (supabase as any).from('work_orders').update({ payment_status: 'partial' }).eq('id', invoiceData.work_order_id)
-          }
-        }
-      }
+    const rows = Array.isArray(result) ? result : result ? [result] : []
+    const row = (rows[0] ?? null) as { payment_id?: string; payment_number?: string } | null
+    if (!row?.payment_id) {
+      return NextResponse.json({ error: 'Payment could not be recorded' }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, id: payment.id, paymentNumber: payment.payment_number })
+    return NextResponse.json({ success: true, id: row.payment_id, paymentNumber: row.payment_number })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : JSON.stringify(err)
     console.error('Create payment error:', err)

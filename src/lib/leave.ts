@@ -2,7 +2,7 @@ export const LEAVE_TYPES = ['annual_leave', 'sick_leave', 'compensation_leave'] 
 export type LeaveType = typeof LEAVE_TYPES[number]
 
 export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
-  annual_leave: 'Annual Leave',
+  annual_leave: 'Annual Leave (Unpaid)',
   sick_leave: 'Sick Leave',
   compensation_leave: 'Compensation Leave',
 }

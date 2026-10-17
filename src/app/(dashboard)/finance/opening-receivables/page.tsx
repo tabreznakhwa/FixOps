@@ -33,6 +33,7 @@ export default async function OpeningReceivablesPage({
       .from('opening_receivables')
       .select('*, customers(full_name, customer_code)')
       .eq('organization_id', profile?.organization_id)
+      .is('reversal_posting_id', null)
       .order('invoice_date', { ascending: true }),
   ])
 

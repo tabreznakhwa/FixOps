@@ -99,26 +99,20 @@ export default async function LedgerPage({
     ? customers.find((customer) => customer.id === customerId) ?? null
     : null
 
-  type InvoiceRow = {
+  // Migration 055 is intentionally consumed through this narrow local shape;
+  // generated/hand-maintained database types can be updated separately.
+  type PostingRow = {
     id: string
-    invoice_number: string
-    invoice_date: string
-    invoice_type: string
-    total_amount: number
-  }
-  type PaymentRow = {
-    id: string
-    payment_number: string
-    payment_date: string
-    amount_received: number
-    payment_mode: string
-    is_advance: boolean
-  }
-  type OpeningRow = {
-    id: string
-    invoice_ref: string
-    invoice_date: string
-    amount: number
+    posting_date: string | null
+    document_date: string | null
+    posting_sequence: number | null
+    event_type: string
+    debit_amount: number | null
+    credit_amount: number | null
+    reference_number: string | null
+    description: string | null
+    provenance: 'live' | 'inferred' | null
+    reversal_of: string | null
   }
 
   let events: CustomerLedgerEvent[] = []
@@ -127,75 +121,63 @@ export default async function LedgerPage({
   // The selector is built from the authenticated tenant's customer list. Refuse to
   // query a guessed ID that is not in that list before touching financial history.
   if (selectedCustomer) {
-    const [invoiceResult, paymentResult, openingResult] = await Promise.all([
-      // Finance tables still trail the generated Database type.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fetchAllPages<InvoiceRow>((from, to) => (supabase as any)
-        .from('invoices')
-        .select('id, invoice_number, invoice_date, invoice_type, total_amount')
-        .eq('customer_id', customerId)
-        .in('status', ['issued', 'partial', 'overdue', 'paid'])
-        .order('invoice_date')
-        .order('id')
-        .range(from, to)),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fetchAllPages<PaymentRow>((from, to) => (supabase as any)
-        .from('payments')
-        .select('id, payment_number, payment_date, amount_received, payment_mode, is_advance')
-        .eq('customer_id', customerId)
-        .eq('is_cancelled', false)
-        .order('payment_date')
-        .order('id')
-        .range(from, to)),
-      fetchAllPages<OpeningRow>((from, to) => admin
-        .from('opening_receivables')
-        .select('id, invoice_ref, invoice_date, amount')
-        .eq('organization_id', orgId)
-        .eq('customer_id', customerId)
-        .order('invoice_date')
-        .order('id')
-        .range(from, to)),
+    const postingResult = await fetchAllPages<PostingRow>((from, to) => admin
+      .from('accounting_postings')
+      .select('id, posting_date, document_date, posting_sequence, event_type, debit_amount, credit_amount, reference_number, description, provenance, reversal_of')
+      .eq('organization_id', orgId)
+      .eq('ledger', 'ar')
+      .eq('party_id', customerId)
+      .order('posting_date')
+      .order('posting_sequence')
+      .order('id')
+      .range(from, to))
+
+    if (postingResult.error) {
+      failedSources.push(`accounting postings: ${postingResult.error}`)
+    }
+
+    const malformed = postingResult.rows.filter((posting) => (
+      !posting.posting_date
+      || !Number.isSafeInteger(Number(posting.posting_sequence))
+      || !posting.provenance
+    ))
+    if (malformed.length > 0) {
+      failedSources.push(`accounting postings: ${malformed.length} row${malformed.length === 1 ? '' : 's'} missing posting metadata`)
+    }
+
+    const allowedTypes = new Set<CustomerLedgerEvent['type']>([
+      'opening_balance',
+      'invoice',
+      'credit_note',
+      'payment',
+      'advance',
+      'refund',
+      'write_off',
+      'adjustment',
+      'reversal',
     ])
 
-    if (invoiceResult.error) failedSources.push(`invoices: ${invoiceResult.error}`)
-    if (paymentResult.error) failedSources.push(`payments: ${paymentResult.error}`)
-    if (openingResult.error) failedSources.push(`opening receivables: ${openingResult.error}`)
-
-    events = [
-      ...openingResult.rows.map((opening) => ({
-        sourceId: opening.id,
-        date: opening.invoice_date,
-        description: `Opening Balance — ${opening.invoice_ref}`,
-        type: 'opening_balance' as const,
-        reference: opening.invoice_ref,
-        debit: Number(opening.amount ?? 0),
-        credit: 0,
-        sequence: 0,
-      })),
-      ...invoiceResult.rows.map((invoice) => {
-        const isCreditNote = invoice.invoice_type === 'credit_note'
-        return {
-          sourceId: invoice.id,
-          date: invoice.invoice_date,
-          description: `${isCreditNote ? 'Credit Note' : 'Invoice'} ${invoice.invoice_number}`,
-          type: isCreditNote ? 'credit_note' as const : 'invoice' as const,
-          reference: invoice.invoice_number,
-          debit: isCreditNote ? 0 : Number(invoice.total_amount ?? 0),
-          credit: isCreditNote ? Number(invoice.total_amount ?? 0) : 0,
-          sequence: 1,
-        }
-      }),
-      ...paymentResult.rows.map((payment) => ({
-        sourceId: payment.id,
-        date: payment.payment_date,
-        description: `Payment ${payment.payment_number}${payment.is_advance ? ' (Advance)' : ''} — ${payment.payment_mode.replace(/_/g, ' ')}`,
-        type: payment.is_advance ? 'advance' as const : 'payment' as const,
-        reference: payment.payment_number,
-        debit: 0,
-        credit: Number(payment.amount_received ?? 0),
-        sequence: 2,
-      })),
-    ]
+    events = postingResult.rows
+      .filter((posting) => (
+        Boolean(posting.posting_date)
+        && Number.isSafeInteger(Number(posting.posting_sequence))
+        && Boolean(posting.provenance)
+        && allowedTypes.has(posting.event_type as CustomerLedgerEvent['type'])
+      ))
+      .map((posting) => ({
+        sourceId: posting.id,
+        date: posting.posting_date as string,
+        documentDate: posting.document_date,
+        description: posting.description
+          || `${posting.event_type.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())}${posting.reference_number ? ` — ${posting.reference_number}` : ''}`,
+        type: posting.event_type as CustomerLedgerEvent['type'],
+        reference: posting.reference_number,
+        debit: Number(posting.debit_amount ?? 0),
+        credit: Number(posting.credit_amount ?? 0),
+        sequence: Number(posting.posting_sequence),
+        provenance: posting.provenance as 'live' | 'inferred',
+        reversalOf: posting.reversal_of,
+      }))
   }
 
   const ledger = buildCustomerLedger(events, { from: fromDate, to: toDate })
@@ -309,7 +291,7 @@ export default async function LedgerPage({
                 <table className="w-full min-w-[760px] text-sm">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-100">
-                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Date</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Posting Date</th>
                       <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Description</th>
                       <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Type</th>
                       <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Debit (KWD)</th>
@@ -342,9 +324,19 @@ export default async function LedgerPage({
                     )}
                     {displayRows.map((row) => (
                       <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">{formatDate(row.date)}</td>
+                        <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">
+                          <p>{formatDate(row.date)}</p>
+                          {row.provenance === 'inferred' && (
+                            <span className="mt-1 inline-flex rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                              Inferred legacy date
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-3.5">
                           <p className="font-medium text-slate-800">{row.description}</p>
+                          {row.documentDate && row.documentDate !== row.date && (
+                            <p className="mt-0.5 text-xs text-slate-400">Document date: {formatDate(row.documentDate)}</p>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 hidden md:table-cell">
                           <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${
@@ -352,6 +344,7 @@ export default async function LedgerPage({
                             row.type === 'credit_note' ? 'bg-teal-50 text-teal-700' :
                             row.type === 'payment' ? 'bg-green-50 text-green-700' :
                             row.type === 'opening_balance' ? 'bg-purple-50 text-purple-700' :
+                            row.type === 'reversal' ? 'bg-red-50 text-red-700' :
                             'bg-amber-50 text-amber-700'
                           }`}>
                             {row.type.replace(/_/g, ' ')}

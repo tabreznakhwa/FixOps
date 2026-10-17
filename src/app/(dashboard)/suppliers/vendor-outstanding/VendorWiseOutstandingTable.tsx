@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AlertCircle, AlertTriangle } from 'lucide-react'
 import type { VendorWiseOutstanding } from './vendorWiseOutstanding'
@@ -20,12 +20,10 @@ function IncompleteWarning({ sources }: { sources: string[] }) {
 const KIND_BADGE: Record<string, string> = {
   opening: 'bg-amber-100 text-amber-700',
   invoice: 'bg-blue-100 text-blue-700',
-  po: 'bg-slate-100 text-slate-600',
 }
 const KIND_LABEL: Record<string, string> = {
   opening: 'Opening',
   invoice: 'Invoice',
-  po: 'PO',
 }
 
 /** Days-outstanding colouring, matching the ageing buckets used elsewhere. */
@@ -38,7 +36,16 @@ function intDaysClass(d: number): string {
 }
 
 export function VendorWiseOutstandingTable({ report, returnTo }: { report: VendorWiseOutstanding; returnTo: string }) {
-  const { groups, grandTotal, billCount, asOn, restated, failedSources } = report
+  const {
+    groups,
+    grandTotal,
+    billCount,
+    grandCommitmentTotal,
+    commitmentCount,
+    asOn,
+    restated,
+    failedSources,
+  } = report
 
   if (groups.length === 0) {
     return (
@@ -62,7 +69,7 @@ export function VendorWiseOutstandingTable({ report, returnTo }: { report: Vendo
           <span className="ml-2 text-sm font-normal text-slate-500">[As On {formatDate(asOn)}]</span>
         </h3>
         <span className="text-xs text-slate-500">
-          {groups.length} vendor{groups.length !== 1 ? 's' : ''} · {billCount} bill{billCount !== 1 ? 's' : ''}
+          {groups.length} vendor{groups.length !== 1 ? 's' : ''} · {billCount} payable bill{billCount !== 1 ? 's' : ''} · {commitmentCount} PO commitment{commitmentCount !== 1 ? 's' : ''}
         </span>
       </div>
 
@@ -97,9 +104,9 @@ export function VendorWiseOutstandingTable({ report, returnTo }: { report: Vendo
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2">
                       {b.href ? (
-                        <Link href={withReturnTo(b.href, returnTo)} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
+                        <DocumentLink href={withReturnTo(b.href, returnTo)} tabLabel={b.billNo} className="text-sm font-mono text-blue-600 hover:text-blue-700 font-semibold">
                           {b.billNo}
-                        </Link>
+                        </DocumentLink>
                       ) : (
                         <span className="text-sm font-mono text-slate-700 font-semibold">{b.billNo}</span>
                       )}
@@ -126,27 +133,71 @@ export function VendorWiseOutstandingTable({ report, returnTo }: { report: Vendo
 
               <tr className="bg-slate-50">
                 <td colSpan={7} className="px-4 py-2.5 text-right text-sm font-bold text-slate-600">
-                  Total — {g.supplierName}
+                  AP Total — {g.supplierName}
                 </td>
                 <td className="px-4 py-2.5 text-right text-sm font-bold text-slate-900">{formatCurrency(g.total)}</td>
                 <td className="px-4 py-2.5" />
               </tr>
+
+              {g.commitments.length > 0 && (
+                <tr className="bg-indigo-50/70">
+                  <td colSpan={9} className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-indigo-700">
+                    Purchase Order Commitments — excluded from Accounts Payable
+                  </td>
+                </tr>
+              )}
+              {g.commitments.map((commitment) => (
+                <tr key={`commitment-${commitment.id}`} className="bg-indigo-50/30 hover:bg-indigo-50 transition-colors">
+                  <td className="px-4 py-2.5 text-xs text-slate-400 font-mono">{g.supplierCode ?? '—'}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <DocumentLink href={withReturnTo(commitment.href, returnTo)} tabLabel={commitment.orderNo} className="text-sm font-mono text-indigo-600 hover:text-indigo-700 font-semibold">
+                        {commitment.orderNo}
+                      </DocumentLink>
+                      <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">Commitment</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-sm text-slate-600 whitespace-nowrap">{formatDate(commitment.orderDate)}</td>
+                  <td className="px-4 py-2.5 text-xs text-slate-500 font-mono">{commitment.refNo ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-sm text-slate-600 whitespace-nowrap">
+                    {commitment.dueDate ? formatDate(commitment.dueDate) : '—'}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-sm font-semibold text-indigo-700">{formatCurrency(commitment.amount)}</td>
+                  <td colSpan={3} className="px-4 py-2.5 text-right text-xs font-medium text-indigo-600">Not included in AP balance</td>
+                </tr>
+              ))}
+              {g.commitments.length > 0 && (
+                <tr className="bg-indigo-50">
+                  <td colSpan={5} className="px-4 py-2.5 text-right text-sm font-bold text-indigo-700">
+                    Commitment Total — {g.supplierName}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-sm font-bold text-indigo-800">{formatCurrency(g.commitmentTotal)}</td>
+                  <td colSpan={3} className="px-4 py-2.5" />
+                </tr>
+              )}
             </tbody>
           ))}
 
           <tfoot>
             <tr className="bg-slate-800 text-white">
-              <td colSpan={7} className="px-4 py-3 text-right text-sm font-bold">Grand Total</td>
+              <td colSpan={7} className="px-4 py-3 text-right text-sm font-bold">AP Grand Total</td>
               <td className="px-4 py-3 text-right text-sm font-bold">{formatCurrency(grandTotal)}</td>
               <td className="px-4 py-3" />
             </tr>
+            {commitmentCount > 0 && (
+              <tr className="bg-indigo-900 text-white">
+                <td colSpan={5} className="px-4 py-3 text-right text-sm font-bold">PO Commitment Grand Total</td>
+                <td className="px-4 py-3 text-right text-sm font-bold">{formatCurrency(grandCommitmentTotal)}</td>
+                <td colSpan={3} className="px-4 py-3" />
+              </tr>
+            )}
           </tfoot>
         </table>
       </div>
 
       <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/60">
         <p className="text-xs text-slate-400">
-          Balance is the running total within each vendor. Int. Days counts from the due date
+          AP balance is the running payable total within each vendor. Purchase orders are operational commitments only and are excluded from Accounts Payable balances, ageing, and totals. Int. Days counts from the due date
           (or bill date when none is set) to the as-on date, inclusive.
           {restated && ' Outstanding figures are restated to the as-on date by adding back later settlements.'}
         </p>

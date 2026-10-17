@@ -9,9 +9,11 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: profileRaw } = await (supabaseUser as any)
-      .from('users').select('organization_id').eq('id', user.id).single()
-    const orgId = (profileRaw as any)?.organization_id
-    if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      .from('users').select('organization_id, role').eq('id', user.id).single()
+    const profile = profileRaw as { organization_id: string; role: string } | null
+    if (!profile || !['owner', 'admin', 'manager'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const body = await request.json()
     const {
@@ -41,135 +43,46 @@ export async function POST(request: NextRequest) {
     if (!invoice_date) return NextResponse.json({ error: 'Invoice date is required' }, { status: 400 })
     if (!payment_type) return NextResponse.json({ error: 'Payment type is required' }, { status: 400 })
     if (!Array.isArray(items) || items.length === 0) return NextResponse.json({ error: 'At least one item is required' }, { status: 400 })
-    if (items.some(it => !it.inventory_item_id && !it.description?.trim())) return NextResponse.json({ error: 'Non-inventory items must have a description' }, { status: 400 })
-    if (items.some(it => !it.quantity || it.quantity <= 0)) return NextResponse.json({ error: 'All quantities must be greater than 0' }, { status: 400 })
+    if (items.some((item) => !item.inventory_item_id && !item.description?.trim())) {
+      return NextResponse.json({ error: 'Non-inventory items must have a description' }, { status: 400 })
+    }
+    if (items.some((item) => !item.quantity || item.quantity <= 0)) {
+      return NextResponse.json({ error: 'All quantities must be greater than 0' }, { status: 400 })
+    }
 
-    const supabase = createAdminClient() as any
-
-    // Generate invoice number
-    const { data: seqData } = await supabase.rpc('generate_sequence_number', {
-      p_org_id: orgId,
-      p_type: 'purchase_invoice',
-      p_prefix: 'PINV',
+    const admin = createAdminClient() as any
+    const { data: result, error } = await admin.rpc('create_purchase_invoice', {
+      p_org_id: profile.organization_id,
+      p_actor_id: user.id,
+      p_supplier_id: supplier_id || null,
+      p_supplier_name: supplier_name?.trim() || null,
+      p_supplier_invoice_number: supplier_invoice_number?.trim() || null,
+      p_invoice_date: invoice_date,
+      p_due_date: due_date || null,
+      p_payment_type: payment_type,
+      p_payment_mode: payment_mode || 'cash',
+      p_discount_amount: Number(discount_amount ?? 0),
+      p_notes: notes?.trim() || null,
+      p_items: items.map((item, index) => ({
+        inventory_item_id: item.inventory_item_id || null,
+        description: item.description,
+        unit_of_measure: item.unit_of_measure?.trim() || null,
+        quantity: Number(item.quantity),
+        unit_cost: Number(item.unit_cost),
+        sort_order: index,
+      })),
     })
-    const invoiceNumber = seqData ?? `PINV-${Date.now()}`
+    if (error) throw error
 
-    // Calculate totals
-    const subtotal = items.reduce((s, it) => s + it.quantity * it.unit_cost, 0)
-    const discountAmt = Number(discount_amount ?? 0)
-    const totalAmount = Math.max(0, subtotal - discountAmt)
-    const amountPaid = payment_type === 'cash' ? totalAmount : 0
-    const balanceDue = payment_type === 'cash' ? 0 : totalAmount
+    const rows = Array.isArray(result) ? result : result ? [result] : []
+    const invoice = rows[0] as { purchase_invoice_id?: string; invoice_number?: string } | undefined
+    if (!invoice?.purchase_invoice_id) throw new Error('Purchase invoice was not created')
 
-    // Insert purchase invoice
-    const { data: invoice, error: invErr } = await supabase
-      .from('purchase_invoices')
-      .insert({
-        organization_id: orgId,
-        invoice_number: invoiceNumber,
-        supplier_id: supplier_id || null,
-        supplier_name: supplier_name?.trim() || null,
-        supplier_invoice_number: supplier_invoice_number?.trim() || null,
-        invoice_date,
-        due_date: due_date || null,
-        payment_type,
-        payment_mode: payment_type === 'cash' ? (payment_mode || 'cash') : null,
-        subtotal,
-        discount_amount: discountAmt,
-        total_amount: totalAmount,
-        amount_paid: amountPaid,
-        balance_due: balanceDue,
-        payment_status: payment_type === 'cash' ? 'paid' : 'unpaid',
-        notes: notes?.trim() || null,
-        status: 'confirmed',
-        created_by: user.id,
-      })
-      .select('id, invoice_number')
-      .single()
-
-    if (invErr) throw invErr
-
-    // Insert line items + update inventory
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i]
-      const qty = Number(it.quantity)
-      const unitCost = Number(it.unit_cost)
-      const totalCost = qty * unitCost
-
-      // Insert line item
-      const { error: liErr } = await supabase.from('purchase_invoice_items').insert({
-        organization_id: orgId,
-        purchase_invoice_id: invoice.id,
-        inventory_item_id: it.inventory_item_id || null,
-        description: it.description,
-        unit_of_measure: it.unit_of_measure?.trim() || null,
-        quantity: qty,
-        unit_cost: unitCost,
-        total_cost: totalCost,
-        sort_order: i,
-      })
-      if (liErr) throw liErr
-
-      // Non-inventory items skip stock updates entirely
-      if (!it.inventory_item_id) continue
-
-      // Get purchase_price for the fallback below (not used for stock — that's atomic now)
-      const { data: invItem } = await supabase
-        .from('inventory_items')
-        .select('purchase_price')
-        .eq('id', it.inventory_item_id)
-        .single()
-
-      // Receive stock and record the ledger entry atomically, in one call
-      // (adjust_inventory_stock_logged, migration 034) instead of a
-      // SELECT-then-UPDATE-then-INSERT, so a failure partway through can't
-      // leave stock changed with no matching ledger row.
-      const { error: stockErr } = await supabase
-        .rpc('adjust_inventory_stock_logged', {
-          p_item_id: it.inventory_item_id,
-          p_delta: qty,
-          p_org_id: orgId,
-          p_transaction_type: 'purchase',
-          p_unit_cost: unitCost,
-          p_reference_type: 'purchase_invoice',
-          p_reference_id: invoice.id,
-          p_notes: `Purchase Invoice ${invoiceNumber}`,
-          p_created_by: user.id,
-        })
-        .single()
-      if (stockErr) throw stockErr
-
-      // Purchase price is unrelated to the stock change — update it separately.
-      await supabase
-        .from('inventory_items')
-        .update({
-          purchase_price: unitCost > 0 ? unitCost : (invItem?.purchase_price ?? 0),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', it.inventory_item_id)
-    }
-
-    // Record supplier payment for cash purchases (if supplier is linked).
-    // Non-critical: the invoice, its line items, and stock have already
-    // committed by this point, so a ledger-write failure here shouldn't
-    // fail the whole request — but it must not be silently discarded
-    // either, which is exactly how a 'knet' payment_mode used to vanish
-    // with zero trace (the enum this column used didn't allow it).
-    if (payment_type === 'cash' && supplier_id) {
-      const { error: spErr } = await supabase.from('supplier_payments').insert({
-        organization_id: orgId,
-        supplier_id,
-        purchase_invoice_id: invoice.id,
-        payment_date: invoice_date,
-        amount_paid: totalAmount,
-        payment_mode: payment_mode || 'cash',
-        notes: `Purchase Invoice ${invoiceNumber}`,
-        paid_by: user.id,
-      })
-      if (spErr) console.error('supplier_payments insert failed (non-critical):', spErr)
-    }
-
-    return NextResponse.json({ success: true, id: invoice.id, invoiceNumber: invoice.invoice_number })
+    return NextResponse.json({
+      success: true,
+      id: invoice.purchase_invoice_id,
+      invoiceNumber: invoice.invoice_number,
+    })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : JSON.stringify(err)
     console.error('Create purchase invoice error:', err)

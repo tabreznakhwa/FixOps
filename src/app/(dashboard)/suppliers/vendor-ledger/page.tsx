@@ -1,25 +1,33 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { createAdminClient } from '@/lib/supabase/server'
+import { getAuthedProfile } from '@/lib/auth/session'
+import { getRoleAccess } from '@/lib/orgPermissions'
 import { Header } from '@/components/layout/Header'
-import { formatCurrency, formatDate } from '@/lib/utils'
 import { FileBarChart } from 'lucide-react'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
 import { SupplierSelector } from './SupplierSelector'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { Suspense } from 'react'
+import { buildVendorLedger } from '../vendor-outstanding/vendorLedger'
+import { VendorLedgerTable } from '../vendor-outstanding/VendorLedgerTable'
 
 export const metadata = { title: 'Vendor Ledger' }
 
 export default async function VendorLedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ supplier_id?: string; from_date?: string; to_date?: string; show?: string }>
+  searchParams: Promise<{ supplier_id?: string; from_date?: string; to_date?: string }>
 }) {
   const params = await searchParams
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileRaw } = await (supabase as any).from('users').select('organization_id').eq('id', user!.id).single()
-  const orgId = (profileRaw as { organization_id: string } | null)?.organization_id
+  const { profile } = await getAuthedProfile()
+  if (!profile || profile.status !== 'active' || !profile.organization_id) redirect('/login')
+  const financeAccess = await getRoleAccess(profile.organization_id, profile.role)
+  if (financeAccess.finance === 'none') redirect('/dashboard?error=unauthorized')
+
+  const orgId = profile.organization_id
+  // Accounting posting metadata trails the hand-maintained Database type.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any
 
   const { data: suppliersRaw } = await admin
@@ -30,106 +38,20 @@ export default async function VendorLedgerPage({
     .order('supplier_name')
 
   const suppliers = (suppliersRaw ?? []) as Array<{ id: string; supplier_name: string; supplier_code: string }>
+  const selectedSupplier = params.supplier_id
+    ? suppliers.find((s) => s.id === params.supplier_id) ?? null
+    : null
 
-  type LedgerRow = {
-    id: string; date: string; description: string; type: string
-    reference: string | null; debit: number; credit: number; running_balance: number
-  }
-
-  let ledgerRows: LedgerRow[] = []
-  let selectedSupplier: typeof suppliers[0] | null = null
-
-  if (params.supplier_id) {
-    selectedSupplier = suppliers.find(s => s.id === params.supplier_id) ?? null
-    const fromDate = params.from_date ?? null
-    const toDate = params.to_date ?? null
-
-    // Opening payables (debit — we owe them from before go-live)
-    let openingQuery = admin
-      .from('opening_payables')
-      .select('id, bill_ref, bill_date, amount')
-      .eq('supplier_id', params.supplier_id)
-      .eq('organization_id', orgId)
-      .order('bill_date', { ascending: true })
-    if (fromDate) openingQuery = openingQuery.gte('bill_date', fromDate)
-    const { data: openingRaw } = await openingQuery
-
-    // Purchase orders (debit — we owe them)
-    let poQuery = admin
-      .from('purchase_orders')
-      .select('id, po_number, purchase_date, total_amount, status')
-      .eq('supplier_id', params.supplier_id)
-      .eq('organization_id', orgId)
-      .not('status', 'in', '(cancelled)')
-      .order('purchase_date', { ascending: true })
-    if (fromDate) poQuery = poQuery.gte('purchase_date', fromDate)
-    if (toDate) poQuery = poQuery.lte('purchase_date', toDate)
-    const { data: posRaw } = await poQuery
-
-    // Supplier payments (credit — we paid them; discount also settles the bill without being cash)
-    let payQuery = admin
-      .from('supplier_payments')
-      .select('id, payment_date, amount_paid, discount_amount, payment_mode, reference_number')
-      .eq('supplier_id', params.supplier_id)
-      .eq('organization_id', orgId)
-      .order('payment_date', { ascending: true })
-    if (fromDate) payQuery = payQuery.gte('payment_date', fromDate)
-    if (toDate) payQuery = payQuery.lte('payment_date', toDate)
-    const { data: paymentsRaw } = await payQuery
-
-    const openingEntries = (openingRaw ?? []) as Array<{ id: string; bill_ref: string; bill_date: string; amount: number }>
-    const pos = (posRaw ?? []) as Array<{ id: string; po_number: string; purchase_date: string; total_amount: number; status: string }>
-    const payments = (paymentsRaw ?? []) as Array<{ id: string; payment_date: string; amount_paid: number; discount_amount: number | null; payment_mode: string; reference_number: string | null }>
-
-    type RawEntry = { date: string; description: string; type: string; reference: string | null; debit: number; credit: number }
-    const merged: RawEntry[] = [
-      ...openingEntries.map(op => ({
-        date: op.bill_date,
-        description: `Opening Balance — ${op.bill_ref}`,
-        type: 'opening_balance',
-        reference: op.bill_ref,
-        debit: op.amount,
-        credit: 0,
-      })),
-      ...pos.map(po => ({
-        date: po.purchase_date,
-        description: `Purchase Order ${po.po_number}`,
-        type: 'purchase_order',
-        reference: po.po_number,
-        debit: po.total_amount,
-        credit: 0,
-      })),
-      ...payments.map(pay => ({
-        date: pay.payment_date,
-        description: `Payment — ${pay.payment_mode.replace(/_/g, ' ')}${pay.reference_number ? ` (${pay.reference_number})` : ''}${pay.discount_amount ? ` incl. ${formatCurrency(pay.discount_amount)} discount` : ''}`,
-        type: 'payment',
-        reference: pay.reference_number,
-        debit: 0,
-        credit: pay.amount_paid + Number(pay.discount_amount ?? 0),
-      })),
-    ].sort((a, b) => a.date.localeCompare(b.date))
-
-    let running = 0
-    ledgerRows = merged.map((row, i) => {
-      running = running + row.debit - row.credit
-      return { id: String(i), date: row.date, description: row.description, type: row.type, reference: row.reference, debit: row.debit, credit: row.credit, running_balance: running }
-    })
-  }
-
-  const balance = ledgerRows.length ? ledgerRows[ledgerRows.length - 1].running_balance : 0
-
-  const show = params.show ?? 'all'
-  const displayRows = show === 'purchases'
-    ? ledgerRows.filter(r => r.type !== 'payment')
-    : show === 'payments'
-    ? ledgerRows.filter(r => r.type === 'payment')
-    : ledgerRows
-
-  const typeBadge: Record<string, string> = {
-    opening_balance: 'bg-purple-50 text-purple-700',
-    purchase_order: 'bg-blue-50 text-blue-700',
-    payment: 'bg-green-50 text-green-700',
-  }
+  // This page is now a thin shell over the canonical vendor-outstanding builder:
+  // one accounting truth, one sign convention (AP: purchases = Cr, payments = Dr),
+  // one stable ordering and paging strategy.
+  const ledger = selectedSupplier
+    ? await buildVendorLedger(admin, orgId, {
+        supplierId: selectedSupplier.id,
+        from: params.from_date,
+        to: params.to_date,
+      })
+    : null
 
   return (
     <div className="animate-fade-in">
@@ -158,121 +80,21 @@ export default async function VendorLedgerPage({
               selectedId={params.supplier_id ?? ''}
             />
           </Suspense>
-          {params.supplier_id && (
-            <div className="flex gap-1.5 ml-2">
-              {([
-                { label: 'All', value: 'all' },
-                { label: 'Purchases', value: 'purchases' },
-                { label: 'Payments Made', value: 'payments' },
-              ] as const).map(({ label, value }) => {
-                const isActive = show === value || (value === 'all' && show !== 'purchases' && show !== 'payments')
-                const sp = new URLSearchParams()
-                if (params.supplier_id) sp.set('supplier_id', params.supplier_id)
-                if (params.from_date) sp.set('from_date', params.from_date)
-                if (params.to_date) sp.set('to_date', params.to_date)
-                if (value !== 'all') sp.set('show', value)
-                return (
-                  <a key={value} href={`/suppliers/vendor-ledger?${sp.toString()}`}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${isActive ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                    {label}
-                  </a>
-                )
-              })}
-            </div>
-          )}
         </div>
 
-        {selectedSupplier && (
-          <>
-            <div className={`rounded-xl border p-5 ${balance > 0 ? 'bg-red-50 border-red-200' : balance < 0 ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-slate-900">{selectedSupplier.supplier_name}</p>
-                  <p className="text-sm text-slate-500">{selectedSupplier.supplier_code}</p>
-                  <p className="text-xs text-slate-400 mt-1">{displayRows.length} transaction{displayRows.length !== 1 ? 's' : ''}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-0.5">Current Balance</p>
-                  <p className={`text-2xl font-bold ${balance > 0 ? 'text-red-600' : balance < 0 ? 'text-green-600' : 'text-slate-900'}`}>
-                    {formatCurrency(Math.abs(balance))}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {balance > 0 ? 'Amount We Owe' : balance < 0 ? 'Overpaid / Credit' : 'Settled'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {!displayRows.length ? (
-              <div className="bg-white rounded-xl border border-slate-200 p-10 text-center">
-                <FileBarChart className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 font-medium">No transactions found</p>
-                <p className="text-slate-400 text-sm mt-1">Purchase orders and payments for this supplier will appear here.</p>
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-100">
-                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Date</th>
-                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Description</th>
-                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Type</th>
-                      <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Debit (KWD)</th>
-                      <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Credit (KWD)</th>
-                      <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Balance (KWD)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {displayRows.map((row) => (
-                      <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">{formatDate(row.date)}</td>
-                        <td className="px-4 py-3.5">
-                          <p className="font-medium text-slate-800">{row.description}</p>
-                        </td>
-                        <td className="px-4 py-3.5 hidden md:table-cell">
-                          <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${typeBadge[row.type] ?? 'bg-slate-100 text-slate-600'}`}>
-                            {row.type.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-semibold text-red-600">
-                          {row.debit > 0 ? formatCurrency(row.debit) : '—'}
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-semibold text-green-600">
-                          {row.credit > 0 ? formatCurrency(row.credit) : '—'}
-                        </td>
-                        <td className="px-5 py-3.5 text-right">
-                          <span className={`font-bold ${row.running_balance > 0 ? 'text-red-600' : row.running_balance < 0 ? 'text-green-600' : 'text-slate-900'}`}>
-                            {formatCurrency(Math.abs(row.running_balance))}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-slate-200 bg-slate-50">
-                      <td colSpan={3} className="px-5 py-3.5 text-sm font-bold text-slate-700">Totals</td>
-                      <td className="px-4 py-3.5 text-right text-sm font-bold text-red-600">
-                        {formatCurrency(displayRows.reduce((s, r) => s + r.debit, 0))}
-                      </td>
-                      <td className="px-4 py-3.5 text-right text-sm font-bold text-green-600">
-                        {formatCurrency(displayRows.reduce((s, r) => s + r.credit, 0))}
-                      </td>
-                      <td className="px-5 py-3.5 text-right text-sm font-bold text-slate-900">
-                        {formatCurrency(Math.abs(balance))}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </>
+        {selectedSupplier && ledger && (
+          <VendorLedgerTable
+            ledger={ledger}
+            showSupplier={false}
+            supplierName={selectedSupplier.supplier_name}
+          />
         )}
 
         {!params.supplier_id && (
           <div className="bg-white rounded-xl border border-slate-200 p-10 text-center">
             <FileBarChart className="w-10 h-10 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500 font-medium">Select a supplier to view their ledger</p>
-            <p className="text-slate-400 text-sm mt-1">Shows opening balances, purchase orders and payments with a running balance.</p>
+            <p className="text-slate-400 text-sm mt-1">Shows opening payables, purchase invoices, payments and advances with a running balance.</p>
           </div>
         )}
       </div>

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, ChevronDown, ChevronRight, Printer, Search, X } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { useCurrentPath } from '@/lib/backNav.client'
 import { withReturnTo } from '@/lib/backNav'
 import {
@@ -258,11 +258,12 @@ export function ReceivablesClient({
                               />
                             )}
                             {inv.source === 'invoice' && inv.invoiceId ? (
-                              <Link href={withReturnTo(`/finance/invoices/${inv.invoiceId}`, receivablesPath)}
+                              <DocumentLink href={withReturnTo(`/finance/invoices/${inv.invoiceId}`, receivablesPath)}
+                                tabLabel={inv.invoice_number}
                                 className="text-xs font-mono font-semibold text-blue-600 hover:underline"
                                 onClick={e => e.stopPropagation()}>
                                 {inv.invoice_number}
-                              </Link>
+                              </DocumentLink>
                             ) : (
                               <span className="text-xs font-mono text-slate-500">{inv.invoice_number}</span>
                             )}

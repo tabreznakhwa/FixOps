@@ -1,7 +1,7 @@
 # FixOps — current state
 
 Read this first. It exists so a new session does not have to rediscover the app
-by exploration. Last updated 14 Oct 2026.
+by exploration. Last updated 17 Oct 2026.
 
 **Note:** commits `fccbb1d`…`2ca13b6` (Pay Salaries modal portal/zoom fixes, a
 Vercel function-invocation-spike fix replacing `force-dynamic` with ISR
@@ -52,6 +52,16 @@ Migration 051 was manually applied by the user on 14 Oct 2026. Migrations
 independently verified. Migration 054 needs to be rerun from its latest file:
 the first run happened before the legacy `attendance.org_isolation` policy and
 broad production table grants were discovered and added to the migration.
+Migrations 055 (`055_accounting_posting_lifecycle.sql`) and 056
+(`056_unpaid_annual_leave_payroll.sql`) were manually applied by the user on
+17 Oct 2026; their production effects have not yet been independently verified.
+Migration 055 introduces the canonical AR/AP posting journal and transactional
+accounting RPCs required by the corresponding application routes. Migration 056
+introduces unpaid approved annual leave, freezes annual-leave days/deduction on
+new salary slips, preserves existing processed/paid history as an explicit paid
+snapshot, and converts only safe unprocessed historical annual-leave dates.
+Deploy the compatible application only after verifying both migrations' schema,
+function, grant and reconciliation checks.
 Migration
 051's two unique indexes and five
 `SECURITY DEFINER` functions were verified in production;
@@ -173,7 +183,18 @@ converted. Attendance rows linked to approved leave cannot be edited or deleted
 directly; there is currently no approved-leave revocation workflow. Migration
 048 adds the database-enforced version of those guards, revokes direct
 `authenticated` attendance mutation, and serializes approval against attendance
-and holiday changes. Migration 049 removes duplicate PostgREST FK paths
+and holiday changes. Once migration 056 is applied, newly approved Annual Leave
+maps to `unpaid_leave`; its payroll daily rate is `(basic + housing + transport +
+other + food + applicable seasonal fixed OT) / 30`, separate from ordinary
+absence (which excludes food). Existing salary-slip history is preserved: the
+exact approved annual-leave rows represented by an existing employee slip are
+marked as paid snapshot `leave`, while historical dates without a matching slip
+convert to `unpaid_leave`. New slips freeze `annual_leave_days` and
+`annual_leave_deduction` separately, with database guards rejecting direct
+financial snapshot rewrites. Paid runs remain non-resettable; resetting a
+non-paid legacy run restores advances, converts that run's grandfathered annual
+leave to unpaid, and removes slips/run atomically. Leave changes remain blocked
+for any month with a salary run. Migration 049 removes duplicate PostgREST FK paths
 introduced by 048 and fixes review lock ordering. Migration 050 rejects requests
 for dates in a processed payroll month, serializes leave with payroll, derives
 payroll attendance inside the database, and makes payroll process/reset atomic.
@@ -193,12 +214,12 @@ appearing, suspect a schema mismatch, not the caller.
 
 ## Testing
 
-Suites live in the session scratchpad (not the repo) and cover the pure logic:
-business metrics, customer paging, leave settlement, auto-absent, back-nav,
-Friday rotation, vendor ledger. Run with
-`npx tsx --tsconfig tsconfig.json <file>` **from the project root** — the path
-alias breaks otherwise. Anything money- or stock-related should get a test before
-it ships.
+Focused assertions for customer/vendor ledgers, vendor outstanding, document
+tabs/tab state, and unpaid annual leave now live under `scripts/*.assert.ts`.
+Additional older suites may still live in the session scratchpad. Run assertion
+files with `npx tsx --tsconfig tsconfig.json <file>` **from the project root** —
+the path alias breaks otherwise. Anything money- or stock-related should get a
+test before it ships.
 
 ## Verifying UI changes
 

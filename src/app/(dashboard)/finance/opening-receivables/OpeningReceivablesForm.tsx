@@ -204,16 +204,17 @@ export function OpeningReceivablesForm({ customers, entries: initialEntries }: P
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this opening receivable?')) return
+    const reason = prompt('Reason for reversing this opening receivable?')?.trim()
+    if (!reason) return
     setDeleting(id)
     try {
       const res = await fetch('/api/opening-receivables', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ id, reason }),
       })
-      if (!res.ok) throw new Error('Delete failed')
-      setEntries(prev => prev.filter(e => e.id !== id))
+      if (!res.ok) throw new Error('Reversal failed')
+      setEntries((previous) => previous.filter((entry) => entry.id !== id))
       router.refresh()
     } finally {
       setDeleting(null)

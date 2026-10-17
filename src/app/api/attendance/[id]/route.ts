@@ -27,6 +27,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (!date) return NextResponse.json({ error: 'Date is required' }, { status: 400 })
     if (!status) return NextResponse.json({ error: 'Status is required' }, { status: 400 })
+    const allowedStatuses = ['present', 'absent', 'half_day', 'leave', 'sick_leave']
+    if (!allowedStatuses.includes(status)) {
+      const error = status === 'unpaid_leave'
+        ? 'Unpaid leave attendance can only be created through an approved annual leave application'
+        : 'Invalid attendance status'
+      return NextResponse.json({ error }, { status: 400 })
+    }
 
     const admin = createAdminClient() as any
 

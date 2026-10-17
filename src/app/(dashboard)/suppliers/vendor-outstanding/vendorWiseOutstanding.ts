@@ -1,3 +1,5 @@
+import { readPagedRows } from './reportPaging'
+
 /**
  * Vendor-wise bill-wise outstanding — the classic ERP payables report.
  *
@@ -14,7 +16,7 @@
  */
 
 export type OutstandingBill = {
-  kind: 'opening' | 'invoice' | 'po'
+  kind: 'opening' | 'invoice'
   id: string
   billNo: string
   billDate: string
@@ -29,12 +31,24 @@ export type OutstandingBill = {
   href: string | null
 }
 
+export type PurchaseOrderCommitment = {
+  id: string
+  orderNo: string
+  orderDate: string
+  refNo: string | null
+  dueDate: string | null
+  amount: number
+  href: string
+}
+
 export type VendorGroup = {
   supplierId: string
   supplierName: string
   supplierCode: string | null
   bills: OutstandingBill[]
+  commitments: PurchaseOrderCommitment[]
   total: number
+  commitmentTotal: number
 }
 
 export type VendorWiseOutstanding = {
@@ -42,6 +56,8 @@ export type VendorWiseOutstanding = {
   groups: VendorGroup[]
   grandTotal: number
   billCount: number
+  grandCommitmentTotal: number
+  commitmentCount: number
   /** True when figures were restated to a past date rather than read live. */
   restated: boolean
   /** Sources that failed to load. Non-empty means the figures are incomplete. */
@@ -53,25 +69,6 @@ function daysBetween(a: string, b: string): number {
   const [ay, am, ad] = a.split('-').map(Number)
   const [by, bm, bd] = b.split('-').map(Number)
   return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000)
-}
-
-/**
- * Degrade to no rows rather than taking the page down, but record the failure —
- * silently dropping a source would show a confidently wrong outstanding total.
- */
-async function safeRows<T>(
-  q: PromiseLike<{ data: T[] | null; error: unknown }>,
-  failures: string[],
-  source: string
-): Promise<T[]> {
-  try {
-    const { data, error } = await q
-    if (error) { failures.push(source); return [] }
-    return data ?? []
-  } catch {
-    failures.push(source)
-    return []
-  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,12 +83,25 @@ export async function buildVendorWiseOutstanding(
 ): Promise<VendorWiseOutstanding> {
   const { supplierId, asOn } = opts
 
+  if (!orgId) {
+    return {
+      asOn,
+      groups: [],
+      grandTotal: 0,
+      billCount: 0,
+      grandCommitmentTotal: 0,
+      commitmentCount: 0,
+      restated: false,
+      failedSources: ['organization scope is missing'],
+    }
+  }
+
   const scope = <T>(q: T): T => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let qq: any = q
     qq = qq.eq('organization_id', orgId)
     if (supplierId) qq = qq.eq('supplier_id', supplierId)
-    return qq.limit(2000) as T
+    return qq as T
   }
 
   type OpeningRow = {
@@ -106,58 +116,77 @@ export async function buildVendorWiseOutstanding(
   }
   type PoRow = {
     id: string; po_number: string; purchase_date: string; due_date: string | null
-    total_amount: number; balance_due: number; status: string
-    supplier_invoice_number: string | null; supplier_id: string | null; suppliers: SupplierRef
+    total_amount: number; status: string; supplier_id: string | null; suppliers: SupplierRef
+    purchase_order_items: Array<{
+      quantity: number
+      quantity_received: number
+      unit_cost: number
+    }> | null
   }
   type PayRow = {
-    purchase_invoice_id: string | null; purchase_order_id: string | null
-    reference_number: string | null; supplier_id: string | null
+    id: string; purchase_invoice_id: string | null
+    opening_payable_id: string | null; supplier_advance_id: string | null
     payment_date: string; amount_paid: number; discount_amount: number | null
   }
 
   const failures: string[] = []
 
   const [openingRows, piRows, poRows, laterPayments] = await Promise.all([
-    safeRows<OpeningRow>(
-      scope(
+    readPagedRows<OpeningRow>(
+      (from, to) => scope(
         admin
           .from('opening_payables')
           .select('id, bill_ref, bill_date, due_date, amount, balance_due, supplier_id, suppliers(id, supplier_name, supplier_code)')
+          .is('reversal_posting_id', null)
           .lte('bill_date', asOn)
-      ),
-      failures, 'opening payables'
+          .order('bill_date')
+          .order('id')
+      ).range(from, to),
+      failures,
+      'opening payables',
     ),
-    safeRows<PiRow>(
-      scope(
+    readPagedRows<PiRow>(
+      (from, to) => scope(
         admin
           .from('purchase_invoices')
           .select('id, invoice_number, invoice_date, due_date, total_amount, balance_due, status, payment_type, supplier_invoice_number, supplier_id, supplier_name, suppliers(id, supplier_name, supplier_code)')
           .eq('payment_type', 'credit')
           .neq('status', 'cancelled')
           .lte('invoice_date', asOn)
-      ),
-      failures, 'purchase invoices'
+          .order('invoice_date')
+          .order('id')
+      ).range(from, to),
+      failures,
+      'purchase invoices',
     ),
-    safeRows<PoRow>(
-      scope(
+    readPagedRows<PoRow>(
+      (from, to) => scope(
         admin
           .from('purchase_orders')
-          .select('id, po_number, purchase_date, due_date, total_amount, balance_due, status, supplier_invoice_number, supplier_id, suppliers(id, supplier_name, supplier_code)')
-          .not('status', 'in', '(cancelled)')
+          .select('id, po_number, purchase_date, due_date, total_amount, status, supplier_id, suppliers(id, supplier_name, supplier_code), purchase_order_items(quantity, quantity_received, unit_cost)')
+          .in('status', ['draft', 'submitted', 'partial'])
           .lte('purchase_date', asOn)
-      ),
-      failures, 'purchase orders'
+          .order('purchase_date')
+          .order('id')
+      ).range(from, to),
+      failures,
+      'purchase orders',
     ),
-    // Settlements recorded after the as-on date, added back to restate balances.
-    // Empty for the default (as-on = today), so the common case stays exact.
-    safeRows<PayRow>(
-      scope(
+    // Only active, independently posted settlements are added back. Supplier
+    // advance allocation traces are operational links, not second cash events.
+    readPagedRows<PayRow>(
+      (from, to) => scope(
         admin
           .from('supplier_payments')
-          .select('purchase_invoice_id, purchase_order_id, reference_number, supplier_id, payment_date, amount_paid, discount_amount')
+          .select('id, purchase_invoice_id, opening_payable_id, supplier_advance_id, payment_date, amount_paid, discount_amount')
+          .eq('is_cancelled', false)
+          .is('supplier_advance_id', null)
           .gt('payment_date', asOn)
-      ),
-      failures, 'later settlements'
+          .order('payment_date')
+          .order('id')
+      ).range(from, to),
+      failures,
+      'later settlements',
     ),
   ])
 
@@ -166,19 +195,19 @@ export async function buildVendorWiseOutstanding(
   // Index later settlements so they can be added back onto the right bill.
   const settled = (amt: number, disc: number | null) => Number(amt ?? 0) + Number(disc ?? 0)
   const byInvoice = new Map<string, number>()
-  const byPo = new Map<string, number>()
-  // Opening payables carry no FK; the payment API stamps the bill_ref onto
-  // reference_number, so match on that (scoped to the supplier).
-  const byOpeningRef = new Map<string, number>()
-  for (const p of laterPayments) {
-    const v = settled(p.amount_paid, p.discount_amount)
-    if (p.purchase_invoice_id) {
-      byInvoice.set(p.purchase_invoice_id, (byInvoice.get(p.purchase_invoice_id) ?? 0) + v)
-    } else if (p.purchase_order_id) {
-      byPo.set(p.purchase_order_id, (byPo.get(p.purchase_order_id) ?? 0) + v)
-    } else if (p.reference_number) {
-      const k = `${p.supplier_id ?? ''}::${p.reference_number}`
-      byOpeningRef.set(k, (byOpeningRef.get(k) ?? 0) + v)
+  const byOpening = new Map<string, number>()
+  for (const payment of laterPayments) {
+    const value = settled(payment.amount_paid, payment.discount_amount)
+    if (payment.purchase_invoice_id) {
+      byInvoice.set(
+        payment.purchase_invoice_id,
+        (byInvoice.get(payment.purchase_invoice_id) ?? 0) + value,
+      )
+    } else if (payment.opening_payable_id) {
+      byOpening.set(
+        payment.opening_payable_id,
+        (byOpening.get(payment.opening_payable_id) ?? 0) + value,
+      )
     }
   }
 
@@ -194,7 +223,9 @@ export async function buildVendorWiseOutstanding(
   }
 
   type Row = OutstandingBill & { supplierId: string; supplierName: string; supplierCode: string | null }
+  type CommitmentRow = PurchaseOrderCommitment & { supplierId: string; supplierName: string; supplierCode: string | null }
   const rows: Row[] = []
+  const commitments: CommitmentRow[] = []
 
   const push = (
     s: SupplierRef,
@@ -213,7 +244,6 @@ export async function buildVendorWiseOutstanding(
   }
 
   for (const r of openingRows) {
-    const key = `${r.supplier_id ?? ''}::${r.bill_ref ?? ''}`
     push(r.suppliers, r.supplier_id, null, {
       kind: 'opening',
       id: r.id,
@@ -222,7 +252,7 @@ export async function buildVendorWiseOutstanding(
       refNo: r.bill_ref,
       dueDate: r.due_date,
       amount: Number(r.amount ?? 0),
-      outstanding: restate(r.balance_due, r.amount, byOpeningRef.get(key) ?? 0),
+      outstanding: restate(r.balance_due, r.amount, byOpening.get(r.id) ?? 0),
       intDays: intDaysFor(r.due_date, r.bill_date),
       href: null,
     })
@@ -243,18 +273,25 @@ export async function buildVendorWiseOutstanding(
     })
   }
 
-  for (const r of poRows) {
-    push(r.suppliers, r.supplier_id, null, {
-      kind: 'po',
-      id: r.id,
-      billNo: r.po_number,
-      billDate: r.purchase_date,
-      refNo: r.supplier_invoice_number,
-      dueDate: r.due_date,
-      amount: Number(r.total_amount ?? 0),
-      outstanding: restate(r.balance_due, r.total_amount, byPo.get(r.id) ?? 0),
-      intDays: intDaysFor(r.due_date, r.purchase_date),
-      href: `/suppliers/po/${r.id}`,
+  for (const row of poRows) {
+    const amount = row.purchase_order_items?.length
+      ? row.purchase_order_items.reduce((sum, item) => {
+          const remainingQuantity = Math.max(0, Number(item.quantity ?? 0) - Number(item.quantity_received ?? 0))
+          return sum + remainingQuantity * Number(item.unit_cost ?? 0)
+        }, 0)
+      : Number(row.total_amount ?? 0)
+    if (amount <= 0.0005) continue
+    commitments.push({
+      id: row.id,
+      orderNo: row.po_number,
+      orderDate: row.purchase_date,
+      refNo: null,
+      dueDate: row.due_date,
+      amount,
+      href: `/suppliers/po/${row.id}`,
+      supplierId: row.suppliers?.id ?? row.supplier_id ?? 'unknown',
+      supplierName: row.suppliers?.supplier_name ?? 'Unallocated',
+      supplierCode: row.suppliers?.supplier_code ?? null,
     })
   }
 
@@ -268,34 +305,60 @@ export async function buildVendorWiseOutstanding(
         (r.refNo ?? '').toLowerCase().includes(q)
       )
     : rows
+  const filteredCommitments = q
+    ? commitments.filter((row) =>
+        row.supplierName.toLowerCase().includes(q) ||
+        (row.supplierCode ?? '').toLowerCase().includes(q) ||
+        row.orderNo.toLowerCase().includes(q) ||
+        (row.refNo ?? '').toLowerCase().includes(q)
+      )
+    : commitments
 
-  // Group by vendor, oldest bill first, accumulating the running balance.
+  // Group by vendor, keeping AP bills and PO commitments explicitly separate.
   const byVendor = new Map<string, VendorGroup>()
-  for (const r of filtered) {
-    let g = byVendor.get(r.supplierId)
-    if (!g) {
-      g = { supplierId: r.supplierId, supplierName: r.supplierName, supplierCode: r.supplierCode, bills: [], total: 0 }
-      byVendor.set(r.supplierId, g)
+  const getGroup = (row: { supplierId: string; supplierName: string; supplierCode: string | null }) => {
+    let group = byVendor.get(row.supplierId)
+    if (!group) {
+      group = {
+        supplierId: row.supplierId,
+        supplierName: row.supplierName,
+        supplierCode: row.supplierCode,
+        bills: [],
+        commitments: [],
+        total: 0,
+        commitmentTotal: 0,
+      }
+      byVendor.set(row.supplierId, group)
     }
-    g.bills.push(r)
+    return group
+  }
+  for (const row of filtered) {
+    getGroup(row).bills.push(row)
+  }
+  for (const row of filteredCommitments) {
+    getGroup(row).commitments.push(row)
   }
 
   const groups = [...byVendor.values()].sort((a, b) => a.supplierName.localeCompare(b.supplierName))
-  for (const g of groups) {
-    g.bills.sort((a, b) => a.billDate.localeCompare(b.billDate) || a.billNo.localeCompare(b.billNo))
+  for (const group of groups) {
+    group.bills.sort((a, b) => a.billDate.localeCompare(b.billDate) || a.billNo.localeCompare(b.billNo))
     let running = 0
-    for (const b of g.bills) {
-      running += b.outstanding
-      b.balance = running
+    for (const bill of group.bills) {
+      running += bill.outstanding
+      bill.balance = running
     }
-    g.total = running
+    group.total = running
+    group.commitments.sort((a, b) => a.orderDate.localeCompare(b.orderDate) || a.orderNo.localeCompare(b.orderNo))
+    group.commitmentTotal = group.commitments.reduce((sum, row) => sum + row.amount, 0)
   }
 
   return {
     asOn,
     groups,
-    grandTotal: groups.reduce((s, g) => s + g.total, 0),
-    billCount: groups.reduce((s, g) => s + g.bills.length, 0),
+    grandTotal: groups.reduce((sum, group) => sum + group.total, 0),
+    billCount: groups.reduce((sum, group) => sum + group.bills.length, 0),
+    grandCommitmentTotal: groups.reduce((sum, group) => sum + group.commitmentTotal, 0),
+    commitmentCount: groups.reduce((sum, group) => sum + group.commitments.length, 0),
     restated,
     failedSources: failures,
   }

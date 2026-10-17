@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { getAuthedProfile } from '@/lib/auth/session'
 import { Header } from '@/components/layout/Header'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { AlertTriangle, FileBarChart } from 'lucide-react'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
@@ -136,6 +136,7 @@ export default async function StaffLedgerPage({
   type SalarySlipRow = {
     id: string; gross_salary: number; advance_deduction: number; net_salary: number
     absent_deduction: number | null; food_deduction: number | null; absent_days: number | null
+    annual_leave_days: number | null; annual_leave_deduction: number | null
     deductions: number | null; payment_status: string; salary_run_id: string
   }
   type SalarySlip = SalarySlipRow & { run: SalaryRun }
@@ -194,7 +195,7 @@ export default async function StaffLedgerPage({
         .range(from, to)),
       fetchAllPages<SalarySlipRow>((from, to) => admin
         .from('salary_slips')
-        .select('id, gross_salary, advance_deduction, net_salary, absent_deduction, food_deduction, absent_days, deductions, payment_status, salary_run_id')
+        .select('id, gross_salary, advance_deduction, net_salary, absent_deduction, food_deduction, absent_days, annual_leave_days, annual_leave_deduction, deductions, payment_status, salary_run_id')
         .eq('organization_id', orgId)
         .eq('staff_id', staffId)
         .order('salary_run_id')
@@ -322,6 +323,10 @@ export default async function StaffLedgerPage({
   const totalRecovered = filteredSlips.reduce((sum, slip) => sum + Number(slip.advance_deduction ?? 0), 0)
   const totalAbsent = filteredSlips.reduce(
     (sum, slip) => sum + Number(slip.absent_deduction ?? 0) + Number(slip.food_deduction ?? 0),
+    0,
+  )
+  const totalAnnualLeave = filteredSlips.reduce(
+    (sum, slip) => sum + Number(slip.annual_leave_deduction ?? 0),
     0,
   )
   const totalBonus = filteredBonuses.reduce((sum, bonus) => sum + Number(bonus.amount ?? 0), 0)
@@ -651,12 +656,13 @@ export default async function StaffLedgerPage({
                   ) : (
                     <div className="print-statement bg-white rounded-xl border border-slate-200 overflow-hidden">
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm min-w-[640px]">
+                        <table className="w-full text-sm min-w-[760px]">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-100">
                               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Period</th>
                               <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Gross</th>
                               <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Absent Deduction</th>
+                              <th className="text-right text-xs font-semibold text-orange-600 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Unpaid AL</th>
                               <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Advance Recovery</th>
                               <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Net Salary</th>
                               <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Status</th>
@@ -679,6 +685,11 @@ export default async function StaffLedgerPage({
                                         {sl.absent_days} absent day{sl.absent_days !== 1 ? 's' : ''}
                                       </p>
                                     )}
+                                    {(sl.annual_leave_days ?? 0) > 0 && (
+                                      <p className="text-xs text-orange-600 mt-0.5">
+                                        {sl.annual_leave_days} unpaid annual leave day{sl.annual_leave_days !== 1 ? 's' : ''}
+                                      </p>
+                                    )}
                                   </td>
                                   <td className="px-4 py-3.5 text-right font-semibold text-slate-700">
                                     {formatCurrency(sl.gross_salary ?? 0)}
@@ -691,8 +702,15 @@ export default async function StaffLedgerPage({
                                     )}
                                   </td>
                                   <td className="px-4 py-3.5 text-right hidden md:table-cell">
+                                    {(sl.annual_leave_deduction ?? 0) > 0 ? (
+                                      <span className="font-semibold text-orange-600">{formatCurrency(sl.annual_leave_deduction ?? 0)}</span>
+                                    ) : (
+                                      <span className="text-slate-300">—</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3.5 text-right hidden md:table-cell">
                                     {(sl.advance_deduction ?? 0) > 0 ? (
-                                      <span className="font-semibold text-orange-600">{formatCurrency(sl.advance_deduction)}</span>
+                                      <span className="font-semibold text-purple-600">{formatCurrency(sl.advance_deduction)}</span>
                                     ) : (
                                       <span className="text-slate-300">—</span>
                                     )}
@@ -708,12 +726,13 @@ export default async function StaffLedgerPage({
                                     </span>
                                   </td>
                                   <td className="px-4 py-3.5 text-right">
-                                    <Link
+                                    <DocumentLink
                                       href={withReturnTo(`/payroll/slips/${sl.salary_run_id}/${staffId}`, ledgerPath)}
+                                      tabLabel="Payslip"
                                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                                     >
                                       Payslip →
-                                    </Link>
+                                    </DocumentLink>
                                   </td>
                                 </tr>
                               )
@@ -729,6 +748,9 @@ export default async function StaffLedgerPage({
                                 {formatCurrency(totalAbsent)}
                               </td>
                               <td className="px-4 py-3.5 text-right text-sm font-bold text-orange-600 hidden md:table-cell">
+                                {formatCurrency(totalAnnualLeave)}
+                              </td>
+                              <td className="px-4 py-3.5 text-right text-sm font-bold text-purple-600 hidden md:table-cell">
                                 {formatCurrency(totalRecovered)}
                               </td>
                               <td className="px-5 py-3.5 text-right text-sm font-bold text-green-700">

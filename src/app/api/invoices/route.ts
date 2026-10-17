@@ -169,61 +169,9 @@ export async function POST(request: NextRequest) {
 
     if (itemsError) throw itemsError
 
-    // Deduct stock for any inventory items used
-    const inventoryLines = items.filter(
-      (it: { inventory_item_id?: string | null }) => it.inventory_item_id,
-    ) as { inventory_item_id: string; quantity: number }[]
-
-    if (inventoryLines.length > 0) {
-      await Promise.all(
-        inventoryLines.map(async (it) => {
-          const qty = Number(it.quantity) || 1
-          await (supabase as any).rpc('decrement_stock', {
-            p_item_id: it.inventory_item_id,
-            p_qty: qty,
-          })
-        }),
-      )
-    }
-
-    // Create ledger entry
-    const { error: ledgerError } = await (supabase as any)
-      .from('customer_ledger_entries')
-      .insert({
-        organization_id: profile.organization_id,
-        customer_id,
-        entry_date: invoice_date,
-        entry_type: 'invoice',
-        debit_amount: totalAmount,
-        credit_amount: 0,
-        description: `Invoice ${invoiceNumber}`,
-        reference_type: 'invoice',
-        reference_id: invoice.id,
-        created_by: user.id,
-      })
-
-    if (ledgerError) throw ledgerError
-
-    // If this invoice is for a work order, auto-apply any payment already collected
-    // for it (e.g. via the work order's "Collect Payment" action) that isn't linked
-    // to an invoice yet — the trg_invoice_balance trigger recalculates amount_paid/
-    // balance_due/status on the invoice once invoice_id is set.
-    if (work_order_id) {
-      const { data: unlinkedPayments } = await (supabase as any)
-        .from('payments')
-        .select('id')
-        .eq('work_order_id', work_order_id)
-        .is('invoice_id', null)
-        .eq('is_cancelled', false)
-
-      if (unlinkedPayments && unlinkedPayments.length > 0) {
-        await (supabase as any)
-          .from('payments')
-          .update({ invoice_id: invoice.id })
-          .in('id', unlinkedPayments.map((p: { id: string }) => p.id))
-      }
-    }
-
+    // Draft invoices do not post accounting or stock. Inventory movement belongs
+    // to the work-order usage/issue lifecycle; issuing an invoice must not deduct it
+    // a second time, and a partially-created draft must be safe to discard.
     await logAudit({
       orgId: profile.organization_id,
       userId: user.id,

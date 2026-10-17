@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { Printer } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
 import { PayrollEntryForm } from './PayrollEntryForm'
@@ -48,6 +49,7 @@ type PayrollAttendance = {
   friday_ot_amount: number
   date: string
   is_public_holiday: boolean
+  leave_application_id: string | null
 }
 
 async function fetchAllPages<T>(
@@ -149,7 +151,7 @@ export default async function PayrollProcessPage({
     const batchIds = staffIds.slice(batchStart, batchStart + IN_FILTER_BATCH_SIZE)
     const batch = await fetchAllPages<PayrollAttendance>((from, to) => admin
       .from('attendance')
-      .select('staff_id, status, overtime_hours, friday_ot_amount, date, is_public_holiday')
+      .select('staff_id, status, overtime_hours, friday_ot_amount, date, is_public_holiday, leave_application_id')
       .eq('organization_id', orgId)
       .in('staff_id', batchIds)
       .gte('date', startDate)
@@ -160,8 +162,31 @@ export default async function PayrollProcessPage({
     attendance.push(...batch)
   }
 
+  // Resolve the approved annual-leave links so the preview uses the same
+  // classification as process_payroll instead of trusting a status string alone.
+  const leaveApplicationIds = Array.from(new Set(
+    attendance
+      .map(record => record.leave_application_id)
+      .filter((id): id is string => Boolean(id))
+  ))
+  const approvedAnnualLeaveIds = new Set<string>()
+  for (let batchStart = 0; batchStart < leaveApplicationIds.length; batchStart += IN_FILTER_BATCH_SIZE) {
+    const batchIds = leaveApplicationIds.slice(batchStart, batchStart + IN_FILTER_BATCH_SIZE)
+    const applications = await fetchAllPages<{ id: string }>((from, to) => admin
+      .from('leave_applications')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('status', 'approved')
+      .eq('leave_type', 'annual_leave')
+      .in('id', batchIds)
+      .order('id')
+      .range(from, to))
+    for (const application of applications) approvedAnnualLeaveIds.add(application.id)
+  }
+
   // Build attendance maps per staff
   const absentDaysMap: Record<string, number> = {}
+  const annualLeaveDaysMap: Record<string, number> = {}
   const normalOtPaidHoursMap: Record<string, number> = {}
   const fridayOtAmountMap: Record<string, number> = {}
 
@@ -175,6 +200,12 @@ export default async function PayrollProcessPage({
       absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 1
     } else if (rec.status === 'half_day') {
       absentDaysMap[rec.staff_id] = (absentDaysMap[rec.staff_id] ?? 0) + 0.5
+    } else if (
+      rec.status === 'unpaid_leave'
+      && rec.leave_application_id
+      && approvedAnnualLeaveIds.has(rec.leave_application_id)
+    ) {
+      annualLeaveDaysMap[rec.staff_id] = (annualLeaveDaysMap[rec.staff_id] ?? 0) + 1
     }
     const [y, m, d] = rec.date.split('-').map(Number)
     const isFridayOrHol = new Date(y, m - 1, d).getDay() === 5 || rec.is_public_holiday
@@ -204,7 +235,8 @@ export default async function PayrollProcessPage({
     transport_allowance: number; other_allowance: number; overtime_amount: number
     gross_salary: number; deductions: number; advance_deduction: number; net_salary: number
     payment_status: string; normal_overtime: number | null; friday_overtime: number | null
-    food_allowance: number | null
+    food_allowance: number | null; annual_leave_days: number | null
+    annual_leave_deduction: number | null
   }> = []
 
   if (run) {
@@ -343,6 +375,7 @@ export default async function PayrollProcessPage({
             year={year}
             staff={staff}
             absentDaysMap={absentDaysMap}
+            annualLeaveDaysMap={annualLeaveDaysMap}
             normalOtPaidHoursMap={normalOtPaidHoursMap}
             fridayOtAmountMap={fridayOtAmountMap}
             staffWithNoAttendance={staffWithNoAttendance}
@@ -417,12 +450,13 @@ export default async function PayrollProcessPage({
                     <td className="px-4 py-3.5 text-right text-sm font-bold text-slate-900">{formatCurrency(r.net)}</td>
                     <td className="px-5 py-3.5 text-center">
                       {run && r.slip ? (
-                        <Link
+                        <DocumentLink
                           href={withReturnTo(`/payroll/slips/${run.id}/${r.id}`, processPath)}
+                          tabLabel="Payslip"
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                         >
                           <Printer className="w-3.5 h-3.5" /> Print
-                        </Link>
+                        </DocumentLink>
                       ) : (
                         <span className="text-xs text-slate-300">—</span>
                       )}

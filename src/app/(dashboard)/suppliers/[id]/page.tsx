@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { Building2, FileText, Plus, Edit } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
@@ -46,7 +48,7 @@ export default async function SupplierDetailPage({
 
   const { data: posRaw } = await (supabase as any)
     .from('purchase_orders')
-    .select('id, po_number, purchase_date, status, total_amount, amount_paid, balance_due, payment_status')
+    .select('id, po_number, purchase_date, status, total_amount, purchase_order_items(quantity, quantity_received, unit_cost)')
     .eq('supplier_id', id)
     .order('created_at', { ascending: false })
     .limit(20)
@@ -57,12 +59,19 @@ export default async function SupplierDetailPage({
     purchase_date: string
     status: string
     total_amount: number
-    amount_paid: number
-    balance_due: number
-    payment_status: string
+    purchase_order_items: Array<{ quantity: number; quantity_received: number; unit_cost: number }> | null
   }>
 
-  const totalOwed = pos.reduce((s, p) => s + p.balance_due, 0)
+  const commitmentFor = (po: (typeof pos)[number]) => {
+    if (!['draft', 'submitted', 'partial'].includes(po.status)) return 0
+    return po.purchase_order_items?.length
+      ? po.purchase_order_items.reduce((sum, item) => {
+          const remaining = Math.max(0, Number(item.quantity ?? 0) - Number(item.quantity_received ?? 0))
+          return sum + remaining * Number(item.unit_cost ?? 0)
+        }, 0)
+      : Number(po.total_amount ?? 0)
+  }
+  const totalCommitment = pos.reduce((sum, po) => sum + commitmentFor(po), 0)
 
   return (
     <div className="animate-fade-in">
@@ -154,13 +163,13 @@ export default async function SupplierDetailPage({
               )}
             </div>
 
-            {/* Balance owed */}
-            <div className={`rounded-xl border p-5 ${totalOwed > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Balance Owed</p>
-              <p className={`text-2xl font-bold ${totalOwed > 0 ? 'text-amber-700' : 'text-slate-900'}`}>
-                {formatCurrency(totalOwed)}
+            {/* Open procurement commitment */}
+            <div className={`rounded-xl border p-5 ${totalCommitment > 0 ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200'}`}>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Open PO Commitment</p>
+              <p className={`text-2xl font-bold ${totalCommitment > 0 ? 'text-indigo-700' : 'text-slate-900'}`}>
+                {formatCurrency(totalCommitment)}
               </p>
-              <p className="text-xs text-slate-500 mt-0.5">across {pos.length} purchase orders</p>
+              <p className="text-xs text-slate-500 mt-0.5">Procurement only — excluded from Accounts Payable</p>
             </div>
           </div>
 
@@ -192,17 +201,25 @@ export default async function SupplierDetailPage({
                       <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">PO #</th>
                       <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Date</th>
                       <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Total</th>
-                      <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Balance</th>
+                      <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Remaining Commitment</th>
                       <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {pos.map((po) => (
                       <tr key={po.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-5 py-3.5 text-sm font-mono font-semibold text-slate-900">{po.po_number}</td>
+                        <td className="px-5 py-3.5">
+                          <DocumentLink
+                            href={withReturnTo(`/suppliers/po/${po.id}`, supplierPath)}
+                            tabLabel={po.po_number}
+                            className="text-sm font-mono font-semibold text-blue-600 hover:text-blue-700"
+                          >
+                            {po.po_number}
+                          </DocumentLink>
+                        </td>
                         <td className="px-4 py-3.5 text-sm text-slate-600 hidden md:table-cell">{formatDate(po.purchase_date)}</td>
                         <td className="px-4 py-3.5 text-right text-sm font-bold text-slate-900">{formatCurrency(po.total_amount)}</td>
-                        <td className="px-4 py-3.5 text-right text-sm font-bold text-amber-600">{formatCurrency(po.balance_due)}</td>
+                        <td className="px-4 py-3.5 text-right text-sm font-bold text-indigo-700">{formatCurrency(commitmentFor(po))}</td>
                         <td className="px-4 py-3.5">
                           <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${getStatusColor(po.status)}`}>
                             {po.status}

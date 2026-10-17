@@ -48,13 +48,22 @@ export async function PATCH(
     const profile = profileRaw as { organization_id: string; role: string; full_name: string } | null
     if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const body = await request.json()
+    let body: Record<string, unknown>
+    try {
+      const parsed: unknown = await request.json()
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+      }
+      body = parsed as Record<string, unknown>
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 })
+    }
     const supabase = createAdminClient() as any
 
     // Fetch current payment — scoped to org
     const { data: payment } = await supabase
       .from('payments')
-      .select('id, payment_number, amount_received, invoice_id, is_advance, is_cancelled, organization_id')
+      .select('id, payment_number, invoice_id, is_advance, is_cancelled, organization_id')
       .eq('id', id)
       .single()
     if (!payment) return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
@@ -68,112 +77,49 @@ export async function PATCH(
       if (!['admin', 'owner', 'manager'].includes(profile.role)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
-      if (!body.cancelled_reason?.trim()) {
+      const cancellationReason = typeof body.cancelled_reason === 'string'
+        ? body.cancelled_reason.trim()
+        : ''
+      if (!cancellationReason) {
         return NextResponse.json({ error: 'Cancellation reason is required' }, { status: 400 })
       }
-      await supabase.from('payments').update({
-        is_cancelled: true,
-        cancelled_reason: body.cancelled_reason.trim(),
-        cancelled_by: user.id,
-        cancelled_at: new Date().toISOString(),
-      }).eq('id', id)
-
-      // Restore invoice balance and sync work order
-      if (payment.invoice_id) {
-        const { data: inv } = await supabase
-          .from('invoices').select('total_amount, amount_paid, work_order_id').eq('id', payment.invoice_id).single()
-        if (inv) {
-          const newPaid = Math.max(0, Number(inv.amount_paid) - Number(payment.amount_received))
-          const newBalance = Math.max(0, Number(inv.total_amount) - newPaid)
-          const newStatus = newPaid <= 0 ? 'issued' : newPaid < Number(inv.total_amount) ? 'partial' : 'paid'
-          await supabase.from('invoices').update({ amount_paid: newPaid, balance_due: newBalance, status: newStatus, updated_at: new Date().toISOString() }).eq('id', payment.invoice_id)
-          // Revert work order: if no longer fully paid, move back to invoiced
-          if (inv.work_order_id && newStatus !== 'paid') {
-            await supabase.from('work_orders').update({ status: 'invoiced', payment_status: newStatus === 'partial' ? 'partial' : 'unpaid' }).eq('id', inv.work_order_id)
-          }
-        }
-      }
+      const { error: cancelError } = await supabase.rpc('cancel_customer_payment', {
+        p_org_id: profile.organization_id,
+        p_actor_id: user.id,
+        p_payment_id: id,
+        p_reason: cancellationReason,
+      })
+      if (cancelError) throw cancelError
 
       await logAudit({ orgId: profile.organization_id, userId: user.id, userName: profile.full_name, action: 'delete', entityType: 'payment', entityId: id, entityLabel: payment.payment_number })
       return NextResponse.json({ success: true })
     }
 
-    // Edit — only admin/owner/manager
+    // Allocation-only workflow — only admin/owner/manager.
     if (!['admin', 'owner', 'manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Apply advance payment to an invoice
     if (body.apply_to_invoice_id) {
-      if (!payment.is_advance || payment.invoice_id) {
-        return NextResponse.json({ error: 'This payment is already linked to an invoice' }, { status: 400 })
+      if (!payment.is_advance) {
+        return NextResponse.json({ error: 'This payment is not an available advance' }, { status: 400 })
       }
-      const targetId = body.apply_to_invoice_id
-      const { data: inv } = await supabase
-        .from('invoices')
-        .select('id, total_amount, amount_paid, balance_due, status, work_order_id')
-        .eq('id', targetId).single()
-      if (!inv) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
-
-      const applied = Math.min(Number(payment.amount_received), Number(inv.balance_due))
-      const newPaid = Math.min(Number(inv.total_amount), Number(inv.amount_paid) + applied)
-      const newBalance = Math.max(0, Number(inv.total_amount) - newPaid)
-      const newStatus = newBalance <= 0 ? 'paid' : newPaid > 0 ? 'partial' : inv.status
-
-      await supabase.from('payments').update({ invoice_id: targetId, is_advance: false }).eq('id', id)
-      await supabase.from('invoices').update({ amount_paid: newPaid, balance_due: newBalance, status: newStatus, updated_at: new Date().toISOString() }).eq('id', targetId)
-
-      if (newStatus === 'paid' && inv.work_order_id) {
-        await supabase.from('work_orders').update({ payment_status: 'paid', status: 'paid' }).eq('id', inv.work_order_id)
-      }
-
-      // Update the ledger entry type from advance → payment
-      await supabase.from('customer_ledger_entries').update({ entry_type: 'payment' })
-        .eq('reference_id', id).eq('reference_type', 'payment')
+      const { error: applyError } = await supabase.rpc('apply_customer_advance', {
+        p_org_id: profile.organization_id,
+        p_actor_id: user.id,
+        p_payment_id: id,
+        p_invoice_id: body.apply_to_invoice_id,
+      })
+      if (applyError) throw applyError
 
       await logAudit({ orgId: profile.organization_id, userId: user.id, userName: profile.full_name, action: 'update', entityType: 'payment', entityId: id, entityLabel: payment.payment_number })
       return NextResponse.json({ success: true })
     }
 
-    const { payment_date, payment_mode, reference_number, notes, amount_received } = body
-    const updatePayload: Record<string, unknown> = {}
-
-    if (payment_date) updatePayload.payment_date = payment_date
-    if (payment_mode) updatePayload.payment_mode = payment_mode
-    if ('reference_number' in body) updatePayload.reference_number = reference_number?.trim() ?? null
-    if ('notes' in body) updatePayload.notes = notes?.trim() ?? null
-
-    // If amount changed, recalculate invoice balance
-    if (amount_received !== undefined) {
-      const newAmount = Number(amount_received)
-      if (isNaN(newAmount) || newAmount <= 0) {
-        return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 })
-      }
-      updatePayload.amount_received = newAmount
-
-      if (payment.invoice_id) {
-        const { data: inv } = await supabase
-          .from('invoices').select('total_amount, amount_paid').eq('id', payment.invoice_id).single()
-        if (inv) {
-          const oldAmount = Number(payment.amount_received)
-          const newPaid = Math.max(0, Number(inv.amount_paid) - oldAmount + newAmount)
-          const newBalance = Math.max(0, Number(inv.total_amount) - newPaid)
-          const newStatus = newPaid <= 0 ? 'issued' : newPaid < inv.total_amount ? 'partial' : 'paid'
-          const { error: invErr } = await supabase.from('invoices').update({ amount_paid: newPaid, balance_due: newBalance, status: newStatus, updated_at: new Date().toISOString() }).eq('id', payment.invoice_id)
-          if (invErr) throw invErr
-        }
-      }
-    }
-
-    if (Object.keys(updatePayload).length === 0) {
-      return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
-    }
-
-    const { error: updateErr } = await supabase.from('payments').update(updatePayload).eq('id', id)
-    if (updateErr) throw updateErr
-
-    await logAudit({ orgId: profile.organization_id, userId: user.id, userName: profile.full_name, action: 'update', entityType: 'payment', entityId: id, entityLabel: payment.payment_number })
-    return NextResponse.json({ success: true })
+    return NextResponse.json(
+      { error: 'Posted payments cannot be edited; cancel and record a replacement payment instead' },
+      { status: 409 },
+    )
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : JSON.stringify(err)
     console.error('Payment PATCH error:', err)

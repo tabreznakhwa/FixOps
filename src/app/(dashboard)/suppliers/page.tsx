@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
-import { Plus, Building2, FileText, DollarSign } from 'lucide-react'
+import { DocumentLink } from '@/components/ui/DocumentLink'
+import { Plus, Building2, FileText, ClipboardList } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils'
 import { currentPath, withReturnTo } from '@/lib/backNav'
 
@@ -25,16 +26,26 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
 
   const { data: purchaseOrdersRaw } = await supabase
     .from('purchase_orders')
-    .select('id, po_number, purchase_date, status, total_amount, amount_paid, balance_due, payment_status, suppliers(supplier_name)')
+    .select('id, po_number, purchase_date, status, total_amount, suppliers(supplier_name), purchase_order_items(quantity, quantity_received, unit_cost)')
     .order('created_at', { ascending: false })
     .limit(30)
   const purchaseOrders = purchaseOrdersRaw as unknown as Array<{
     id: string; po_number: string; purchase_date: string; status: string;
-    total_amount: number; amount_paid: number; balance_due: number; payment_status: string;
+    total_amount: number;
     suppliers: { supplier_name: string } | null
+    purchase_order_items: Array<{ quantity: number; quantity_received: number; unit_cost: number }> | null
   }>
 
-  const totalPayable = purchaseOrders?.reduce((s, p) => s + p.balance_due, 0) ?? 0
+  const openCommitment = purchaseOrders.reduce((sum, po) => {
+    if (!['draft', 'submitted', 'partial'].includes(po.status)) return sum
+    const amount = po.purchase_order_items?.length
+      ? po.purchase_order_items.reduce((lineSum, item) => {
+          const remaining = Math.max(0, Number(item.quantity ?? 0) - Number(item.quantity_received ?? 0))
+          return lineSum + remaining * Number(item.unit_cost ?? 0)
+        }, 0)
+      : Number(po.total_amount ?? 0)
+    return sum + amount
+  }, 0)
 
   return (
     <div className="animate-fade-in">
@@ -67,10 +78,10 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
             <p className="text-2xl font-bold text-slate-900">{purchaseOrders?.length ?? 0}</p>
             <p className="text-xs text-slate-500">Purchase Orders</p>
           </div>
-          <div className="bg-white rounded-xl border border-amber-200 p-4 col-span-2 md:col-span-1">
-            <DollarSign className="w-5 h-5 text-amber-600 mb-2" />
-            <p className="text-xl font-bold text-amber-600">{formatCurrency(totalPayable)}</p>
-            <p className="text-xs text-slate-500">Total Payable</p>
+          <div className="bg-white rounded-xl border border-indigo-200 p-4 col-span-2 md:col-span-1">
+            <ClipboardList className="w-5 h-5 text-indigo-600 mb-2" />
+            <p className="text-xl font-bold text-indigo-700">{formatCurrency(openCommitment)}</p>
+            <p className="text-xs text-slate-500">Open PO Commitment</p>
           </div>
         </div>
 
@@ -152,7 +163,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Supplier</th>
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Date</th>
                     <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Total</th>
-                    <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Balance</th>
+                    <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Remaining Commitment</th>
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Status</th>
                     <th className="px-4 py-3" />
                   </tr>
@@ -160,18 +171,26 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
                 <tbody className="divide-y divide-slate-50">
                   {purchaseOrders.map((po) => {
                     const supplier = po.suppliers as { supplier_name: string } | null
+                    const commitment = ['draft', 'submitted', 'partial'].includes(po.status)
+                      ? po.purchase_order_items?.length
+                        ? po.purchase_order_items.reduce((sum, item) => {
+                            const remaining = Math.max(0, Number(item.quantity ?? 0) - Number(item.quantity_received ?? 0))
+                            return sum + remaining * Number(item.unit_cost ?? 0)
+                          }, 0)
+                        : Number(po.total_amount ?? 0)
+                      : 0
                     return (
                       <tr key={po.id} className="hover:bg-slate-50 transition-colors group">
                         <td className="px-5 py-3.5 text-sm font-mono font-semibold text-slate-900 group-hover:text-blue-700">{po.po_number}</td>
                         <td className="px-4 py-3.5 hidden md:table-cell text-sm text-slate-700">{supplier?.supplier_name}</td>
                         <td className="px-4 py-3.5 hidden lg:table-cell text-sm text-slate-600">{formatDate(po.purchase_date)}</td>
                         <td className="px-4 py-3.5 text-right text-sm font-bold text-slate-900">{formatCurrency(po.total_amount)}</td>
-                        <td className="px-4 py-3.5 text-right text-sm font-bold text-amber-600">{formatCurrency(po.balance_due)}</td>
+                        <td className="px-4 py-3.5 text-right text-sm font-bold text-indigo-700">{formatCurrency(commitment)}</td>
                         <td className="px-4 py-3.5">
                           <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${getStatusColor(po.status)}`}>{po.status}</span>
                         </td>
                         <td className="px-4 py-3.5 text-right">
-                          <Link href={withReturnTo(`/suppliers/po/${po.id}`, suppliersPath)} className="text-xs text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">View →</Link>
+                          <DocumentLink href={withReturnTo(`/suppliers/po/${po.id}`, suppliersPath)} tabLabel={po.po_number} className="text-xs text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">View →</DocumentLink>
                         </td>
                       </tr>
                     )

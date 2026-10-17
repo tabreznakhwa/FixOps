@@ -90,7 +90,9 @@ export function isValidISODate(value: string): boolean {
 
 /** A non-empty decimal string/number with at most three decimal places. */
 export function isValidMoney(value: unknown): boolean {
-  if (typeof value === 'number') return Number.isFinite(value) && Number.isInteger(Math.round(value * 1000))
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7
+  }
   if (typeof value !== 'string') return false
   if (!/^\d{1,9}(\.\d{1,3})?$/.test(value.trim())) return false
   return true

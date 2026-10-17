@@ -1,98 +1,128 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/
+
+function rpcErrorStatus(message: string): number {
+  if (/not found|does not belong/i.test(message)) return 404
+  if (/already|cancelled|settled|duplicate|unapply|reconcile|match|no balance/i.test(message)) return 409
+  return 400
+}
+
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params
+    if (!UUID_RE.test(id)) {
+      return NextResponse.json({ error: 'Invalid supplier advance' }, { status: 400 })
+    }
+
     const supabaseUser = await createClient()
     const { data: { user } } = await supabaseUser.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: profileRaw } = await (supabaseUser as any)
-      .from('users').select('organization_id, role').eq('id', user.id).single()
+      .from('users')
+      .select('organization_id, role')
+      .eq('id', user.id)
+      .single()
     const profile = profileRaw as { organization_id: string; role: string } | null
     if (!profile || !['admin', 'owner', 'manager'].includes(profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const body = await request.json()
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 })
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+
+    const input = body as Record<string, unknown>
+    if (typeof input.action !== 'string') {
+      return NextResponse.json({ error: 'No action specified' }, { status: 400 })
+    }
+
     const admin = createAdminClient() as any
 
-    // Fetch advance — scoped to org
-    const { data: advance } = await admin
-      .from('supplier_advances')
-      .select('id, advance_number, supplier_id, amount, amount_utilized, balance, is_cancelled, organization_id')
-      .eq('id', id)
-      .single()
-
-    if (!advance) return NextResponse.json({ error: 'Advance not found' }, { status: 404 })
-    if (advance.organization_id !== profile.organization_id) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    }
-    if (advance.is_cancelled) return NextResponse.json({ error: 'Advance is cancelled' }, { status: 400 })
-    if (Number(advance.balance) <= 0) return NextResponse.json({ error: 'No balance remaining on this advance' }, { status: 400 })
-
-    // Apply to purchase invoice
-    if (body.apply_to_purchase_invoice_id) {
-      const targetId = body.apply_to_purchase_invoice_id
-
-      const { data: inv } = await admin
-        .from('purchase_invoices')
-        .select('id, total_amount, amount_paid, balance_due, payment_status, supplier_id, organization_id')
-        .eq('id', targetId)
-        .single()
-
-      if (!inv) return NextResponse.json({ error: 'Purchase invoice not found' }, { status: 404 })
-      if (inv.organization_id !== profile.organization_id) {
-        return NextResponse.json({ error: 'Purchase invoice not found' }, { status: 404 })
-      }
-      if (inv.supplier_id !== advance.supplier_id) {
-        return NextResponse.json({ error: 'Advance supplier does not match invoice supplier' }, { status: 400 })
-      }
-      if (Number(inv.balance_due) <= 0) {
-        return NextResponse.json({ error: 'Invoice is already fully paid' }, { status: 400 })
+    if (input.action === 'apply' || input.action === 'unapply') {
+      const purchaseInvoiceId = input.purchase_invoice_id
+      if (typeof purchaseInvoiceId !== 'string' || !UUID_RE.test(purchaseInvoiceId)) {
+        return NextResponse.json({ error: 'A valid purchase invoice is required' }, { status: 400 })
       }
 
-      const applied = Math.min(Number(advance.balance), Number(inv.balance_due))
-      const newPaid = Math.min(Number(inv.total_amount), Number(inv.amount_paid) + applied)
-      const newBalance = Math.max(0, Number(inv.total_amount) - newPaid)
-      const newStatus = newBalance <= 0 ? 'paid' : newPaid > 0 ? 'partial' : inv.payment_status
-
-      // Update purchase invoice
-      await admin.from('purchase_invoices').update({
-        amount_paid: newPaid,
-        balance_due: newBalance,
-        payment_status: newStatus,
-        updated_at: new Date().toISOString(),
-      }).eq('id', targetId)
-
-      // Update advance balance
-      await admin.from('supplier_advances').update({
-        amount_utilized: Number(advance.amount_utilized) + applied,
-        balance: Number(advance.balance) - applied,
-      }).eq('id', id)
-
-      // Record a supplier_payment row for traceability
-      await admin.from('supplier_payments').insert({
-        organization_id: profile.organization_id,
-        supplier_id: advance.supplier_id,
-        purchase_invoice_id: targetId,
-        payment_date: new Date().toISOString().split('T')[0],
-        amount_paid: applied,
-        payment_mode: 'advance',
-        notes: `Applied from advance ${advance.advance_number}`,
-        paid_by: user.id,
-        supplier_advance_id: id,
+      const rpc = input.action === 'apply'
+        ? 'apply_supplier_advance'
+        : 'unapply_supplier_advance'
+      const { data: result, error } = await admin.rpc(rpc, {
+        p_org_id: profile.organization_id,
+        p_actor_id: user.id,
+        p_supplier_advance_id: id,
+        p_purchase_invoice_id: purchaseInvoiceId,
       })
+      if (error) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: rpcErrorStatus(error.message) },
+        )
+      }
 
-      return NextResponse.json({ success: true })
+      const rows = Array.isArray(result) ? result : result ? [result] : []
+      const row = rows[0]
+      if (!row) {
+        return NextResponse.json({ error: `Supplier advance was not ${input.action === 'apply' ? 'applied' : 'unapplied'}` }, { status: 500 })
+      }
+
+      return NextResponse.json({
+        success: true,
+        ...(input.action === 'apply'
+          ? { applied_amount: row.applied_amount }
+          : { unapplied_amount: row.unapplied_amount }),
+        balance_due: row.balance_due,
+      })
     }
 
-    return NextResponse.json({ error: 'No action specified' }, { status: 400 })
+    if (input.action === 'cancel') {
+      const reason = typeof input.reason === 'string' ? input.reason.trim() : ''
+      if (!reason) {
+        return NextResponse.json({ error: 'Cancellation reason is required' }, { status: 400 })
+      }
+      if (reason.length > 1000) {
+        return NextResponse.json({ error: 'Cancellation reason is too long' }, { status: 400 })
+      }
+
+      const { data: result, error } = await admin.rpc('cancel_supplier_advance', {
+        p_org_id: profile.organization_id,
+        p_actor_id: user.id,
+        p_supplier_advance_id: id,
+        p_reason: reason,
+      })
+      if (error) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: rpcErrorStatus(error.message) },
+        )
+      }
+
+      const rows = Array.isArray(result) ? result : result ? [result] : []
+      if (!rows[0]?.cancelled || !rows[0]?.posting_id) {
+        return NextResponse.json({ error: 'Supplier advance was not cancelled' }, { status: 500 })
+      }
+      return NextResponse.json({ success: true, posting_id: rows[0].posting_id })
+    }
+
+    return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
   } catch (err: unknown) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Error' }, { status: 500 })
+    console.error('Supplier advance PATCH error:', err)
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Error' },
+      { status: 500 },
+    )
   }
 }

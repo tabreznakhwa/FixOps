@@ -1,15 +1,30 @@
-export type CustomerLedgerEventType = 'opening_balance' | 'invoice' | 'credit_note' | 'payment' | 'advance'
+export type CustomerLedgerEventType =
+  | 'opening_balance'
+  | 'invoice'
+  | 'credit_note'
+  | 'payment'
+  | 'advance'
+  | 'refund'
+  | 'write_off'
+  | 'adjustment'
+  | 'reversal'
 
 export type CustomerLedgerEvent = {
+  /** Immutable accounting-posting id, not a mutable document id. */
   sourceId: string
+  /** Accounting posting date. */
   date: string
+  /** Editable business/document date retained for audit context. */
+  documentDate: string | null
   description: string
   type: CustomerLedgerEventType
   reference: string | null
   debit: number
   credit: number
-  /** Debits must precede settlements recorded on the same business date. */
+  /** Global organization posting sequence. */
   sequence: number
+  provenance: 'live' | 'inferred'
+  reversalOf: string | null
 }
 
 export type CustomerLedgerRow = CustomerLedgerEvent & {
@@ -51,7 +66,6 @@ export function dayBefore(date: string): string {
 export function compareCustomerLedgerEvents(a: CustomerLedgerEvent, b: CustomerLedgerEvent): number {
   return a.date.localeCompare(b.date)
     || a.sequence - b.sequence
-    || a.type.localeCompare(b.type)
     || a.sourceId.localeCompare(b.sourceId)
 }
 
@@ -88,7 +102,7 @@ export function buildCustomerLedger(
     runningBalance = roundCurrency(runningBalance + event.debit - event.credit)
     return {
       ...event,
-      id: `${event.type}:${event.sourceId}`,
+      id: event.sourceId,
       runningBalance,
     }
   })

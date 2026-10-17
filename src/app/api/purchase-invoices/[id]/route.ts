@@ -16,122 +16,80 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const body = await request.json()
-    const supabase = createAdminClient() as any
+    let body: Record<string, unknown>
+    try {
+      const parsed: unknown = await request.json()
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+      }
+      body = parsed as Record<string, unknown>
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 })
+    }
+    const admin = createAdminClient() as any
 
     if (body.action === 'cancel') {
-      // Receiving an invoice adds stock. Cancelling it previously only flipped
-      // the status, so the goods stayed on the books forever — stock that was
-      // never really received, with a purchase still sitting in the ledger
-      // explaining it. Cancelling must put the stock back.
-      const { data: invoice } = await supabase
-        .from('purchase_invoices')
-        .select('id, invoice_number, status')
-        .eq('id', id)
-        .eq('organization_id', profile.organization_id)
-        .single()
-
-      if (!invoice) return NextResponse.json({ error: 'Purchase invoice not found' }, { status: 404 })
-      if (invoice.status === 'cancelled') {
-        // Reversing twice would take the stock away a second time.
-        return NextResponse.json({ error: 'This purchase invoice is already cancelled.' }, { status: 400 })
+      const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+      if (!reason) {
+        return NextResponse.json({ error: 'Cancellation reason is required.' }, { status: 400 })
       }
-
-      const { data: lines } = await supabase
-        .from('purchase_invoice_items')
-        .select('inventory_item_id, quantity, unit_cost, description')
-        .eq('purchase_invoice_id', id)
-        .not('inventory_item_id', 'is', null)
-
-      const items = (lines ?? []) as Array<{
-        inventory_item_id: string; quantity: number; unit_cost: number; description: string
-      }>
-
-      // Refuse rather than drive stock negative: if the goods have already been
-      // fitted to jobs, cancelling the invoice is the wrong correction and would
-      // leave an impossible balance behind.
-      const shortfalls: string[] = []
-      const current = new Map<string, number>()
-      for (const li of items) {
-        const { data: inv } = await supabase
-          .from('inventory_items')
-          .select('item_name, current_stock')
-          .eq('id', li.inventory_item_id)
-          .single()
-        if (!inv) continue
-        const have = Number(inv.current_stock) || 0
-        const need = Number(li.quantity) || 0
-        current.set(li.inventory_item_id, have)
-        if (have < need) shortfalls.push(`${inv.item_name} (have ${have}, invoice ${need})`)
+      const { data: result, error } = await admin.rpc('cancel_purchase_invoice', {
+        p_org_id: profile.organization_id,
+        p_actor_id: user.id,
+        p_purchase_invoice_id: id,
+        p_reason: reason,
+      })
+      if (error) {
+        const status = /not found/i.test(error.message)
+          ? 404
+          : /already|cannot|cancel or reallocate|no accounting posting/i.test(error.message)
+            ? 409
+            : 400
+        return NextResponse.json({ error: error.message }, { status })
       }
-      if (shortfalls.length > 0) {
-        return NextResponse.json({
-          error: `Cannot cancel — stock has already been used: ${shortfalls.join('; ')}. Raise a stock adjustment instead.`,
-        }, { status: 400 })
-      }
-
-      for (const li of items) {
-        const qty = Number(li.quantity) || 0
-
-        // Remove stock and record the ledger entry atomically, in one call
-        // (adjust_inventory_stock_logged, migration 034) instead of a
-        // SELECT-then-UPDATE-then-INSERT, so a failure partway through can't
-        // leave stock changed with no matching ledger row.
-        // (The shortfall check above using `current` is a best-effort pre-check,
-        // not the source of truth — the RPC below is.)
-        const { error: stockErr } = await supabase
-          .rpc('adjust_inventory_stock_logged', {
-            p_item_id: li.inventory_item_id,
-            p_delta: -qty,
-            p_org_id: profile.organization_id,
-            p_transaction_type: 'adjustment',
-            p_unit_cost: Number(li.unit_cost) || 0,
-            p_reference_type: 'purchase_invoice_cancelled',
-            p_reference_id: id,
-            p_notes: `Reversal of cancelled Purchase Invoice ${invoice.invoice_number}`,
-            p_created_by: user.id,
-          })
-          .single()
-        if (stockErr) throw stockErr
-      }
-
-      const { error } = await supabase
-        .from('purchase_invoices')
-        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .eq('organization_id', profile.organization_id)
-      if (error) throw error
-      return NextResponse.json({ success: true, reversedItems: items.length })
+      const rows = Array.isArray(result) ? result : result ? [result] : []
+      return NextResponse.json({ success: true, reversedItems: rows[0]?.reversed_items ?? 0 })
     }
 
     if (body.action === 'update') {
-      const allowed = ['invoice_date', 'due_date', 'payment_type', 'payment_mode', 'payment_status', 'notes', 'supplier_id']
+      const { data: currentInvoice } = await admin
+        .from('purchase_invoices')
+        .select('posting_sequence')
+        .eq('id', id)
+        .eq('organization_id', profile.organization_id)
+        .single()
+      if (!currentInvoice) return NextResponse.json({ error: 'Purchase invoice not found' }, { status: 404 })
+
+      const allowed = currentInvoice.posting_sequence
+        ? ['due_date']
+        : ['invoice_date', 'due_date', 'payment_type', 'payment_mode', 'payment_status', 'notes', 'supplier_id']
+      const submitted = Object.keys(body).filter((key) => key !== 'action')
+      const rejected = submitted.filter((key) => !allowed.includes(key))
+      if (rejected.length > 0) {
+        return NextResponse.json({ error: `Unsupported update field: ${rejected[0]}` }, { status: 400 })
+      }
+      if (submitted.length === 0) {
+        return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+      }
+
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
       for (const key of allowed) {
         if (key in body) updates[key] = body[key] === '' ? null : body[key]
       }
-      const { error } = await supabase.from('purchase_invoices').update(updates).eq('id', id).eq('organization_id', profile.organization_id)
+      const { error } = await admin
+        .from('purchase_invoices')
+        .update(updates)
+        .eq('id', id)
+        .eq('organization_id', profile.organization_id)
       if (error) throw error
-
-      // Editing payment_mode on the invoice used to have no effect anywhere
-      // else — supplier_payments (what Bank Book/Cash Book actually read)
-      // had no link back to its invoice, so an edit could never reach the
-      // ledger row it was meant to correct. Keep them in sync now that
-      // there's a real link (migration 035).
-      if ('payment_mode' in body) {
-        const { error: syncErr } = await supabase
-          .from('supplier_payments')
-          .update({ payment_mode: updates.payment_mode })
-          .eq('purchase_invoice_id', id)
-        if (syncErr) console.error('supplier_payments payment_mode sync failed (non-critical):', syncErr)
-      }
 
       return NextResponse.json({ success: true })
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
-  } catch (err) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed'
     console.error('Purchase invoice PATCH error:', err)
-    return NextResponse.json({ error: 'Failed' }, { status: 500 })
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

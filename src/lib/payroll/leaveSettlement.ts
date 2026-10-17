@@ -39,6 +39,7 @@ export interface SettlementStaff {
 export interface SettlementAttendance {
   date: string
   status: string
+  isApprovedAnnualLeave: boolean
   overtime_hours: number | null
   friday_ot_amount: number | null
   is_public_holiday?: boolean | null
@@ -55,6 +56,8 @@ export interface SettlementResult {
   fridayOvertime: number
   absentDays: number
   absentDeduction: number
+  annualLeaveDays: number
+  annualLeaveDeduction: number
   grossEarned: number
   outstandingAdvance: number
   netPayable: number
@@ -121,16 +124,35 @@ export function calcLeaveSettlement(
   const absentDeduction =
     absentDays > 0 ? ((basic + allowance + fixedOtMonthly) / PAYROLL_DAYS_IN_MONTH) * absentDays : 0
 
+  // Annual leave is unpaid for this settlement. Keep it separate from ordinary
+  // absence because its daily base also includes food. Compensation and sick
+  // leave remain paid and therefore do not contribute to either deduction.
+  const annualLeaveDays = inWindow.reduce(
+    (sum, row) => sum + (
+      row.status === 'unpaid_leave' && row.isApprovedAnnualLeave ? 1 : 0
+    ),
+    0
+  )
+  const annualLeaveDeduction = annualLeaveDays > 0
+    ? Math.round(
+        (((basic + allowance + food + fixedOtMonthly) / PAYROLL_DAYS_IN_MONTH) * annualLeaveDays) * 1000
+      ) / 1000
+    : 0
+
   const basicEarned = basic * proRataFactor
   const allowanceEarned = allowance * proRataFactor
   const foodEarned = food * proRataFactor
 
-  const grossEarned =
-    basicEarned + allowanceEarned + foodEarned + fixedOtEarned + normalOvertime + fridayOvertime
+  const grossEarned = Math.round(
+    (basicEarned + allowanceEarned + foodEarned + fixedOtEarned + normalOvertime + fridayOvertime) * 1000
+  ) / 1000
 
   const outstandingAdvance = Number(staff.advance_balance) || 0
 
-  const netPayable = Math.max(0, grossEarned - absentDeduction - outstandingAdvance)
+  const netBeforeFloor = Math.round(
+    (grossEarned - absentDeduction - annualLeaveDeduction - outstandingAdvance) * 1000
+  ) / 1000
+  const netPayable = Math.max(0, netBeforeFloor)
 
   // How much of the window is still in the future — the part being paid on trust.
   const covered = new Set(inWindow.map(r => r.date))
@@ -151,9 +173,9 @@ export function calcLeaveSettlement(
       `An existing advance balance of KWD ${outstandingAdvance.toFixed(3)} has been netted off this payment.`
     )
   }
-  if (grossEarned - absentDeduction - outstandingAdvance < 0) {
+  if (netBeforeFloor < 0) {
     warnings.push(
-      'The existing advance balance exceeds what is earned to this date, so nothing is payable now.'
+      'Deductions and the existing advance balance exceed what is earned to this date, so nothing is payable now.'
     )
   }
 
@@ -168,6 +190,8 @@ export function calcLeaveSettlement(
     fridayOvertime,
     absentDays,
     absentDeduction,
+    annualLeaveDays,
+    annualLeaveDeduction,
     grossEarned,
     outstandingAdvance,
     netPayable,

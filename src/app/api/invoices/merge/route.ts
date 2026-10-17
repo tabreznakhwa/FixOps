@@ -27,11 +27,14 @@ export async function POST(request: NextRequest) {
 
     const admin = createAdminClient() as any
 
-    // Fetch all source invoices — verify they belong to same org + customer and are not paid/cancelled
+    // Merging is a draft-composition operation only. Issued invoices already
+    // have immutable accounting postings and must be cancelled/replaced rather
+    // than silently folded into another document.
     const { data: sourceInvoices } = await admin
       .from('invoices')
       .select('id, invoice_number, customer_id, status, amount_paid, total_amount, organization_id')
       .in('id', invoice_ids)
+      .eq('organization_id', profile.organization_id)
 
     if (!sourceInvoices || sourceInvoices.length !== invoice_ids.length) {
       return NextResponse.json({ error: 'One or more invoices not found' }, { status: 404 })
@@ -48,10 +51,11 @@ export async function POST(request: NextRequest) {
     }
     const customerId = customerIds[0]
 
-    // Verify none are paid or cancelled
-    const blocked = sourceInvoices.find((inv: { status: string }) => ['paid', 'cancelled'].includes(inv.status))
+    const blocked = sourceInvoices.find((inv: { status: string }) => inv.status !== 'draft')
     if (blocked) {
-      return NextResponse.json({ error: `Invoice ${(blocked as { invoice_number: string }).invoice_number} is ${(blocked as { status: string }).status} and cannot be merged` }, { status: 400 })
+      return NextResponse.json({
+        error: `Invoice ${(blocked as { invoice_number: string }).invoice_number} is ${(blocked as { status: string }).status}. Only draft invoices can be merged.`,
+      }, { status: 400 })
     }
 
     // Fetch all line items from source invoices

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 
@@ -53,9 +54,6 @@ export async function POST(request: NextRequest) {
         purchase_date,
         status: 'draft',
         total_amount: totalAmount,
-        amount_paid: 0,
-        balance_due: totalAmount,
-        payment_status: 'unpaid',
         notes: notes?.trim() || null,
         created_by: user.id,
       })

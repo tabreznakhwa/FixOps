@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { FileText, Clock, AlertCircle, CheckCircle2, Pencil, Printer } from 'lucide-react'
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils'
 import { DeleteInvoiceButton } from './DeleteInvoiceButton'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { safeReturnTo, withReturnTo } from '@/lib/backNav'
 
 interface Invoice {
@@ -163,12 +164,13 @@ export function InvoiceTableClient({
                 </td>
                 <td className="px-4 py-3.5 text-right">
                   <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Link
+                    <DocumentLink
                       href={withReturnTo(`/finance/invoices/${inv.id}`, source)}
+                      tabLabel={inv.invoice_number}
                       className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1"
                     >
                       View
-                    </Link>
+                    </DocumentLink>
                     {canEdit && (
                       <Link
                         href={withReturnTo(`/finance/invoices/${inv.id}/edit`, source)}

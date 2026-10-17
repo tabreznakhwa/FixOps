@@ -247,15 +247,17 @@ export function OpeningPayablesForm({ suppliers, entries: initialEntries }: Prop
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this opening payable?')) return
+    const reason = prompt('Reason for reversing this opening payable?')?.trim()
+    if (!reason) return
     setDeleting(id)
     try {
       const res = await fetch('/api/opening-payables', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ id, reason }),
       })
-      if (!res.ok) throw new Error('Delete failed')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Reversal failed')
       setEntries(prev => prev.filter(e => e.id !== id))
       router.refresh()
     } finally {

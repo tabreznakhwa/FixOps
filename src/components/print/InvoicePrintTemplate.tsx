@@ -3,6 +3,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 export interface PrintableInvoice {
   id: string
   invoice_number: string
+  invoice_type: string
   invoice_date: string
   due_date: string | null
   ref_number: string | null
@@ -75,7 +76,7 @@ export function InvoicePrintTemplate({
           </div>
         </div>
         <div className="text-right">
-          <h2 className="text-2xl font-bold text-blue-700">INVOICE</h2>
+          <h2 className="text-2xl font-bold text-blue-700">{invoice.invoice_type === 'credit_note' ? 'CREDIT NOTE' : 'INVOICE'}</h2>
           <p className="text-lg font-mono font-bold text-slate-900 mt-0.5">{invoice.invoice_number}</p>
         </div>
       </div>

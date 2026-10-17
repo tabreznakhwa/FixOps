@@ -1,6 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { redirect } from 'next/navigation'
 import { Printer, FileText } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
@@ -60,7 +60,7 @@ export default async function MyPayslipsPage() {
   // Get all salary slips for this staff member with their run info
   const { data: slipsRaw } = await admin
     .from('salary_slips')
-    .select('id, salary_run_id, net_salary, gross_salary, payment_status, basic_salary, overtime_amount, normal_overtime, friday_overtime, absent_days, absent_deduction, food_deduction, advance_deduction')
+    .select('id, salary_run_id, net_salary, gross_salary, payment_status, basic_salary, overtime_amount, normal_overtime, friday_overtime, absent_days, absent_deduction, annual_leave_days, annual_leave_deduction, food_deduction, advance_deduction')
     .eq('organization_id', profile.organization_id)
     .eq('staff_id', staff.id)
 
@@ -68,8 +68,9 @@ export default async function MyPayslipsPage() {
     id: string; salary_run_id: string; net_salary: number; gross_salary: number
     payment_status: string; basic_salary: number; overtime_amount: number | null
     normal_overtime: number | null; friday_overtime: number | null
-    absent_days: number | null; absent_deduction: number | null; food_deduction: number | null
-    advance_deduction: number | null
+    absent_days: number | null; absent_deduction: number | null
+    annual_leave_days: number | null; annual_leave_deduction: number | null
+    food_deduction: number | null; advance_deduction: number | null
   }>
 
   // Get run info for each slip
@@ -137,6 +138,7 @@ export default async function MyPayslipsPage() {
               <tbody className="divide-y divide-slate-50">
                 {sortedSlips.map((s) => {
                   const totalDeductions = (s.absent_deduction ?? 0)
+                    + (s.annual_leave_deduction ?? 0)
                     + (s.food_deduction ?? 0)
                     + (s.advance_deduction ?? 0)
                   return (
@@ -164,15 +166,16 @@ export default async function MyPayslipsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <Link
+                        <DocumentLink
                           // Carry the origin so Back returns here. Without it the slip
                           // page falls back to /payroll/process, which self-service
                           // roles cannot open — they'd land on the dashboard instead.
                           href={withReturnTo(`/payroll/slips/${s.salary_run_id}/${staff.id}`, '/payroll/my-payslips')}
+                          tabLabel="Payslip"
                           className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
                         >
                           <Printer className="w-3.5 h-3.5" /> View Payslip
-                        </Link>
+                        </DocumentLink>
                       </td>
                     </tr>
                   )

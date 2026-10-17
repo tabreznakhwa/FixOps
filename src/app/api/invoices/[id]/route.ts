@@ -86,26 +86,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Cannot delete an invoice with payments recorded' }, { status: 400 })
     }
 
-    // Restore any source invoices that were cancelled when this was merged
-    const mergeReason = `Merged into ${inv.invoice_number}`
-    const { data: sourceInvs } = await supabase
-      .from('invoices')
-      .select('id, amount_paid, total_amount, due_date')
-      .eq('cancelled_reason', mergeReason)
-      .eq('organization_id', profile.organization_id)
-    if (sourceInvs && sourceInvs.length > 0) {
-      const today = new Date().toISOString().split('T')[0]
-      for (const src of sourceInvs as { id: string; amount_paid: number; total_amount: number; due_date: string | null }[]) {
-        const paid = Number(src.amount_paid)
-        const total = Number(src.total_amount)
-        let restoredStatus = 'issued'
-        if (paid >= total && total > 0) restoredStatus = 'paid'
-        else if (paid > 0) restoredStatus = 'partial'
-        else if (src.due_date && src.due_date < today) restoredStatus = 'overdue'
-        await supabase.from('invoices').update({ status: restoredStatus, cancelled_reason: null, updated_at: new Date().toISOString() }).eq('id', src.id)
-      }
-    }
-
+    // Posted source invoices cannot be restored after their cancellation reversal.
+    // A merged draft can be discarded, but its source accounting history stays
+    // immutable and any correction must be a new replacement document.
     await supabase.from('invoice_items').delete().eq('invoice_id', id)
     await supabase.from('invoices').delete().eq('id', id)
 
@@ -154,7 +137,12 @@ export async function PATCH(
       if (existing.organization_id !== profile.organization_id) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
-      if (['cancelled', 'paid'].includes(existing.status)) return NextResponse.json({ error: 'Cannot edit a paid or cancelled invoice' }, { status: 400 })
+      if (existing.status !== 'draft') {
+        return NextResponse.json(
+          { error: 'Posted invoice financials are immutable; cancel and create a replacement invoice' },
+          { status: 400 },
+        )
+      }
 
       const subtotal = items.reduce((sum: number, it: { quantity: number; unit_price: number }) => sum + it.quantity * it.unit_price, 0)
       const discountAmt = Math.max(0, Number(discount_amount ?? 0))
@@ -187,7 +175,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const ALLOWED_FIELDS = ['status', 'notes', 'terms_and_conditions', 'cancelled_reason', 'due_date', 'invoice_date']
+    const ALLOWED_FIELDS = ['status', 'notes', 'terms_and_conditions', 'due_date', 'invoice_date']
     const updatePayload: Record<string, unknown> = {}
 
     for (const field of ALLOWED_FIELDS) {
@@ -196,7 +184,8 @@ export async function PATCH(
       }
     }
 
-    // work_order_id can be linked/unlinked by admin/owner/manager even on paid invoices
+    // Work-order linkage does not change the posted AR amount or party, but all
+    // writes remain tenant-scoped below.
     if ('work_order_id' in body && ['admin', 'owner', 'manager'].includes(profile.role)) {
       updatePayload.work_order_id = body.work_order_id ?? null
     }
@@ -205,43 +194,48 @@ export async function PATCH(
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
-    // Validate status transitions
+    // Posted status transitions are transactional accounting operations, not
+    // ordinary row updates. The RPCs validate tenant, actor and current state and
+    // append the immutable posting/reversal event atomically.
+    const supabase = createAdminClient() as any
+    if (updatePayload.status === 'issued') {
+      const { error } = await supabase.rpc('issue_customer_invoice', {
+        p_org_id: profile.organization_id,
+        p_actor_id: user.id,
+        p_invoice_id: id,
+      })
+      if (error) throw error
+      return NextResponse.json({ success: true })
+    }
     if (updatePayload.status === 'cancelled') {
       if (!body.cancelled_reason?.trim()) {
         return NextResponse.json({ error: 'Cancellation reason is required' }, { status: 400 })
       }
-      updatePayload.cancelled_reason = body.cancelled_reason.trim()
+      const { error } = await supabase.rpc('cancel_customer_invoice', {
+        p_org_id: profile.organization_id,
+        p_actor_id: user.id,
+        p_invoice_id: id,
+        p_reason: body.cancelled_reason.trim(),
+      })
+      if (error) throw error
+      return NextResponse.json({ success: true })
+    }
+    if (updatePayload.status) {
+      return NextResponse.json({ error: 'Unsupported invoice status transition' }, { status: 400 })
     }
 
-    const supabase = createAdminClient() as any
-
-    // Fetch current invoice to get work_order_id for status sync
-    const { data: currentInv } = await supabase
+    const { data: currentInvoice } = await supabase
       .from('invoices')
-      .select('invoice_number, organization_id, work_order_id, status')
+      .select('status')
       .eq('id', id)
+      .eq('organization_id', profile.organization_id)
       .single()
-
-    // If cancelling, restore any merged source invoices
-    if (updatePayload.status === 'cancelled' && currentInv && currentInv.organization_id === profile.organization_id) {
-      const mergeReason = `Merged into ${currentInv.invoice_number}`
-      const { data: sourceInvs } = await supabase
-        .from('invoices')
-        .select('id, amount_paid, total_amount, due_date')
-        .eq('cancelled_reason', mergeReason)
-        .eq('organization_id', profile.organization_id)
-      if (sourceInvs && sourceInvs.length > 0) {
-        const today = new Date().toISOString().split('T')[0]
-        for (const src of sourceInvs as { id: string; amount_paid: number; total_amount: number; due_date: string | null }[]) {
-          const paid = Number(src.amount_paid)
-          const total = Number(src.total_amount)
-          let restoredStatus = 'issued'
-          if (paid >= total && total > 0) restoredStatus = 'paid'
-          else if (paid > 0) restoredStatus = 'partial'
-          else if (src.due_date && src.due_date < today) restoredStatus = 'overdue'
-          await supabase.from('invoices').update({ status: restoredStatus, cancelled_reason: null, updated_at: new Date().toISOString() }).eq('id', src.id)
-        }
-      }
+    if (!currentInvoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
+    if (currentInvoice.status !== 'draft' && 'invoice_date' in updatePayload) {
+      return NextResponse.json(
+        { error: 'Posted invoice date is immutable; cancel and create a replacement invoice' },
+        { status: 400 },
+      )
     }
 
     const { data: updated, error } = await supabase
@@ -253,20 +247,6 @@ export async function PATCH(
       .single()
 
     if (error) throw error
-
-    // Sync linked work order status when invoice status changes
-    if (updatePayload.status && currentInv?.work_order_id) {
-      const woId = currentInv.work_order_id as string
-      if (updatePayload.status === 'issued') {
-        await supabase.from('work_orders').update({ status: 'invoiced' }).eq('id', woId)
-      } else if (updatePayload.status === 'cancelled') {
-        // Revert WO to completed only if it was in invoiced state (not already paid)
-        const { data: wo } = await supabase.from('work_orders').select('status').eq('id', woId).single()
-        if (wo?.status === 'invoiced') {
-          await supabase.from('work_orders').update({ status: 'completed' }).eq('id', woId)
-        }
-      }
-    }
 
     return NextResponse.json({ success: true, invoice: updated })
   } catch (err: unknown) {

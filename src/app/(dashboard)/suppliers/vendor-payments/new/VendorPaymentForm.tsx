@@ -1,184 +1,161 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency } from '@/lib/utils'
 import { safeReturnTo } from '@/lib/backNav'
+import { SUPPLIER_PAYMENT_MODES } from '@/lib/supplierPayments'
 
-interface Supplier { id: string; supplier_name: string; supplier_code: string }
-interface OpenPO { id: string; po_number: string; supplier_id: string; balance_due: number; total_amount: number }
-interface OpenInvoice {
-  id: string; invoice_number: string; supplier_invoice_number: string | null
-  supplier_id: string; invoice_date: string; balance_due: number; total_amount: number
+interface Supplier {
+  id: string
+  supplier_name: string
+  supplier_code: string
 }
-interface OpenPayable {
-  id: string; bill_ref: string; supplier_id: string; bill_date: string; balance_due: number; amount: number
+
+interface OpenInvoice {
+  id: string
+  invoice_number: string
+  supplier_invoice_number: string | null
+  supplier_id: string
+  invoice_date: string
+  balance_due: number
+  total_amount: number
 }
 
 interface Props {
   suppliers: Supplier[]
-  openPOs: OpenPO[]
-  defaultPO: { id: string; po_number: string; supplier_id: string; balance_due: number; total_amount: number } | null
   openInvoices: OpenInvoice[]
-  openPayables: OpenPayable[]
+  defaultInvoiceId: string | null
+  defaultSupplierId: string | null
   returnTo: string
 }
 
-interface PayableLine {
-  key: string
-  type: 'invoice' | 'opening'
-  id: string
-  title: string
-  subtitle: string | null
-  date: string
-  balance: number
+const MODE_LABELS: Record<(typeof SUPPLIER_PAYMENT_MODES)[number], string> = {
+  bank_transfer: 'Bank Transfer',
+  cheque: 'Cheque',
+  cash: 'Cash',
+  knet: 'KNET',
+  pos: 'POS',
+  online: 'Online',
+  card: 'Card',
+  other: 'Other',
 }
-
-const PAYMENT_MODES = [
-  { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'cheque', label: 'Cheque' },
-  { value: 'cash', label: 'Cash' },
-  { value: 'pos', label: 'POS' },
-  { value: 'online', label: 'Online' },
-  { value: 'card', label: 'Card' },
-  { value: 'other', label: 'Other' },
-]
 
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
+const KWD_RE = /^\d{1,9}(\.\d{1,3})?$/
 
-export function VendorPaymentForm({ suppliers, openPOs, defaultPO, openInvoices, openPayables, returnTo }: Props) {
+export function VendorPaymentForm({
+  suppliers,
+  openInvoices,
+  defaultInvoiceId,
+  defaultSupplierId,
+  returnTo,
+}: Props) {
   const router = useRouter()
   const destination = safeReturnTo(returnTo) ?? '/suppliers/vendor-payments'
-  const [supplierId, setSupplierId] = useState(defaultPO?.supplier_id ?? '')
-  const [poId, setPoId] = useState(defaultPO?.id ?? '')
-  const [selectedKeys, setSelectedKeys] = useState<string[]>([])
-  const [amount, setAmount] = useState(defaultPO?.balance_due ? String(defaultPO.balance_due) : '')
+  const [supplierId, setSupplierId] = useState(defaultSupplierId ?? '')
+  const [invoiceId, setInvoiceId] = useState(defaultInvoiceId ?? '')
+  const [amount, setAmount] = useState('')
   const [discount, setDiscount] = useState('')
-  const [mode, setMode] = useState('bank_transfer')
+  const [mode, setMode] = useState<(typeof SUPPLIER_PAYMENT_MODES)[number]>('bank_transfer')
   const [reference, setReference] = useState('')
   const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }))
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // POs filtered by selected supplier
-  const supplierPOs = supplierId ? openPOs.filter((p) => p.supplier_id === supplierId) : openPOs
+  const supplierInvoices = useMemo(
+    () => supplierId ? openInvoices.filter((invoice) => invoice.supplier_id === supplierId) : [],
+    [openInvoices, supplierId],
+  )
+  const selectedInvoice = supplierInvoices.find((invoice) => invoice.id === invoiceId) ?? null
 
-  // Combined outstanding lines (purchase invoices + opening payables) for the selected supplier
-  const payableLines: PayableLine[] = supplierId
-    ? [
-        ...openInvoices
-          .filter((i) => i.supplier_id === supplierId)
-          .map((i) => ({
-            key: `inv:${i.id}`,
-            type: 'invoice' as const,
-            id: i.id,
-            title: i.invoice_number,
-            subtitle: i.supplier_invoice_number,
-            date: i.invoice_date,
-            balance: Number(i.balance_due),
-          })),
-        ...openPayables
-          .filter((p) => p.supplier_id === supplierId)
-          .map((p) => ({
-            key: `op:${p.id}`,
-            type: 'opening' as const,
-            id: p.id,
-            title: p.bill_ref,
-            subtitle: 'Opening Balance',
-            date: p.bill_date,
-            balance: Number(p.balance_due),
-          })),
-      ].sort((a, b) => a.date.localeCompare(b.date))
-    : []
-
-  // When PO is selected, auto-fill amount with balance due (less any discount), and clear any selected lines
-  useEffect(() => {
-    if (!poId) return
-    const po = openPOs.find((p) => p.id === poId)
-    if (po) setAmount(Math.max(0, po.balance_due - Number(discount || 0)).toFixed(3))
-    setSelectedKeys([])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poId, openPOs])
-
-  // When lines are selected, auto-fill amount with total balance due (less any discount), and clear PO
-  useEffect(() => {
-    if (selectedKeys.length === 0) return
-    const total = payableLines
-      .filter((l) => selectedKeys.includes(l.key))
-      .reduce((s, l) => s + l.balance, 0)
-    setAmount(Math.max(0, total - Number(discount || 0)).toFixed(3))
-    setPoId('')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKeys])
-
-  // When discount changes, re-derive amount from the selected bill(s)/PO total
-  useEffect(() => {
-    if (selectedKeys.length > 0) {
-      const total = payableLines
-        .filter((l) => selectedKeys.includes(l.key))
-        .reduce((s, l) => s + l.balance, 0)
-      setAmount(Math.max(0, total - Number(discount || 0)).toFixed(3))
-    } else if (poId) {
-      const po = openPOs.find((p) => p.id === poId)
-      if (po) setAmount(Math.max(0, po.balance_due - Number(discount || 0)).toFixed(3))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [discount])
-
-  // When supplier changes, clear PO/line selections that don't belong to new supplier
-  useEffect(() => {
-    if (poId) {
-      const po = openPOs.find((p) => p.id === poId)
-      if (po && po.supplier_id !== supplierId) setPoId('')
-    }
-    setSelectedKeys([])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supplierId])
-
-  const selectedPO = openPOs.find((p) => p.id === poId)
-  const selectedTotal = payableLines
-    .filter((l) => selectedKeys.includes(l.key))
-    .reduce((s, l) => s + l.balance, 0)
-
-  function toggleLine(key: string) {
-    setSelectedKeys((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]))
+  function settlementAmount(invoice: OpenInvoice | null, nextDiscount: string) {
+    if (!invoice) return ''
+    return Math.max(0, Number(invoice.balance_due) - Number(nextDiscount || 0)).toFixed(3)
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    if (!supplierId) { setError('Please select a supplier'); return }
-    if (!amount || Number(amount) <= 0) { setError('Enter a valid amount'); return }
+  function onSupplierChange(nextSupplierId: string) {
+    const invoiceStillMatches = openInvoices.some(
+      (invoice) => invoice.id === invoiceId && invoice.supplier_id === nextSupplierId,
+    )
+    setSupplierId(nextSupplierId)
+    if (!invoiceStillMatches) {
+      setInvoiceId('')
+      setDiscount('')
+      setAmount('')
+    }
+  }
 
-    const invoice_ids = selectedKeys.filter((k) => k.startsWith('inv:')).map((k) => k.split(':')[1])
-    const opening_payable_ids = selectedKeys.filter((k) => k.startsWith('op:')).map((k) => k.split(':')[1])
+  function onInvoiceChange(nextId: string) {
+    const invoice = supplierInvoices.find((candidate) => candidate.id === nextId) ?? null
+    setInvoiceId(nextId)
+    setDiscount('')
+    setAmount(settlementAmount(invoice, ''))
+  }
+
+  function onDiscountChange(nextDiscount: string) {
+    setDiscount(nextDiscount)
+    setAmount(settlementAmount(selectedInvoice, nextDiscount))
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    setError('')
+
+    const amountText = amount.trim()
+    const discountText = discount.trim() || '0'
+    if (!supplierId) { setError('Please select a supplier'); return }
+    if (!selectedInvoice) {
+      setError('Please select a purchase invoice; use Supplier Advances for unallocated payments')
+      return
+    }
+    if (!KWD_RE.test(amountText)) {
+      setError('Enter a cash amount with up to three decimal places')
+      return
+    }
+    if (!KWD_RE.test(discountText)) {
+      setError('Enter a discount with up to three decimal places')
+      return
+    }
+    if (Number(amountText) + Number(discountText) <= 0) {
+      setError('Cash paid or discount must be greater than zero')
+      return
+    }
+    if (Number(amountText) + Number(discountText) > Number(selectedInvoice.balance_due) + 0.0001) {
+      setError(`Payment plus discount cannot exceed ${formatCurrency(Number(selectedInvoice.balance_due))}`)
+      return
+    }
 
     setLoading(true)
     try {
-      const res = await fetch('/api/suppliers/payments', {
+      const response = await fetch('/api/suppliers/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           supplier_id: supplierId,
-          purchase_order_id: poId || null,
-          invoice_ids,
-          opening_payable_ids,
+          purchase_invoice_id: invoiceId || null,
           payment_date: date,
-          amount_paid: Number(amount),
-          discount_amount: Number(discount || 0),
+          amount_paid: amountText,
+          discount_amount: discountText,
           payment_mode: mode,
           reference_number: reference.trim() || null,
           notes: notes.trim() || null,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error ?? 'Failed to record payment'); return }
+      const data = await response.json()
+      if (!response.ok) {
+        setError(data.error ?? 'Failed to record payment')
+        return
+      }
       router.replace(destination)
       router.refresh()
-    } catch { setError('Network error') }
-    finally { setLoading(false) }
+    } catch {
+      setError('Network error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -187,81 +164,42 @@ export function VendorPaymentForm({ suppliers, openPOs, defaultPO, openInvoices,
 
       <div>
         <label className={labelClass}>Supplier <span className="text-red-500">*</span></label>
-        <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} required className={inputClass}>
+        <select
+          value={supplierId}
+          onChange={(event) => onSupplierChange(event.target.value)}
+          required
+          className={inputClass}
+        >
           <option value="">— Select supplier —</option>
-          {suppliers.map((s) => (
-            <option key={s.id} value={s.id}>{s.supplier_name} ({s.supplier_code})</option>
+          {suppliers.map((supplier) => (
+            <option key={supplier.id} value={supplier.id}>
+              {supplier.supplier_name} ({supplier.supplier_code})
+            </option>
           ))}
         </select>
       </div>
 
-      {supplierId && payableLines.length > 0 && (
-        <div>
-          <label className={labelClass}>Outstanding Bills <span className="text-slate-400 font-normal">(optional — select which to pay)</span></label>
-          <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-56 overflow-y-auto">
-            {/* Select All header */}
-            <label className="flex items-center justify-between gap-3 px-3 py-2 text-sm cursor-pointer bg-slate-50 hover:bg-slate-100 sticky top-0">
-              <span className="flex items-center gap-2.5">
-                <input
-                  type="checkbox"
-                  checked={selectedKeys.length === payableLines.length && payableLines.length > 0}
-                  onChange={() => {
-                    if (selectedKeys.length === payableLines.length) {
-                      setSelectedKeys([])
-                    } else {
-                      setSelectedKeys(payableLines.map(l => l.key))
-                    }
-                  }}
-                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Select All</span>
-              </span>
-              <span className="text-xs text-slate-400">{payableLines.length} bills</span>
-            </label>
-            {payableLines.map((line) => (
-              <label key={line.key} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm cursor-pointer hover:bg-slate-50">
-                <span className="flex items-center gap-2.5 min-w-0">
-                  <input
-                    type="checkbox"
-                    checked={selectedKeys.includes(line.key)}
-                    onChange={() => toggleLine(line.key)}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="min-w-0">
-                    <span className="font-medium text-slate-900">{line.title}</span>
-                    {line.subtitle && (
-                      <span className={`text-xs ml-1.5 ${line.type === 'opening' ? 'text-amber-600' : 'text-slate-400'}`}>
-                        ({line.subtitle})
-                      </span>
-                    )}
-                    <span className="block text-xs text-slate-400">{new Date(line.date).toLocaleDateString('en-GB')}</span>
-                  </span>
-                </span>
-                <span className="text-slate-700 font-semibold flex-shrink-0">{formatCurrency(line.balance)}</span>
-              </label>
-            ))}
-          </div>
-          {selectedKeys.length > 0 && (
-            <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
-              {selectedKeys.length} bill{selectedKeys.length > 1 ? 's' : ''} selected · Total: <strong>{formatCurrency(selectedTotal)}</strong>
-            </p>
-          )}
-        </div>
-      )}
-
       <div>
-        <label className={labelClass}>Purchase Order <span className="text-slate-400 font-normal">(optional)</span></label>
-        <select value={poId} onChange={(e) => setPoId(e.target.value)} className={inputClass}>
-          <option value="">— Select PO —</option>
-          {supplierPOs.map((po) => (
-            <option key={po.id} value={po.id}>
-              {po.po_number} · Balance: {formatCurrency(po.balance_due)} / {formatCurrency(po.total_amount)}
+        <label className={labelClass}>
+          Purchase Invoice <span className="text-red-500">*</span>
+        </label>
+        <select
+          value={invoiceId}
+          onChange={(event) => onInvoiceChange(event.target.value)}
+          disabled={!supplierId}
+          className={inputClass}
+        >
+          <option value="">— Select purchase invoice —</option>
+          {supplierInvoices.map((invoice) => (
+            <option key={invoice.id} value={invoice.id}>
+              {invoice.invoice_number}{invoice.supplier_invoice_number ? ` · ${invoice.supplier_invoice_number}` : ''} · {formatCurrency(Number(invoice.balance_due))}
             </option>
           ))}
         </select>
-        {selectedPO && (
+        {selectedInvoice && (
           <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
-            Outstanding balance: <strong>{formatCurrency(selectedPO.balance_due)}</strong>
+            Outstanding balance: <strong>{formatCurrency(Number(selectedInvoice.balance_due))}</strong>
+            {' · '}Invoice date: {new Date(`${selectedInvoice.invoice_date}T00:00:00`).toLocaleDateString('en-GB')}
           </p>
         )}
       </div>
@@ -269,48 +207,81 @@ export function VendorPaymentForm({ suppliers, openPOs, defaultPO, openInvoices,
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={labelClass}>Payment Date <span className="text-red-500">*</span></label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className={inputClass} />
+          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} required className={inputClass} />
         </div>
         <div>
           <label className={labelClass}>Amount Paid <span className="text-red-500">*</span></label>
-          <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
-            min="0.001" step="0.001" required placeholder="0.000" className={`${inputClass} text-right font-semibold`} />
+          <input
+            type="number"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            min="0"
+            step="0.001"
+            required
+            placeholder="0.000"
+            className={`${inputClass} text-right font-semibold`}
+          />
         </div>
       </div>
 
       <div>
-        <label className={labelClass}>Discount <span className="text-slate-400 font-normal">(optional — write-off / early-payment discount given by supplier)</span></label>
-        <input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)}
-          min="0" step="0.001" placeholder="0.000" className={`${inputClass} text-right`} />
-        {(selectedKeys.length > 0 || poId) && Number(discount || 0) > 0 && (
+        <label className={labelClass}>
+          Settlement Discount <span className="text-slate-400 font-normal">(only for the selected invoice)</span>
+        </label>
+        <input
+          type="number"
+          value={discount}
+          onChange={(event) => onDiscountChange(event.target.value)}
+          min="0"
+          step="0.001"
+          placeholder="0.000"
+          disabled={!selectedInvoice}
+          className={`${inputClass} text-right disabled:bg-slate-100 disabled:text-slate-400`}
+        />
+        {selectedInvoice && Number(discount || 0) > 0 && (
           <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
-            Bill fully settled with {formatCurrency(Number(amount || 0))} cash + {formatCurrency(Number(discount || 0))} discount
+            Settlement: {formatCurrency(Number(amount || 0))} cash + {formatCurrency(Number(discount || 0))} discount
           </p>
         )}
       </div>
 
       <div>
-        <label className={labelClass}>Payment Mode</label>
-        <select value={mode} onChange={(e) => setMode(e.target.value)} className={inputClass}>
-          {PAYMENT_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+        <label className={labelClass}>Payment Mode <span className="text-red-500">*</span></label>
+        <select value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} required className={inputClass}>
+          {SUPPLIER_PAYMENT_MODES.map((paymentMode) => (
+            <option key={paymentMode} value={paymentMode}>{MODE_LABELS[paymentMode]}</option>
+          ))}
         </select>
       </div>
 
       <div>
         <label className={labelClass}>Reference / Cheque No.</label>
-        <input type="text" value={reference} onChange={(e) => setReference(e.target.value)}
-          placeholder="e.g. CHQ-12345 or TXN-REF" className={inputClass} />
+        <input
+          type="text"
+          value={reference}
+          onChange={(event) => setReference(event.target.value)}
+          placeholder="e.g. CHQ-12345 or TXN-REF"
+          className={inputClass}
+        />
       </div>
 
       <div>
         <label className={labelClass}>Notes</label>
-        <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)}
-          placeholder="Optional remarks…" className={inputClass} />
+        <textarea
+          rows={2}
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+          placeholder="Optional remarks…"
+          className={inputClass}
+        />
       </div>
 
       <div className="flex gap-3">
-        <button type="submit" disabled={loading}
-          className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+        <button
+          type="submit"
+          disabled={loading}
+          className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+        >
           {loading ? 'Recording…' : 'Record Payment'}
         </button>
         <button

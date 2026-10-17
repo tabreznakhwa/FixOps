@@ -83,6 +83,7 @@ export default async function PayslipPage({
     overtime_amount: number; normal_overtime: number | null; friday_overtime: number | null
     gross_salary: number; deductions: number; advance_deduction: number; net_salary: number
     absent_days: number | null; absent_deduction: number | null; food_deduction: number | null
+    annual_leave_days: number | null; annual_leave_deduction: number | null
     payment_status: string; payment_date: string | null; payment_mode: string | null
     advance_balance_after: number | null
   } | null
@@ -130,6 +131,8 @@ export default async function PayslipPage({
   const allowance = (slip.housing_allowance ?? 0) + (slip.transport_allowance ?? 0) + (slip.other_allowance ?? 0)
   const absentDays = slip.absent_days ?? 0
   const absentDeduction = slip.absent_deduction ?? 0
+  const annualLeaveDays = slip.annual_leave_days ?? 0
+  const annualLeaveDeduction = slip.annual_leave_deduction ?? 0
   const foodDeduction = slip.food_deduction ?? 0
 
   const earnings = [
@@ -159,10 +162,17 @@ export default async function PayslipPage({
       label: `Absent ${absentDays} Day${absentDays !== 1 ? 's' : ''} (Basic + ${allowanceName} + Fixed OT)`,
       amount: absentDeduction,
     }] : []),
+    ...(annualLeaveDeduction > 0 ? [{
+      label: `Unpaid Annual Leave ${annualLeaveDays} Day${annualLeaveDays !== 1 ? 's' : ''} (Basic + ${allowanceName} + Food + Fixed OT)`,
+      amount: annualLeaveDeduction,
+    }] : []),
     ...(foodDeduction > 0 ? [{ label: `Food Deduction (${absentDays} Day${absentDays !== 1 ? 's' : ''})`, amount: foodDeduction }] : []),
     ...(slip.advance_deduction > 0 ? [{ label: 'Advance / Loan Recovery', amount: slip.advance_deduction }] : []),
   ]
-  const totalDeductionsAmt = absentDeduction + foodDeduction + (slip.advance_deduction ?? 0)
+  const totalDeductionsAmt = absentDeduction
+    + annualLeaveDeduction
+    + foodDeduction
+    + (slip.advance_deduction ?? 0)
 
   return (
     <div className="animate-fade-in">
@@ -200,11 +210,18 @@ export default async function PayslipPage({
                 <p className="text-sm text-slate-500">Joined: {staff.joining_date ? new Date(staff.joining_date).toLocaleDateString('en-GB') : '—'}</p>
               </div>
             </div>
-            {absentDays > 0 && (
-              <div className="mt-3 pt-3 border-t border-slate-200">
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-red-50 text-red-700 border border-red-200 px-3 py-1 rounded-full">
-                  ⚠️ Absent: {absentDays} day{absentDays !== 1 ? 's' : ''} — Deduction: {formatCurrency(absentDeduction + foodDeduction)}
-                </span>
+            {(absentDays > 0 || annualLeaveDays > 0) && (
+              <div className="mt-3 pt-3 border-t border-slate-200 flex flex-wrap gap-2">
+                {absentDays > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-red-50 text-red-700 border border-red-200 px-3 py-1 rounded-full">
+                    Absent: {absentDays} day{absentDays !== 1 ? 's' : ''} — Deduction: {formatCurrency(absentDeduction + foodDeduction)}
+                  </span>
+                )}
+                {annualLeaveDays > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200 px-3 py-1 rounded-full">
+                    Unpaid annual leave: {annualLeaveDays} day{annualLeaveDays !== 1 ? 's' : ''} — Deduction: {formatCurrency(annualLeaveDeduction)}
+                  </span>
+                )}
               </div>
             )}
           </div>

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
@@ -22,10 +23,9 @@ export async function PATCH(
     if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await request.json()
-    const { action, status, supplier_invoice_number, received_items } = body as {
-      action: 'receive' | 'cancel' | 'set_status' | 'update_invoice'
+    const { action, status, received_items } = body as {
+      action: 'receive' | 'cancel' | 'set_status'
       status?: string
-      supplier_invoice_number?: string
       received_items?: Array<{ item_id: string; received_quantity: number }>
     }
 
@@ -57,11 +57,6 @@ export async function PATCH(
       await logAudit({ orgId: profile.organization_id, userId: user.id, userName: profile.full_name,
         action: 'status_change', entityType: 'purchase_order', entityId: poId, entityLabel: po.po_number,
         changes: { status: { before: po.status, after: status } } })
-      return NextResponse.json({ success: true })
-    }
-
-    if (action === 'update_invoice' && supplier_invoice_number !== undefined) {
-      await admin.from('purchase_orders').update({ supplier_invoice_number }).eq('id', poId)
       return NextResponse.json({ success: true })
     }
 

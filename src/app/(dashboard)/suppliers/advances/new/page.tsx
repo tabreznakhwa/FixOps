@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/Header'
 import { BackButton } from '@/components/ui/BackButton'
 import { NewSupplierAdvanceForm } from './NewSupplierAdvanceForm'
 import { resolveBack } from '@/lib/backNav'
+import { redirect } from 'next/navigation'
 
 export const metadata = { title: 'New Supplier Advance' }
 
@@ -16,9 +17,23 @@ export default async function NewSupplierAdvancePage({
   const supabase = await createClient()
   const admin = createAdminClient() as any
 
-  const { data: suppliersRaw } = await (supabase as any)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+  const { data: profileRaw } = await (supabase as any)
+    .from('users')
+    .select('organization_id, role')
+    .eq('id', user.id)
+    .single()
+  const profile = profileRaw as { organization_id: string; role: string } | null
+  if (!profile || !['owner', 'admin', 'manager'].includes(profile.role)) {
+    redirect('/suppliers/advances')
+  }
+
+  const { data: suppliersRaw } = await admin
     .from('suppliers')
     .select('id, supplier_name, supplier_code')
+    .eq('organization_id', profile.organization_id)
+    .eq('status', 'active')
     .order('supplier_name')
 
   const suppliers = (suppliersRaw ?? []) as Array<{

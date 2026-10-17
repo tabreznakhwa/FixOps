@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { TrendingDown, Plus, Pencil } from 'lucide-react'
+import { TrendingDown, Plus, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
@@ -15,13 +16,13 @@ import { currentPath, withReturnTo } from '@/lib/backNav'
 export const metadata = { title: 'Vendor Payment Register' }
 
 const MODE_LABELS: Record<string, string> = {
-  cash: 'Cash', bank_transfer: 'Bank Transfer', cheque: 'Cheque',
+  cash: 'Cash', bank_transfer: 'Bank Transfer', cheque: 'Cheque', knet: 'KNET',
   pos: 'POS', online: 'Online', card: 'Card', other: 'Other',
 }
 
 const MODE_COLORS: Record<string, string> = {
   cash: 'bg-green-100 text-green-700', bank_transfer: 'bg-blue-100 text-blue-700',
-  cheque: 'bg-purple-100 text-purple-700', pos: 'bg-amber-100 text-amber-700',
+  cheque: 'bg-purple-100 text-purple-700', knet: 'bg-teal-100 text-teal-700', pos: 'bg-amber-100 text-amber-700',
   online: 'bg-cyan-100 text-cyan-700', card: 'bg-indigo-100 text-indigo-700',
   other: 'bg-slate-100 text-slate-600',
 }
@@ -42,7 +43,9 @@ export default async function VendorPaymentsPage({
 
   let paymentQuery = (supabase as any)
     .from('supplier_payments')
-    .select('id, payment_date, amount_paid, discount_amount, payment_mode, reference_number, notes, supplier_id, suppliers(supplier_name, supplier_code), purchase_orders(po_number)')
+    .select('id, payment_date, amount_paid, discount_amount, payment_mode, reference_number, notes, supplier_id, is_cancelled, is_automatic, supplier_advance_id, purchase_order_id, suppliers(supplier_name, supplier_code), purchase_invoices(invoice_number)')
+    .eq('is_cancelled', false)
+    .is('supplier_advance_id', null)
     .gte('payment_date', from)
     .lte('payment_date', to)
     .order('payment_date', { ascending: false })
@@ -55,8 +58,9 @@ export default async function VendorPaymentsPage({
   const allPayments = (paymentsRaw ?? []) as Array<{
     id: string; payment_date: string; amount_paid: number; discount_amount: number | null; payment_mode: string
     reference_number: string | null; notes: string | null; supplier_id: string | null
+    is_cancelled: boolean; is_automatic: boolean; supplier_advance_id: string | null; purchase_order_id: string | null
     suppliers: { supplier_name: string; supplier_code: string } | null
-    purchase_orders: { po_number: string } | null
+    purchase_invoices: { invoice_number: string } | null
   }>
 
   // Unique suppliers from fetched payments for dropdown
@@ -71,7 +75,7 @@ export default async function VendorPaymentsPage({
     ? allPayments.filter(p =>
         (p.suppliers?.supplier_name ?? '').toLowerCase().includes(q) ||
         (p.reference_number ?? '').toLowerCase().includes(q) ||
-        (p.purchase_orders?.po_number ?? '').toLowerCase().includes(q)
+        (p.purchase_invoices?.invoice_number ?? '').toLowerCase().includes(q)
       )
     : allPayments
 
@@ -122,6 +126,12 @@ export default async function VendorPaymentsPage({
           </Suspense>
         </div>
 
+        {payments.some((payment) => payment.purchase_order_id) && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <strong>Legacy purchase-order payments need reconciliation.</strong> Purchase orders are commitments, not Accounts Payable bills. Map each marked row to a posted purchase invoice or reclassify genuine pre-invoice cash as a supplier advance before applying migration 055.
+          </div>
+        )}
+
         {/* Summary */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-white rounded-xl border border-slate-200 p-4 sm:col-span-2">
@@ -159,7 +169,7 @@ export default async function VendorPaymentsPage({
                   <tr className="bg-slate-50 border-b border-slate-100">
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Date</th>
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Supplier</th>
-                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">PO #</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Invoice #</th>
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Mode</th>
                     <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Reference</th>
                     <th className="text-right text-xs font-semibold text-amber-600 uppercase tracking-wider px-4 py-3">Discount</th>
@@ -175,7 +185,15 @@ export default async function VendorPaymentsPage({
                         <p className="text-sm font-semibold text-slate-800">{p.suppliers?.supplier_name}</p>
                         <p className="text-xs text-slate-400 font-mono">{p.suppliers?.supplier_code}</p>
                       </td>
-                      <td className="px-4 py-3 text-sm font-mono text-blue-600">{p.purchase_orders?.po_number ?? '—'}</td>
+                      <td className="px-4 py-3 text-sm font-mono">
+                        {p.purchase_order_id ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800" title="Reconcile this legacy purchase-order payment before migration 055">
+                            Legacy PO link
+                          </span>
+                        ) : (
+                          <span className="text-blue-600">{p.purchase_invoices?.invoice_number ?? '—'}</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${MODE_COLORS[p.payment_mode] ?? 'bg-slate-100 text-slate-600'}`}>
                           {MODE_LABELS[p.payment_mode] ?? p.payment_mode}
@@ -187,9 +205,11 @@ export default async function VendorPaymentsPage({
                       </td>
                       <td className="px-5 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(p.amount_paid)}</td>
                       <td className="px-4 py-3 text-right print:hidden">
-                        <Link href={withReturnTo(`/suppliers/vendor-payments/${p.id}/edit`, vendorPaymentsPath)} className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition">
-                          <Pencil className="w-3 h-3" /> Edit
-                        </Link>
+                        {!p.is_automatic && !p.purchase_order_id && (
+                          <Link href={withReturnTo(`/suppliers/vendor-payments/${p.id}/edit`, vendorPaymentsPath)} className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 rounded transition">
+                            <XCircle className="w-3 h-3" /> Cancel
+                          </Link>
+                        )}
                       </td>
                     </tr>
                   ))}

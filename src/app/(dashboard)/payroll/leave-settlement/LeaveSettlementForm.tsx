@@ -24,6 +24,8 @@ interface Result {
   fridayOvertime: number
   absentDays: number
   absentDeduction: number
+  annualLeaveDays: number
+  annualLeaveDeduction: number
   grossEarned: number
   outstandingAdvance: number
   netPayable: number
@@ -39,7 +41,6 @@ const PAYMENT_METHODS = [
 
 export function LeaveSettlementForm({ staff }: { staff: StaffRow[] }) {
   const router = useRouter()
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
 
   const [staffId, setStaffId] = useState('')
   const [settlementDate, setSettlementDate] = useState('')
@@ -214,6 +215,7 @@ export function LeaveSettlementForm({ staff }: { staff: StaffRow[] }) {
               {preview.normalOvertime > 0 && row('Overtime earned', preview.normalOvertime)}
               {preview.fridayOvertime > 0 && row('Friday / holiday OT', preview.fridayOvertime)}
               {preview.absentDeduction > 0 && row(`Absence (${preview.absentDays} days)`, preview.absentDeduction, { negative: true })}
+              {preview.annualLeaveDeduction > 0 && row(`Unpaid annual leave (${preview.annualLeaveDays} days)`, preview.annualLeaveDeduction, { negative: true })}
               {preview.outstandingAdvance > 0 && row('Existing advance recovered', preview.outstandingAdvance, { negative: true })}
             </div>
 

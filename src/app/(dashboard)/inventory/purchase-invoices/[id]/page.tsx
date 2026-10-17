@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { Pencil } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
 import { currentPath, resolveBack, withReturnTo } from '@/lib/backNav'
@@ -26,11 +27,23 @@ export default async function PurchaseInvoiceDetailPage({
   const editHref = withReturnTo(`/inventory/purchase-invoices/${id}/edit`, invoicePath)
   const admin = createAdminClient() as any
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+  const { data: profileRaw } = await (supabase as any)
+    .from('users')
+    .select('organization_id, role')
+    .eq('id', user.id)
+    .single()
+  const profile = profileRaw as { organization_id: string; role: string } | null
+  if (!profile || !['owner', 'admin', 'manager', 'accounts'].includes(profile.role)) {
+    redirect('/dashboard')
+  }
 
   const { data: invoiceRaw } = await admin
     .from('purchase_invoices')
     .select('*, suppliers(supplier_name, mobile_number, email)')
     .eq('id', id)
+    .eq('organization_id', profile.organization_id)
     .single()
 
   if (!invoiceRaw) notFound()
@@ -47,6 +60,7 @@ export default async function PurchaseInvoiceDetailPage({
     .from('purchase_invoice_items')
     .select('*, inventory_items(item_name, item_code, unit_of_measure, current_stock)')
     .eq('purchase_invoice_id', id)
+    .eq('organization_id', profile.organization_id)
     .order('sort_order')
 
   const items = (itemsRaw ?? []) as Array<{
@@ -55,23 +69,54 @@ export default async function PurchaseInvoiceDetailPage({
     inventory_items: { item_name: string; item_code: string; unit_of_measure: string; current_stock: number } | null
   }>
 
-  // Fetch supplier advances available to apply against this invoice
+  // Fetch available advances and active allocation traces separately. Applying an
+  // advance is allocation-only; unapplying restores both the advance and invoice.
   const isCancelled = invoice.status === 'cancelled'
+  const canManageAdvances = ['owner', 'admin', 'manager'].includes(profile.role)
   let supplierAdvances: Array<{ id: string; advance_number: string; advance_date: string; balance: number; payment_mode: string }> = []
-  if (invoice.supplier_id && Number(invoice.balance_due) > 0 && !isCancelled) {
-    const { data: advancesRaw } = await admin
-      .from('supplier_advances')
-      .select('id, advance_number, advance_date, balance, payment_mode')
-      .eq('supplier_id', invoice.supplier_id)
-      .eq('is_cancelled', false)
-      .gt('balance', 0)
-      .order('advance_date', { ascending: false })
+  let appliedAdvances: Array<{ id: string; advance_id: string; advance_number: string; amount: number }> = []
+  if (invoice.supplier_id && !isCancelled && canManageAdvances) {
+    const [{ data: advancesRaw }, { data: allocationsRaw }] = await Promise.all([
+      Number(invoice.balance_due) > 0
+        ? admin
+          .from('supplier_advances')
+          .select('id, advance_number, advance_date, balance, payment_mode')
+          .eq('organization_id', profile.organization_id)
+          .eq('supplier_id', invoice.supplier_id)
+          .eq('is_cancelled', false)
+          .gt('balance', 0)
+          .order('advance_date', { ascending: false })
+        : Promise.resolve({ data: [] }),
+      admin
+        .from('supplier_payments')
+        .select('id, amount_paid, supplier_advance_id, supplier_advances(advance_number)')
+        .eq('organization_id', profile.organization_id)
+        .eq('purchase_invoice_id', invoice.id)
+        .eq('is_cancelled', false)
+        .not('supplier_advance_id', 'is', null)
+        .order('created_at', { ascending: true }),
+    ])
     supplierAdvances = (advancesRaw ?? []) as typeof supplierAdvances
+    appliedAdvances = (allocationsRaw ?? []).flatMap((allocation: {
+      id: string
+      amount_paid: number
+      supplier_advance_id: string | null
+      supplier_advances: { advance_number: string } | null
+    }) => allocation.supplier_advance_id
+      ? [{
+        id: allocation.id,
+        advance_id: allocation.supplier_advance_id,
+        advance_number: allocation.supplier_advances?.advance_number ?? 'Supplier Advance',
+        amount: Number(allocation.amount_paid),
+      }]
+      : [])
   }
 
   // Fetch org for print letterhead
   const { data: orgRaw } = await admin.from('organizations')
-    .select('name, logo_url, address, city, phone, email').limit(1).single()
+    .select('name, logo_url, address, city, phone, email')
+    .eq('id', profile.organization_id)
+    .single()
   const org = orgRaw as { name: string; logo_url: string | null; address: string | null; city: string | null; phone: string | null; email: string | null } | null
 
   const supplierDisplay = invoice.suppliers?.supplier_name ?? invoice.supplier_name ?? '—'
@@ -310,10 +355,11 @@ export default async function PurchaseInvoiceDetailPage({
         </div>
 
         {/* Supplier Advance Actions */}
-        {supplierAdvances.length > 0 && (
+        {(supplierAdvances.length > 0 || appliedAdvances.length > 0) && (
           <PurchaseInvoiceAdvanceActions
             invoiceId={invoice.id}
             advances={supplierAdvances}
+            appliedAdvances={appliedAdvances}
           />
         )}
       </div>

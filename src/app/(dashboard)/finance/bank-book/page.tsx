@@ -10,6 +10,7 @@ import { Suspense } from 'react'
 import { fetchAllAssetDisposalsForBook } from '@/lib/assets.server'
 import { getAuthedProfile } from '@/lib/auth/session'
 import { getRoleAccess } from '@/lib/orgPermissions'
+import { readPagedRows } from '@/lib/reportPaging'
 
 export const metadata = { title: 'Bank Book' }
 
@@ -47,15 +48,23 @@ export default async function BankBookPage({
   if (financeAccess.finance === 'none') return null
 
   // Opening balance
-  const { data: orgRaw } = await (supabase as any)
-    .from('organizations').select('id, opening_bank_balance, opening_balance_date').limit(1).single()
+  // The hand-maintained Database type does not include several finance tables
+  // and relationships loaded by the books below.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const financeDb = supabase as any
+
+  const { data: orgRaw } = await financeDb
+    .from('organizations')
+    .select('id, opening_bank_balance, opening_balance_date')
+    .eq('id', profile.organization_id)
+    .single()
   const org = (orgRaw ?? {}) as { id: string | null; opening_bank_balance: number | null; opening_balance_date: string | null }
   const openingBank = org.opening_bank_balance ?? 0
   const openingDate = org.opening_balance_date ?? null
 
   // Fetch ALL historical data in one pass — closing balance is always all-time
   // Client-side filtering handles the period view for the table
-  const { data: allReceiptsRaw } = await (supabase as any)
+  const { data: allReceiptsRaw } = await financeDb
     .from('payments')
     .select('payment_date, payment_number, amount_received, payment_mode, reference_number, customers(full_name)')
     .in('payment_mode', BANK_MODES)
@@ -63,21 +72,41 @@ export default async function BankBookPage({
     .order('payment_date', { ascending: true })
     .limit(5000)
 
-  const { data: allSupplierPaymentsRaw } = await (supabase as any)
-    .from('supplier_payments')
-    .select('payment_date, amount_paid, payment_mode, reference_number, suppliers(supplier_name)')
-    .in('payment_mode', BANK_MODES)
-    .order('payment_date', { ascending: true })
-    .limit(5000)
+  const [{ data: allSupplierPaymentsRaw }, supplierAdvanceResult] = await Promise.all([
+    financeDb
+      .from('supplier_payments')
+      .select('payment_date, amount_paid, payment_mode, reference_number, suppliers(supplier_name)')
+      .in('payment_mode', BANK_MODES)
+      .eq('is_cancelled', false)
+      .is('supplier_advance_id', null)
+      .order('payment_date', { ascending: true })
+      .limit(5000),
+    (async () => {
+      const failures: string[] = []
+      const rows = await readPagedRows<SupplierAdvance>(
+        (rangeFrom, rangeTo) => financeDb
+          .from('supplier_advances')
+          .select('id, advance_date, amount, payment_mode, reference_number, suppliers(supplier_name)')
+          .in('payment_mode', BANK_MODES)
+          .eq('is_cancelled', false)
+          .order('advance_date', { ascending: true })
+          .order('id', { ascending: true })
+          .range(rangeFrom, rangeTo),
+        failures,
+        'supplier advances',
+      )
+      return { rows, failures }
+    })(),
+  ])
 
-  const { data: allExpensesRaw } = await (supabase as any)
+  const { data: allExpensesRaw } = await financeDb
     .from('expenses')
     .select('expense_date, expense_number, category, description, amount, payment_method, reference_number')
     .in('payment_method', ['bank_transfer', 'cheque'])
     .order('expense_date', { ascending: true })
     .limit(5000)
 
-  const { data: allSalariesRaw } = await (supabase as any)
+  const { data: allSalariesRaw } = await financeDb
     .from('salary_slips')
     .select('payment_date, net_salary, payment_mode, staff(full_name), salary_runs(salary_month, salary_year)')
     .eq('payment_status', 'paid')
@@ -85,21 +114,21 @@ export default async function BankBookPage({
     .order('payment_date', { ascending: true })
     .limit(5000)
 
-  const { data: allAdvancesRaw } = await (supabase as any)
+  const { data: allAdvancesRaw } = await financeDb
     .from('staff_advances')
     .select('issued_date, type, amount, notes, staff(full_name)')
     .eq('payment_method', 'bank')
     .order('issued_date', { ascending: true })
     .limit(5000)
 
-  const { data: allRepaymentsRaw } = await (supabase as any)
+  const { data: allRepaymentsRaw } = await financeDb
     .from('staff_advance_repayments')
     .select('repayment_date, amount, notes, staff(full_name)')
     .eq('payment_method', 'bank')
     .order('repayment_date', { ascending: true })
     .limit(5000)
 
-  const { data: allAmcPaymentsRaw } = await (supabase as any)
+  const { data: allAmcPaymentsRaw } = await financeDb
     .from('amc_payments')
     .select('payment_date, amount, payment_mode, reference_number, amc_contracts(contract_number, customers(full_name))')
     .in('payment_mode', BANK_MODES)
@@ -107,20 +136,20 @@ export default async function BankBookPage({
     .order('payment_date', { ascending: true })
     .limit(5000)
 
-  const { data: allTransfersRaw } = await (supabase as any)
+  const { data: allTransfersRaw } = await financeDb
     .from('fund_transfers')
     .select('transfer_date, from_account, to_account, amount, reference_number, notes')
     .order('transfer_date', { ascending: true })
     .limit(5000)
 
-  const { data: allWithdrawalsRaw } = await (supabase as any)
+  const { data: allWithdrawalsRaw } = await financeDb
     .from('owner_withdrawals')
     .select('withdrawal_date, amount, payment_mode, purpose, notes')
     .in('payment_mode', ['bank_transfer', 'cheque', 'pos', 'card', 'online'])
     .order('withdrawal_date', { ascending: true })
     .limit(5000)
 
-  const { data: allBonusesRaw } = await (supabase as any)
+  const { data: allBonusesRaw } = await financeDb
     .from('staff_bonuses')
     .select('bonus_date, amount, payment_mode, notes, staff(full_name)')
     .in('payment_mode', BANK_MODES)
@@ -142,6 +171,7 @@ export default async function BankBookPage({
 
   type Receipt = { payment_date: string; payment_number: string; amount_received: number; payment_mode: string; reference_number: string | null; customers: { full_name: string } | null }
   type SupplierPay = { payment_date: string; amount_paid: number; payment_mode: string; reference_number: string | null; suppliers: { supplier_name: string } | null }
+  type SupplierAdvance = { advance_date: string; amount: number; payment_mode: string; reference_number: string | null; suppliers: { supplier_name: string } | null }
   type Expense = { expense_date: string; expense_number: string; category: string; description: string; amount: number; payment_method: string; reference_number: string | null }
   type Salary = { payment_date: string; net_salary: number; payment_mode: string; staff: { full_name: string } | null; salary_runs: { salary_month: number; salary_year: number } | null }
   type AdvancePay = { issued_date: string; type: string; amount: number; notes: string | null; staff: { full_name: string } | null }
@@ -152,6 +182,8 @@ export default async function BankBookPage({
   type Bonus = { bonus_date: string; amount: number; payment_mode: string; notes: string | null; staff: { full_name: string } | null }
   const allReceipts = (allReceiptsRaw ?? []) as Receipt[]
   const allSupplierPayments = (allSupplierPaymentsRaw ?? []) as SupplierPay[]
+  const allSupplierAdvances = supplierAdvanceResult.rows
+  const sourceFailures = supplierAdvanceResult.failures
   const allExpenses = (allExpensesRaw ?? []) as Expense[]
   const allSalaries = (allSalariesRaw ?? []) as Salary[]
   const allAdvances = (allAdvancesRaw ?? []) as AdvancePay[]
@@ -172,6 +204,7 @@ export default async function BankBookPage({
     + allRepayments.reduce((s, r) => s + r.amount, 0)
     + allAssetDisposals.reduce((s, a) => s + Number(a.disposal_proceeds), 0)
   const totalBankOut = allSupplierPayments.reduce((s, r) => s + r.amount_paid, 0)
+    + allSupplierAdvances.reduce((s, r) => s + r.amount, 0)
     + allExpenses.reduce((s, r) => s + r.amount, 0)
     + allSalaries.reduce((s, r) => s + r.net_salary, 0)
     + allAdvances.reduce((s, r) => s + r.amount, 0)
@@ -190,6 +223,7 @@ export default async function BankBookPage({
   )
   const prePeriodOut = allTime ? 0 : (
     allSupplierPayments.filter((p) => p.payment_date < from).reduce((s, p) => s + p.amount_paid, 0)
+    + allSupplierAdvances.filter((a) => a.advance_date < from).reduce((s, a) => s + a.amount, 0)
     + allExpenses.filter((e) => e.expense_date < from).reduce((s, e) => s + e.amount, 0)
     + allSalaries.filter((s) => s.payment_date < from).reduce((s2, s) => s2 + s.net_salary, 0)
     + allAdvances.filter((a) => a.issued_date < from).reduce((s, a) => s + a.amount, 0)
@@ -221,6 +255,13 @@ export default async function BankBookPage({
       mode: MODE_LABELS[p.payment_mode] ?? p.payment_mode,
       receipts: 0, payments: p.amount_paid,
       ref: p.reference_number ?? '—',
+    })),
+    ...allSupplierAdvances.filter((a) => inPeriod(a.advance_date)).map((a) => ({
+      date: a.advance_date,
+      narration: `Supplier Advance — ${a.suppliers?.supplier_name ?? 'Supplier'}`,
+      mode: MODE_LABELS[a.payment_mode] ?? a.payment_mode,
+      receipts: 0, payments: a.amount,
+      ref: a.reference_number ?? '—',
     })),
     ...allSalaries.filter((s) => inPeriod(s.payment_date)).map((s) => {
       const run = s.salary_runs
@@ -308,6 +349,11 @@ export default async function BankBookPage({
       <Header title="Bank Book" subtitle="All bank receipts and payments" actions={<div className="flex items-center gap-2"><RefreshButton /><PrintActions /></div>} />
 
       <div className="p-6 space-y-5">
+        {sourceFailures.length > 0 && (
+          <div className="print:hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <strong>These figures are incomplete.</strong> Could not fully load: {sourceFailures.join(', ')}.
+          </div>
+        )}
         <div className="print:hidden">
           <Suspense>
             <DateRangeFilter basePath="/finance/bank-book" from={params.from} to={params.to} />

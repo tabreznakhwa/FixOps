@@ -230,7 +230,7 @@ export default async function UserGuidePage({
             <Step n={3}>Inventory automatically updates. If the item doesn&apos;t exist in inventory, it is created automatically.</Step>
           </Sub>
           <Sub title="Purchase Register">
-            <p>Go to <strong>Purchase Register</strong> to see all POs with their totals, amount paid, and outstanding balance.</p>
+            <p>Go to <strong>Purchase Register</strong> to see supplier purchase invoices, amounts settled, and Accounts Payable balances. Purchase orders are procurement commitments and remain separate from this accounting register.</p>
           </Sub>
         </Section>
 
@@ -238,11 +238,11 @@ export default async function UserGuidePage({
         <Section id="s10" title="10. Vendor Payments">
           <Sub title="Recording a Payment">
             <Step n={1}>Go to <strong>Vendor Payments</strong> → <strong>Record Payment</strong>.</Step>
-            <Step n={2}>Select the supplier and optionally link to a specific PO. The outstanding balance auto-fills.</Step>
-            <Step n={3}>Enter the amount, payment mode, reference/cheque number, and date. Click <strong>Record Payment</strong>.</Step>
-            <Step n={4}>The PO balance updates automatically and the payment appears in the Bank Book or Cash Book depending on the payment mode.</Step>
+            <Step n={2}>Select a posted purchase invoice. Its outstanding Accounts Payable balance auto-fills.</Step>
+            <Step n={3}>Enter the cash amount, any settlement discount, payment mode, reference/cheque number, and date. Click <strong>Record Payment</strong>.</Step>
+            <Step n={4}>The purchase invoice balance updates and the cash payment appears in the Bank Book or Cash Book depending on the payment mode. Any settlement discount remains a separate accounting entry.</Step>
           </Sub>
-          <Tip>You can also record a payment directly from the PO detail page using the &quot;Record Vendor Payment&quot; button.</Tip>
+          <Tip>Cash paid before a purchase invoice exists must be recorded as a Supplier Advance. Applying that advance to an invoice is allocation-only and does not record cash twice.</Tip>
         </Section>
 
         {/* 11. HR — Staff */}
@@ -265,22 +265,22 @@ export default async function UserGuidePage({
         <Section id="s12" title="12. Attendance & Leave Applications">
           <Sub title="Marking Attendance">
             <Step n={1}>Go to <strong>Attendance</strong> → <strong>Mark Attendance</strong>.</Step>
-            <Step n={2}>Select the staff member, date, and status: Present, Absent, Half Day, Leave, or Sick Leave.</Step>
+            <Step n={2}>Select the staff member, date, and status: Present, Absent, Half Day, Leave, or Sick Leave. Unpaid annual leave is created only by approving an Annual Leave application; it cannot be entered manually.</Step>
             <Step n={3}>For Present/Half Day, enter Check In and Check Out times. The system calculates regular hours (the first 8 hours from clock-in) and overtime (any time after those 8 hours, paid at 1.25×).</Step>            <Step n={4}>Click <strong>Save Attendance</strong>.</Step>
           </Sub>
           <Sub title="Viewing Records">
-            <p>The main Attendance page shows all records for the current month. Use the month selector and staff filter to drill down. Summary cards show total Present, Absent, Half Day, Leave, and Sick Leave counts.</p>
+            <p>The main Attendance page shows all records for the current month. Use the month selector and staff filter to drill down. Summary cards show total Present, Absent, Half Day, paid Leave, Unpaid Leave, and Sick Leave counts.</p>
           </Sub>
           <Sub title="Applying for Leave">
             <Step n={1}>Open <strong>My Leave</strong> under HR &amp; Payroll, then click <strong>Apply for Leave</strong>.</Step>
-            <Step n={2}>Choose Annual Leave, Sick Leave, or Compensation Leave. Select the dates and enter the reason.</Step>
+            <Step n={2}>Choose Annual Leave (unpaid), Sick Leave (paid), or Compensation Leave (paid). Select the dates and enter the reason.</Step>
             <Step n={3}>Submit the application. Fridays and known public holidays are not counted as leave days.</Step>
             <Step n={4}>Track the request on My Leave. A pending request may be cancelled before it is reviewed.</Step>
           </Sub>
           <Sub title="Approving Leave (Owner/Admin)">
             <Step n={1}>Open <strong>Leave Approvals</strong> under HR &amp; Payroll.</Step>
             <Step n={2}>Review the employee, leave type, dates, working-day count, and reason.</Step>
-            <Step n={3}>Approve to add paid leave to attendance, or reject and enter a reason for the employee.</Step>
+            <Step n={3}>Approve to create the correct attendance status: Annual Leave becomes unpaid leave; Sick and Compensation Leave remain paid. Or reject and enter a reason for the employee.</Step>
           </Sub>
           <Tip>Approved leave cannot overwrite worked or manually entered attendance. From 1 October 2026, the 8-hour duty starts from the employee&apos;s clock-in time — clocking in at 12 PM means the duty runs until 8 PM, and anything worked after that is overtime. Fixed overtime is a summer-only benefit paid from March to September.</Tip>
         </Section>
@@ -290,7 +290,7 @@ export default async function UserGuidePage({
           <Sub title="Processing Payroll">
             <Step n={1}>Go to <strong>Payslips</strong> → select the month and year → click <strong>Process X Payslips</strong>.</Step>
             <Step n={2}>The system generates payslips for all active employees based on their salary structure.</Step>
-            <Step n={3}>Review the summary table showing Basic, Allowances, Overtime, Deductions, and Net pay per employee.</Step>
+            <Step n={3}>Review the summary table showing Basic, Allowances, Overtime, ordinary absence, Unpaid Annual Leave, other deductions, and Net pay per employee. Annual Leave uses (Basic + fixed allowances + Food + applicable seasonal Fixed OT) ÷ 30 per day.</Step>
           </Sub>
           <Sub title="Marking Salaries as Paid">
             <Step n={1}>After processing, click <strong>Pay X Salaries</strong> button (green, top right).</Step>

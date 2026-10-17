@@ -1,14 +1,20 @@
 'use client'
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
-import { labelForPath } from '@/lib/backNav'
+import {
+  createInitialTab,
+  openOrFocusTab,
+  syncTabUrl,
+  type Tab,
+} from '@/contexts/tabState'
 
-export interface Tab { id: string; url: string; label: string }
+export type { Tab } from '@/contexts/tabState'
 
 interface TabContextValue {
   tabs: Tab[]
   activeTabId: string | null
-  openTab: (url: string, label: string) => void
+  openTab: (url: string, label: string, tabKey?: string) => void
+  updateTabUrl: (id: string, url: string) => void
   closeTab: (id: string) => void
   closeAllTabs: () => void
   setActiveTab: (id: string) => void
@@ -22,32 +28,28 @@ export function useTabContext() {
   return ctx
 }
 
-let _id = 0
-function nextId() { return String(++_id) }
-
 export function TabProvider({ children, initialPath }: { children: ReactNode; initialPath: string }) {
-  const first: Tab = { id: nextId(), url: initialPath, label: labelForPath(initialPath, 'Page') }
+  const first = createInitialTab(initialPath)
   const [tabs, setTabs] = useState<Tab[]>([first])
   const [activeTabId, setActiveTabId] = useState<string>(first.id)
 
-  const openTab = useCallback((url: string, label: string) => {
+  const openTab = useCallback((url: string, label: string, tabKey?: string) => {
     setTabs(prev => {
-      const cleanUrl = url.split('?')[0]
-      const existing = prev.find(t => t.url.split('?')[0] === cleanUrl)
-      if (existing) {
-        setActiveTabId(existing.id)
-        return prev
-      }
-      const tab: Tab = { id: nextId(), url, label }
-      setActiveTabId(tab.id)
-      return [...prev, tab]
+      const result = openOrFocusTab(prev, url, label, tabKey)
+      setActiveTabId(result.activeTabId)
+      return result.tabs
     })
+  }, [])
+
+  const updateTabUrl = useCallback((id: string, url: string) => {
+    setTabs(prev => syncTabUrl(prev, id, url))
   }, [])
 
   const closeTab = useCallback((id: string) => {
     setTabs(prev => {
       if (prev.length <= 1) return prev
       const idx = prev.findIndex(t => t.id === id)
+      if (idx === -1) return prev
       const next = prev.filter(t => t.id !== id)
       setActiveTabId(cur => {
         if (cur !== id) return cur
@@ -58,13 +60,17 @@ export function TabProvider({ children, initialPath }: { children: ReactNode; in
   }, [])
 
   const closeAllTabs = useCallback(() => {
-    const dashboard: Tab = { id: nextId(), url: '/dashboard', label: 'Dashboard' }
+    const dashboard = createInitialTab('/dashboard')
     setTabs([dashboard])
     setActiveTabId(dashboard.id)
   }, [])
 
+  const setActiveTab = useCallback((id: string) => {
+    setActiveTabId(current => tabs.some(tab => tab.id === id) ? id : current)
+  }, [tabs])
+
   return (
-    <TabContext.Provider value={{ tabs, activeTabId, openTab, closeTab, closeAllTabs, setActiveTab: setActiveTabId }}>
+    <TabContext.Provider value={{ tabs, activeTabId, openTab, updateTabUrl, closeTab, closeAllTabs, setActiveTab }}>
       {children}
     </TabContext.Provider>
   )

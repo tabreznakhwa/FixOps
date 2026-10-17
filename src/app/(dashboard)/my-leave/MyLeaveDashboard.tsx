@@ -216,7 +216,7 @@ export function MyLeaveDashboard({
                     <Icon className={`h-5 w-5 ${form.leave_type === value ? 'text-blue-600' : 'text-slate-400'}`} />
                     <p className="mt-2 text-sm font-semibold text-slate-900">{label}</p>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      {value === 'annual_leave' && 'Paid annual leave, subject to admin approval.'}
+                      {value === 'annual_leave' && 'Unpaid annual leave, subject to approval.'}
                       {value === 'sick_leave' && 'Paid sick leave; annual usage is tracked against 15 days.'}
                       {value === 'compensation_leave' && 'Paid time off in compensation for extra duty.'}
                     </p>
@@ -279,7 +279,7 @@ export function MyLeaveDashboard({
                       )}
                       <p className="mt-2 text-sm text-slate-700">{application.reason}</p>
                       {application.review_note && (
-                        <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600"><span className="font-semibold">Admin note:</span> {application.review_note}</p>
+                        <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600"><span className="font-semibold">Review note:</span> {application.review_note}</p>
                       )}
                     </div>
                     {status === 'pending' && (

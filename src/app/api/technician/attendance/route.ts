@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (action === 'clock_in') {
-      if (existing && ['leave', 'sick_leave'].includes(existing.status)) {
+      if (existing && ['leave', 'sick_leave', 'unpaid_leave'].includes(existing.status)) {
         return NextResponse.json({ error: 'You have approved leave today. Contact an administrator if you need to work.' }, { status: 409 })
       }
       if (existing?.status === 'absent' && !existing.check_in) {
