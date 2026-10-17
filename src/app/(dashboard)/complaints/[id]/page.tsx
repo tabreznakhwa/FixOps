@@ -2,6 +2,7 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { getAuthedProfile } from '@/lib/auth/session'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { notFound, redirect } from 'next/navigation'
 import { ClipboardList, Plus, Edit, CalendarClock } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDateTime, formatDate } from '@/lib/utils'
@@ -208,10 +209,10 @@ export default async function ComplaintDetailPage({
               </div>
               <div className="p-5 space-y-2">
                 {linkedWorkOrders.map(wo => (
-                  <Link
+                  <DocumentLink
                     key={wo.id}
-                    prefetch={false}
                     href={withReturnTo(`/work-orders/${wo.id}?complaint_id=${complaint.id}`, complaintPath)}
+                    tabLabel={wo.work_order_number}
                     className="flex items-center justify-between p-3 bg-slate-50 hover:bg-blue-50 rounded-lg transition group border border-slate-200"
                   >
                     <div>
@@ -221,7 +222,7 @@ export default async function ComplaintDetailPage({
                     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusColor(wo.status)}`}>
                       {formatStatus(wo.status)}
                     </span>
-                  </Link>
+                  </DocumentLink>
                 ))}
               </div>
             </div>
@@ -344,10 +345,10 @@ export default async function ComplaintDetailPage({
             ) : (
               <div className="space-y-2">
                 {linkedWorkOrders.map(wo => (
-                  <Link
+                  <DocumentLink
                     key={wo.id}
-                    prefetch={false}
                     href={withReturnTo(`/work-orders/${wo.id}?complaint_id=${complaint.id}`, complaintPath)}
+                    tabLabel={wo.work_order_number}
                     className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-blue-50 rounded-lg transition group"
                   >
                     <span className="text-sm font-mono font-semibold text-slate-700 group-hover:text-blue-700">
@@ -356,7 +357,7 @@ export default async function ComplaintDetailPage({
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getStatusColor(wo.status)}`}>
                       {formatStatus(wo.status)}
                     </span>
-                  </Link>
+                  </DocumentLink>
                 ))}
               </div>
             )}

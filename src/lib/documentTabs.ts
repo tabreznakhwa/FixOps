@@ -6,6 +6,7 @@ export type DocumentKind =
   | 'purchase-invoice'
   | 'purchase-order'
   | 'payslip'
+  | 'work-order'
 
 export interface DocumentRoute {
   href: string
@@ -79,6 +80,12 @@ const DOCUMENT_ROUTES: RouteDefinition[] = [
     pattern: /^\/payroll\/slips\/([^/]+)\/([^/]+)\/?$/,
     fallbackLabel: 'Payslip',
     key: ([runId, staffId]) => `document:payslip:${runId}:${staffId}`,
+  },
+  {
+    kind: 'work-order',
+    pattern: /^\/work-orders\/([^/]+)\/?$/,
+    fallbackLabel: 'Work Order',
+    key: ([id]) => `document:work-order:${id}`,
   },
 ]
 

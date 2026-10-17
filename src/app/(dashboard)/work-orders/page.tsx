@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
+import { DocumentLink } from '@/components/ui/DocumentLink'
 import { Suspense } from 'react'
 import { Plus, ClipboardList } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDate, formatCurrency } from '@/lib/utils'
@@ -153,12 +154,13 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                         <p className={`text-xs ${getStatusColor(displayPaymentStatus)}`}>{displayPaymentStatus}</p>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <Link
+                        <DocumentLink
                           href={withReturnTo(`/work-orders/${wo.id}`, listPath)}
+                          tabLabel={wo.work_order_number}
                           className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-blue-600 hover:text-white transition-colors whitespace-nowrap"
                         >
                           View
-                        </Link>
+                        </DocumentLink>
                       </td>
                     </tr>
                   )

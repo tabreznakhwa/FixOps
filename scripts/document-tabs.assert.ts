@@ -34,6 +34,11 @@ const payslip = parseDocumentRoute('/payroll/slips/run-1/staff-2')
 assert.equal(payslip?.kind, 'payslip')
 assert.equal(payslip?.tabKey, 'document:payslip:run-1:staff-2')
 
+const workOrder = parseDocumentRoute('/work-orders/wo-1')
+assert.equal(workOrder?.kind, 'work-order')
+assert.equal(workOrder?.tabKey, 'document:work-order:wo-1')
+assert.equal(workOrder?.href, '/work-orders/wo-1')
+
 // Trailing slash is accepted and canonicalized.
 assert.equal(parseDocumentRoute('/finance/invoices/abc123/')?.href, '/finance/invoices/abc123')
 
@@ -59,7 +64,10 @@ for (const bad of [
   '/payroll/slips/run-1',
   '/payroll/slips/run-1/staff-2/extra',
   '/finance/payments/p-1',
-  '/work-orders/wo-1',
+  '/work-orders',
+  '/work-orders/new',
+  '/work-orders/wo-1/edit',
+  '/work-orders/wo-1/extra',
   '/complaints/c-1',
   '/customers',
   'javascript:alert(1)',
@@ -93,6 +101,15 @@ assert.notEqual(otherInvoice.tabKey, base.tabKey)
 
 const otherStaff = parseDocumentRoute('/payroll/slips/run-1/staff-3')!
 assert.notEqual(otherStaff.tabKey, payslip!.tabKey)
+
+const workOrderFromComplaint = parseDocumentRoute(
+  '/work-orders/wo-1?complaint_id=c-1&return_to=%2Fcomplaints%2Fc-1&__tab=1',
+)!
+assert.equal(workOrderFromComplaint.tabKey, workOrder!.tabKey)
+assert.equal(workOrderFromComplaint.href, '/work-orders/wo-1?complaint_id=c-1&return_to=%2Fcomplaints%2Fc-1')
+
+const otherWorkOrder = parseDocumentRoute('/work-orders/wo-2')!
+assert.notEqual(otherWorkOrder.tabKey, workOrder!.tabKey)
 
 // --- Protocol type guards ----------------------------------------------------
 

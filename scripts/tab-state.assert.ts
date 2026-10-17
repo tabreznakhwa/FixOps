@@ -88,4 +88,38 @@ assert.equal(documentNavigatesToOtherDocument[1].url, '/finance/invoices/inv-2')
 assert.equal(documentNavigatesToOtherDocument[1].label, 'Invoice')
 assert.equal(documentNavigatesToOtherDocument[1].tabKey, 'document:invoice:inv-2')
 
+const workOrderFromList = createTab(
+  '/work-orders?status=open',
+  'Work Orders',
+  'path:/work-orders',
+)
+const workOrderFromListHref = '/work-orders/wo-9?return_to=%2Fwork-orders%3Fstatus%3Dopen'
+const openedFromList = openOrFocusTab(
+  [workOrderFromList],
+  workOrderFromListHref,
+  'WO-009',
+  'document:work-order:wo-9',
+)
+assert.equal(openedFromList.tabs.length, 2)
+assert.notEqual(openedFromList.activeTabId, workOrderFromList.id)
+
+const workOrderFromComplaintHref = '/work-orders/wo-9?complaint_id=c-1&return_to=%2Fcomplaints%2Fc-1'
+const reopenedFromComplaint = openOrFocusTab(
+  openedFromList.tabs,
+  workOrderFromComplaintHref,
+  'WO-009',
+  'document:work-order:wo-9',
+)
+assert.equal(reopenedFromComplaint.tabs.length, 2, 'same work order from a second origin must focus its existing tab')
+assert.equal(reopenedFromComplaint.activeTabId, openedFromList.tabs[1].id)
+assert.equal(reopenedFromComplaint.tabs[1].url, workOrderFromComplaintHref, 'reopening must retain the latest navigation origin')
+
+const otherWorkOrder = openOrFocusTab(
+  reopenedFromComplaint.tabs,
+  '/work-orders/wo-10',
+  'WO-010',
+  'document:work-order:wo-10',
+)
+assert.equal(otherWorkOrder.tabs.length, 3, 'different work orders need separate tabs')
+
 console.log('tab state assertions passed')
