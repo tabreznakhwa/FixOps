@@ -2,10 +2,12 @@
  * Deterministic navigation origins for dashboard pages.
  *
  * Back goes where the user came from, never to whatever the record happens to
- * be related to. Browser history is not a reliable origin in this app because
- * formal documents open in their own popup window (see DocumentLink), so
- * there's no shared history to go back through. Callers carry the immediate
- * source URL in a `return_to` query parameter and resolve it here.
+ * be related to. Browser history is not a reliable origin in this app for two
+ * independent reasons: formal documents open in their own popup window (see
+ * DocumentLink), and main-module navigation opens in-app tabs rendered as
+ * always-mounted iframes (see TabShell) whose outer page never navigates —
+ * neither leaves a shared history to go back through. Callers carry the
+ * immediate source URL in a `return_to` query parameter and resolve it here.
  */
 
 export type ReturnToValue = string | string[] | null | undefined
@@ -80,9 +82,12 @@ function normalizedInternalPath(value: string): string | null {
     const url = new URL(value, INTERNAL_ORIGIN)
     if (url.origin !== INTERNAL_ORIGIN) return null
 
-    // `__popup` is popup-window rendering state, not navigation origin.
-    // DocumentLink sets it when opening the destination in a new window.
+    // `__popup` and `__tab` are rendering state, not navigation origin.
+    // DocumentLink sets `__popup` when opening the destination in a new
+    // window; TabShell's tabSrc sets `__tab` when loading a module page
+    // inside an in-app tab's iframe.
     url.searchParams.delete('__popup')
+    url.searchParams.delete('__tab')
     return `${url.pathname}${url.search}${url.hash}`
   } catch {
     return null

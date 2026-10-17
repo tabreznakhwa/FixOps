@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, MessageSquare, ClipboardList, FileText,
   CreditCard, Package, UserCheck, DollarSign, BarChart3, Settings,
@@ -15,7 +15,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { type ModuleKey, type ModuleAccess } from '@/lib/permissions'
-import { withReturnTo } from '@/lib/backNav'
+import { useTabContext } from '@/contexts/TabContext'
+import { labelForPath, withReturnTo } from '@/lib/backNav'
 
 const navGroups: Array<{
   label: string
@@ -128,10 +129,10 @@ interface SidebarProps {
 
 export function Sidebar({ user, moduleAccess }: SidebarProps) {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
   const router = useRouter()
   const supabase = createClient()
-  const activeSource = searchParams.toString() ? `${pathname}?${searchParams}` : pathname
+  const { tabs, activeTabId, openTab } = useTabContext()
+  const activeSource = tabs.find((tab) => tab.id === activeTabId)?.url ?? pathname
   const [mobileOpen, setMobileOpen] = useState(false)
   const [mobileCollapsed, setMobileCollapsed] = useState<Record<string, boolean>>({})
   const [activeGroup, setActiveGroup] = useState<string | null>(null)
@@ -216,7 +217,12 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
                 title={group.label}
                 onMouseEnter={() => openGroup(group.label)}
                 onMouseLeave={scheduleClose}
-                onClick={() => setActiveGroup(null)}
+                onClick={(e) => {
+                  if (e.ctrlKey || e.metaKey || e.altKey) return
+                  e.preventDefault()
+                  setActiveGroup(null)
+                  openTab(primaryTargetHref, labelForPath(primaryHref, 'Page'))
+                }}
                 className={cn(
                   'w-10 h-10 rounded-lg flex items-center justify-center transition-all flex-shrink-0',
                   groupActive
@@ -277,7 +283,12 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
                 <Link
                   key={href}
                   href={targetHref}
-                  onClick={() => setActiveGroup(null)}
+                  onClick={(e) => {
+                    if (e.ctrlKey || e.metaKey || e.altKey) return
+                    e.preventDefault()
+                    setActiveGroup(null)
+                    openTab(targetHref, label)
+                  }}
                   className={cn(
                     'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group',
                     active
@@ -369,7 +380,12 @@ export function Sidebar({ user, moduleAccess }: SidebarProps) {
                             <Link
                               key={href}
                               href={targetHref}
-                              onClick={() => setMobileOpen(false)}
+                              onClick={(e) => {
+                                if (e.ctrlKey || e.metaKey) return
+                                e.preventDefault()
+                                setMobileOpen(false)
+                                openTab(targetHref, label)
+                              }}
                               className={cn(
                                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group',
                                 active

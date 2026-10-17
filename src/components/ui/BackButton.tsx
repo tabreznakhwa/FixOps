@@ -18,10 +18,13 @@ export function BackButton({
   const router = useRouter()
   const destination = safeReturnTo(href ?? fallbackHref) ?? '/dashboard'
 
-  // Documents open in their own popup window (see DocumentLink / popupGuard
-  // in the dashboard layout), so the history stack inside that window holds
-  // edit forms, "new" forms and duplicate entries left behind by post-save
-  // router.replace() calls. history.back() therefore lands somewhere
+  // Two coexisting mechanisms make browser history an unreliable "back"
+  // source: documents open in their own popup window (DocumentLink /
+  // popupGuard in the dashboard layout), where the window's own history
+  // stack holds edit forms, "new" forms and duplicate entries left behind by
+  // post-save router.replace() calls; and main modules open as in-app tabs
+  // (TabShell / tabModeGuard), whose iframes navigate independently of the
+  // outer page's address bar. Either way, history.back() lands somewhere
   // arbitrary — most visibly on the edit page the user just saved.
   //
   // Every call site already passes the destination it wants, so navigate there

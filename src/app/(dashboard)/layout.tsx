@@ -2,6 +2,9 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { AssignmentNotifier } from '@/components/layout/AssignmentNotifier'
+import { TabProvider } from '@/contexts/TabContext'
+import { TabBar } from '@/components/layout/TabBar'
+import { TabShell } from '@/components/layout/TabShell'
 import { getRoleAccess } from '@/lib/orgPermissions'
 import { getAuthedProfile } from '@/lib/auth/session'
 
@@ -17,6 +20,24 @@ function popupGuard(isPopupMode: boolean) {
       if(!u||typeof u!=='string'||u.indexOf('__popup=')!==-1)return u;
       if(u[0]==='#'||u.slice(0,11)==='javascript:')return u;
       return u.indexOf('?')!==-1?u+'&__popup=1':u+'?__popup=1';
+    };
+    var op=history.pushState.bind(history),or=history.replaceState.bind(history);
+    history.pushState=function(s,t,u){return op(s,t,a(u));};
+    history.replaceState=function(s,t,u){return or(s,t,a(u));};
+  })();`
+}
+
+// Injected only when this page is rendered inside a main-module tab's iframe
+// (?__tab=1, see TabShell's tabSrc) — keeps later client-side navigation
+// inside that iframe (Edit, filters, pagination) rendering bare, by
+// re-appending __tab=1 before Next's router can strip it.
+function tabModeGuard(isTabMode: boolean) {
+  return `(function(){
+    if(!${isTabMode}) return;
+    var a=function(u){
+      if(!u||typeof u!=='string'||u.indexOf('__tab=')!==-1)return u;
+      if(u[0]==='#'||u.slice(0,11)==='javascript:')return u;
+      return u.indexOf('?')!==-1?u+'&__tab=1':u+'?__tab=1';
     };
     var op=history.pushState.bind(history),or=history.replaceState.bind(history);
     history.pushState=function(s,t,u){return op(s,t,a(u));};
@@ -46,17 +67,35 @@ export default async function DashboardLayout({ children }: { children: React.Re
     )
   }
 
+  const isTabMode = headersList.get('x-tab-mode') === '1'
+
+  if (isTabMode) {
+    return (
+      <>
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script dangerouslySetInnerHTML={{ __html: tabModeGuard(true) }} />
+        <div className="min-h-screen bg-slate-50 overflow-y-auto">
+          {children}
+        </div>
+      </>
+    )
+  }
+
   const moduleAccess = await getRoleAccess(profile.organization_id, profile.role)
 
+  // Main-module sidebar navigation uses in-app tabs (each tab an
+  // always-mounted iframe rendered by TabShell); children is intentionally
+  // unused here — TabShell's iframes independently fetch each tab's own URL.
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
-      <Sidebar user={profile} moduleAccess={moduleAccess} />
-      <div className="flex-1 flex flex-col min-w-0 lg:ml-14 overflow-hidden">
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
+    <TabProvider initialPath="/dashboard">
+      <div className="flex h-screen bg-slate-50 overflow-hidden">
+        <Sidebar user={profile} moduleAccess={moduleAccess} />
+        <div className="flex-1 flex flex-col min-w-0 lg:ml-14 overflow-hidden">
+          <TabBar />
+          <TabShell />
+        </div>
       </div>
       <AssignmentNotifier userId={user.id} />
-    </div>
+    </TabProvider>
   )
 }

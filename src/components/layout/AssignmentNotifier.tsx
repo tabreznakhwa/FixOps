@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { usePathname, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Bell, X, ExternalLink, Volume2 } from 'lucide-react'
 import { DocumentLink } from '@/components/ui/DocumentLink'
 import { withReturnTo } from '@/lib/backNav'
+import { useTabContext } from '@/contexts/TabContext'
 
 interface AssignmentNotif {
   id: string
@@ -58,9 +58,10 @@ async function playSound() {
 }
 
 export function AssignmentNotifier({ userId }: { userId: string }) {
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const activeSource = searchParams.toString() ? `${pathname}?${searchParams}` : pathname
+  // DocumentLink handles its own click/popup behavior, so only tabs/activeTabId
+  // are needed here — not openTab.
+  const { tabs, activeTabId } = useTabContext()
+  const activeSource = tabs.find((tab) => tab.id === activeTabId)?.url ?? '/dashboard'
   const [notifs, setNotifs] = useState<AssignmentNotif[]>([])
   const [audioReady, setAudioReady] = useState(false)
   const audioUnlocked = useRef(false)

@@ -66,6 +66,20 @@ export async function proxy(request: NextRequest) {
   const baseHeaders = new Headers(request.headers)
   if (request.nextUrl.searchParams.has('__popup')) baseHeaders.set('x-popup-mode', '1')
 
+  // Pass tab-mode flag to the layout so it can render bare (no sidebar) for a
+  // main-module page loaded inside TabShell's always-mounted iframe
+  // (?__tab=1, see tabSrc). Unlike __popup, this needs 3 signals: Next's
+  // router strips query params on client-side RSC fetches made from inside
+  // the iframe (Edit, filters, pagination), so the explicit query param alone
+  // only covers the iframe's initial load — Sec-Fetch-Dest and Referer catch
+  // the subsequent same-iframe navigations.
+  const referer = request.headers.get('referer') ?? ''
+  const isTabRequest =
+    request.nextUrl.searchParams.has('__tab') ||
+    request.headers.get('sec-fetch-dest') === 'iframe' ||
+    referer.includes('__tab=')
+  if (isTabRequest) baseHeaders.set('x-tab-mode', '1')
+
   let supabaseResponse = NextResponse.next({ request: { headers: baseHeaders } })
 
   const supabase = createServerClient(
