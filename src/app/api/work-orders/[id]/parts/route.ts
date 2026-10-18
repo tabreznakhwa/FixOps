@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
+import {
+  authorizeWorkOrderMutation,
+  isAuthorizationResponse,
+} from '@/lib/workOrderMutationAccess'
 
 /**
  * Atomically apply a signed stock change AND record it in the
@@ -52,12 +56,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const supabase = createAdminClient()
+    const authorization = await authorizeWorkOrderMutation(
+      supabase,
+      user.id,
+      workOrderId,
+    )
+    if (isAuthorizationResponse(authorization)) return authorization
+    const workOrder = authorization
+    if (['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(workOrder.status)) {
+      return NextResponse.json({ error: 'This work order can no longer be changed' }, { status: 409 })
+    }
 
     // Get current inventory item stock and price
     const { data: item, error: itemErr } = await (supabase as any)
       .from('inventory_items')
       .select('id, item_name, current_stock, selling_price, unit_of_measure')
       .eq('id', inventory_item_id)
+      .eq('organization_id', workOrder.organization_id)
       .single()
 
     if (itemErr || !item) return NextResponse.json({ error: 'Inventory item not found' }, { status: 404 })
@@ -68,14 +83,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }, { status: 400 })
     }
 
-    const { data: wo } = await (supabase as any)
-      .from('work_orders').select('organization_id').eq('id', workOrderId).single()
-    if (!wo) return NextResponse.json({ error: 'Work order not found' }, { status: 404 })
-
     // Insert into work_order_parts
     const { data: part, error: partErr } = await (supabase as any)
       .from('work_order_parts')
       .insert({
+        organization_id: workOrder.organization_id,
         work_order_id: workOrderId,
         inventory_item_id,
         quantity_used,
@@ -93,7 +105,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await adjustStockLogged(supabase, {
         itemId: inventory_item_id,
         delta: -quantity_used,
-        orgId: wo.organization_id,
+        orgId: workOrder.organization_id,
         type: 'issued',
         workOrderId,
         userId: user.id,
@@ -125,6 +137,16 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (!part_id) return NextResponse.json({ error: 'Missing part_id' }, { status: 400 })
 
     const supabase = createAdminClient()
+    const authorization = await authorizeWorkOrderMutation(
+      supabase,
+      user.id,
+      workOrderId,
+    )
+    if (isAuthorizationResponse(authorization)) return authorization
+    const workOrder = authorization
+    if (['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(workOrder.status)) {
+      return NextResponse.json({ error: 'This work order can no longer be changed' }, { status: 409 })
+    }
 
     // Fetch the part to know how much stock to restore
     const { data: part, error: partErr } = await (supabase as any)
@@ -136,15 +158,21 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     if (partErr || !part) return NextResponse.json({ error: 'Part not found' }, { status: 404 })
 
-    const { data: wo } = await (supabase as any)
-      .from('work_orders').select('organization_id').eq('id', workOrderId).single()
-    if (!wo) return NextResponse.json({ error: 'Work order not found' }, { status: 404 })
+    const { data: inventoryItem } = await (supabase as any)
+      .from('inventory_items')
+      .select('id')
+      .eq('id', part.inventory_item_id)
+      .eq('organization_id', workOrder.organization_id)
+      .single()
+    if (!inventoryItem) {
+      return NextResponse.json({ error: 'Inventory item not found' }, { status: 404 })
+    }
 
     // Restore inventory stock and record the ledger entry atomically.
     await adjustStockLogged(supabase, {
       itemId: part.inventory_item_id,
       delta: Number(part.quantity_used),
-      orgId: wo.organization_id,
+      orgId: workOrder.organization_id,
       type: 'returned',
       workOrderId,
       userId: user.id,
@@ -156,6 +184,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       .from('work_order_parts')
       .delete()
       .eq('id', part_id)
+      .eq('work_order_id', workOrderId)
 
     if (deleteErr) throw deleteErr
 

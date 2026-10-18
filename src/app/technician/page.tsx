@@ -21,15 +21,6 @@ export default async function TechnicianPage() {
   if (!profile || profile.status !== 'active') redirect('/pending')
   if (profile.role !== 'technician') redirect('/dashboard')
 
-  const { data: jobsRaw } = await supabase
-    .from('work_orders')
-    .select('id, work_order_number, job_description, priority, status, scheduled_date, scheduled_time, customers(full_name, mobile_number, address, area, map_location_url)')
-    .eq('assigned_to', user.id)
-    .not('status', 'in', '(cancelled,paid,invoiced)')
-    .order('scheduled_date', { ascending: true })
-
-  const jobs = (jobsRaw as unknown as Parameters<typeof TechnicianDashboard>[0]['jobs']) ?? []
-
   // Attendance and some staff columns trail the hand-maintained Database type.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: staffRaw } = await (supabase as any)
@@ -39,6 +30,18 @@ export default async function TechnicianPage() {
     .eq('employment_status', 'active')
     .maybeSingle()
   const staffId = (staffRaw as { id: string } | null)?.id ?? null
+
+  let jobsQuery = supabase
+    .from('work_orders')
+    .select('id, work_order_number, job_description, priority, status, scheduled_date, scheduled_time, customers(full_name, mobile_number, address, area, map_location_url)')
+    .not('status', 'in', '(cancelled,paid,invoiced)')
+
+  jobsQuery = staffId
+    ? jobsQuery.or(`assigned_to.eq.${user.id},assigned_staff_id.eq.${staffId}`)
+    : jobsQuery.eq('assigned_to', user.id)
+
+  const { data: jobsRaw } = await jobsQuery.order('scheduled_date', { ascending: true })
+  const jobs = (jobsRaw as unknown as Parameters<typeof TechnicianDashboard>[0]['jobs']) ?? []
 
   let todayAttendance: { check_in: string | null; check_out: string | null; status: string } | null = null
   if (staffId) {

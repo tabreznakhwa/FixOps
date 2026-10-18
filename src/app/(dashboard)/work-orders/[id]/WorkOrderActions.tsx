@@ -15,16 +15,18 @@ interface Props {
   currentAssigneeKey: string | null
   technicians: Person[]
   customerId: string | null
-  finalAmount: number
+  finalAmount: number | null
   paymentStatus: string
   existingInvoiceId: string | null
   existingInvoiceStatus: string | null
   workOrderHref: string
+  isTechnician: boolean
 }
 
 export function WorkOrderActions({
   workOrderId, currentStatus, currentAssigneeKey, technicians,
   customerId, finalAmount, paymentStatus, existingInvoiceId, existingInvoiceStatus, workOrderHref,
+  isTechnician,
 }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
@@ -41,6 +43,11 @@ export function WorkOrderActions({
   const isCompleted = currentStatus === 'completed'
   const isCancelled = currentStatus === 'cancelled'
   const isPaid = paymentStatus === 'paid'
+  const technicianCanComplete = [
+    'work_started',
+    'waiting_parts',
+    'waiting_approval',
+  ].includes(currentStatus)
 
   const update = async (payload: Record<string, unknown>) => {
     const key = String(Object.keys(payload)[0])
@@ -62,12 +69,11 @@ export function WorkOrderActions({
 
   const saveAssignment = () => {
     const [pType, pId] = assigneeKey ? assigneeKey.split(':') : []
-    const person = technicians.find(t => t.id === pId && t.type === pType)
+    const hasAssignee = technicians.some(t => t.id === pId && t.type === pType)
     update({
       assigned_to: pType === 'user' ? pId ?? null : null,
       assigned_staff_id: pType === 'staff' ? pId ?? null : null,
-      technician_name: person?.full_name ?? null,
-      status: person && currentStatus === 'new' ? 'assigned' : currentStatus,
+      status: hasAssignee && currentStatus === 'new' ? 'assigned' : currentStatus,
     })
   }
 
@@ -83,7 +89,11 @@ export function WorkOrderActions({
       const res = await fetch(`/api/work-orders/${workOrderId}/collect-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: amt, payment_mode: payMode, payment_date: payDate }),
+        body: JSON.stringify({
+          amount: amt,
+          payment_mode: isTechnician ? 'cash' : payMode,
+          payment_date: payDate,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to record payment')
@@ -106,7 +116,7 @@ export function WorkOrderActions({
       <h2 className="font-semibold text-slate-900">Actions</h2>
 
       {/* Assign Technician */}
-      {!isCompleted && !isCancelled && (
+      {!isTechnician && !isCompleted && !isCancelled && (
         <div className="space-y-2">
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Assign Technician</label>
           <div className="relative">
@@ -138,14 +148,14 @@ export function WorkOrderActions({
             disabled={!!loading}
             className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-lg transition disabled:opacity-60 flex items-center justify-center gap-2"
           >
-            {loading === 'assigned_to' || loading === 'technician_name' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {loading === 'assigned_to' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Save Assignment
           </button>
         </div>
       )}
 
       {/* Mark Complete */}
-      {!isCompleted && !isCancelled && (
+      {!isCompleted && !isCancelled && (!isTechnician || technicianCanComplete) && (
         <div className="border-t border-slate-100 pt-4">
           <button
             onClick={() => {
@@ -170,18 +180,10 @@ export function WorkOrderActions({
       {/* Collect Payment */}
       {!isCancelled && !isPaid && customerId && (
         <div className="border-t border-slate-100 pt-4">
-          {existingInvoiceId ? (
-            <DocumentLink
-              href={withReturnTo(`/finance/invoices/${existingInvoiceId}`, workOrderHref)}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
-            >
-              <Banknote className="w-4 h-4" />
-              Collect Payment
-            </DocumentLink>
-          ) : !showPayForm ? (
+          {!showPayForm ? (
             <button
               onClick={() => {
-                setPayAmount(finalAmount > 0 ? finalAmount.toFixed(3) : '')
+                setPayAmount(finalAmount !== null && finalAmount > 0 ? finalAmount.toFixed(3) : '')
                 setShowPayForm(true)
               }}
               className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
@@ -211,16 +213,22 @@ export function WorkOrderActions({
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1">Payment Mode</label>
-                <select
-                  value={payMode}
-                  onChange={e => setPayMode(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="cash">Cash</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="knet">KNET</option>
-                </select>
+                {isTechnician ? (
+                  <div className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-slate-50">
+                    Cash
+                  </div>
+                ) : (
+                  <select
+                    value={payMode}
+                    onChange={e => setPayMode(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="knet">KNET</option>
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1">Date</label>
@@ -253,7 +261,7 @@ export function WorkOrderActions({
       )}
 
       {/* Invoice */}
-      {!isCancelled && (
+      {!isTechnician && !isCancelled && (
         <div className="border-t border-slate-100 pt-4 space-y-2">
           {existingInvoiceId ? (
             <>
@@ -287,7 +295,7 @@ export function WorkOrderActions({
       )}
 
       {/* Cancel */}
-      {!isCompleted && !isCancelled && (
+      {!isTechnician && !isCompleted && !isCancelled && (
         <button
           onClick={() => { if (confirm('Cancel this work order?')) update({ status: 'cancelled' }) }}
           disabled={!!loading}

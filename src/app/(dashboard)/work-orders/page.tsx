@@ -1,8 +1,10 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
+import { getAuthedProfile } from '@/lib/auth/session'
 import { Header } from '@/components/layout/Header'
 import { RefreshButton } from '@/components/ui/RefreshButton'
 import Link from 'next/link'
 import { DocumentLink } from '@/components/ui/DocumentLink'
+import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import { Plus, ClipboardList } from 'lucide-react'
 import { getPriorityColor, getStatusColor, formatStatus, formatDate, formatCurrency } from '@/lib/utils'
@@ -15,28 +17,58 @@ export const metadata = { title: 'Work Orders' }
 
 export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; from?: string; to?: string; q?: string }> }) {
   const params = await searchParams
-  const supabase = await createClient()
+  const { user, profile } = await getAuthedProfile()
+  if (!user || !profile || profile.status !== 'active' || !profile.organization_id) notFound()
+
+  const admin = createAdminClient()
   const listPath = currentPath('/work-orders', params)
   const hasDateFilter = Boolean(params.from || params.to || params.q)
+  const isTechnician = profile.role === 'technician'
+  let ownStaffId: string | null = null
 
-  let query = supabase
+  if (isTechnician) {
+    const { data: ownStaffRaw } = await admin
+      .from('staff')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('organization_id', profile.organization_id)
+      .eq('employment_status', 'active')
+      .maybeSingle()
+    ownStaffId = (ownStaffRaw as { id: string } | null)?.id ?? null
+  }
+
+  let query = admin
     .from('work_orders')
-    .select('id, work_order_number, job_description, priority, status, payment_status, scheduled_date, final_amount, customers(full_name), users!work_orders_assigned_to_fkey(full_name)')
+    .select(
+      isTechnician
+        ? 'id, work_order_number, job_description, priority, status, payment_status, scheduled_date, assigned_to, assigned_staff_id, customers(full_name), users!work_orders_assigned_to_fkey(full_name)'
+        : 'id, work_order_number, job_description, priority, status, payment_status, scheduled_date, final_amount, assigned_to, assigned_staff_id, customers(full_name), users!work_orders_assigned_to_fkey(full_name)'
+    )
+    .eq('organization_id', profile.organization_id)
     .order('created_at', { ascending: false })
     .limit(hasDateFilter ? 1000 : 100)
+
+  if (isTechnician) {
+    query = ownStaffId
+      ? query.or(`assigned_to.eq.${user.id},assigned_staff_id.eq.${ownStaffId}`)
+      : query.eq('assigned_to', user.id)
+  }
 
   // Without a date filter, keep the list short by hiding already-closed-out work orders.
   // With a date filter, show everything in range (including invoiced/paid/cancelled) since
   // the user is looking back at a specific period rather than the active queue.
   if (!hasDateFilter) query = query.not('status', 'in', '(cancelled)')
-  if (params.status) query = (query as any).eq('status', params.status)
+  if (params.status) query = query.eq('status', params.status)
   if (params.from) query = query.gte('scheduled_date', params.from)
   if (params.to) query = query.lte('scheduled_date', params.to)
 
   if (params.q) {
     const q = params.q.trim()
-    const { data: matchedCustomers } = await supabase
-      .from('customers').select('id').ilike('full_name', `%${q}%`)
+    const { data: matchedCustomers } = await admin
+      .from('customers')
+      .select('id')
+      .eq('organization_id', profile.organization_id)
+      .ilike('full_name', `%${q}%`)
     const customerIds = (matchedCustomers ?? []).map((c: { id: string }) => c.id)
     if (customerIds.length > 0) {
       query = query.or(`work_order_number.ilike.%${q}%,job_description.ilike.%${q}%,customer_id.in.(${customerIds.join(',')})`)
@@ -48,18 +80,19 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
   const { data: workOrdersRaw } = await query
   const workOrders = (workOrdersRaw ?? []) as unknown as Array<{
     id: string; work_order_number: string; job_description: string | null; priority: string; status: string;
-    payment_status: string; scheduled_date: string | null; final_amount: number;
+    payment_status: string; scheduled_date: string | null; final_amount?: number;
+    assigned_to: string | null; assigned_staff_id: string | null;
     customers: { full_name: string } | null; users: { full_name: string } | null
   }>
 
   // Fetch invoice payment status for these work orders separately (avoids FK join issues)
   const woIds = workOrders.map((wo) => wo.id)
   const invoiceStatusMap: Record<string, string> = {}
-  if (woIds.length > 0) {
-    const admin = createAdminClient() as any
+  if (!isTechnician && woIds.length > 0) {
     const { data: invoicesRaw } = await admin
       .from('invoices')
       .select('work_order_id, status')
+      .eq('organization_id', profile.organization_id)
       .in('work_order_id', woIds)
     for (const inv of (invoicesRaw ?? []) as Array<{ work_order_id: string; status: string }>) {
       // Prefer 'paid' if any invoice for this WO is paid
@@ -108,7 +141,9 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Technician</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Priority</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Status</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden sm:table-cell">Amount</th>
+                  {!isTechnician && (
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden sm:table-cell">Amount</th>
+                  )}
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -149,10 +184,12 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                           {formatStatus(wo.status)}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 hidden sm:table-cell">
-                        <p className="text-sm font-bold text-slate-900">{formatCurrency(wo.final_amount)}</p>
-                        <p className={`text-xs ${getStatusColor(displayPaymentStatus)}`}>{displayPaymentStatus}</p>
-                      </td>
+                      {!isTechnician && (
+                        <td className="px-4 py-3.5 hidden sm:table-cell">
+                          <p className="text-sm font-bold text-slate-900">{formatCurrency(wo.final_amount ?? 0)}</p>
+                          <p className={`text-xs ${getStatusColor(displayPaymentStatus)}`}>{displayPaymentStatus}</p>
+                        </td>
+                      )}
                       <td className="px-4 py-3.5 text-right">
                         <DocumentLink
                           href={withReturnTo(`/work-orders/${wo.id}`, listPath)}

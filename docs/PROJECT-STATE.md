@@ -1,7 +1,7 @@
 # FixOps — current state
 
 Read this first. It exists so a new session does not have to rediscover the app
-by exploration. Last updated 17 Oct 2026.
+by exploration. Last updated 18 Oct 2026.
 
 **Note:** commits `fccbb1d`…`2ca13b6` (Pay Salaries modal portal/zoom fixes, a
 Vercel function-invocation-spike fix replacing `force-dynamic` with ISR
@@ -61,7 +61,32 @@ introduces unpaid approved annual leave, freezes annual-leave days/deduction on
 new salary slips, preserves existing processed/paid history as an explicit paid
 snapshot, and converts only safe unprocessed historical annual-leave dates.
 Deploy the compatible application only after verifying both migrations' schema,
-function, grant and reconciliation checks.
+function, grant and reconciliation checks. Migration 057
+(`057_technician_work_order_cash_collection.sql`) was manually applied by the
+user on 18 Oct 2026; its production function body and grants have not yet been
+independently verified. It extends `record_customer_payment` so an active
+technician can collect cash only for a work order assigned directly to their
+login or to their active linked staff row. The application route repeats those
+checks, and the RPC continues to be executable by `service_role` only. Do not
+use `db push --include-all` to reconcile migration history. Migrations 058
+(`058_work_order_staff_assignment_rls.sql`) and 059
+(`059_work_order_payment_snapshot.sql`) were manually applied by the user on
+18 Oct 2026; their production effects have not yet been independently verified.
+Migration 058 revokes direct authenticated work-order writes, keeps read access,
+allows a technician to read only direct or active staff-linked assignments
+through a tightly scoped `SECURITY DEFINER` predicate, and adds a serialized
+nonnegative-stock guard to `adjust_inventory_stock_logged`. The application now
+routes technician status changes through the guarded server API. Migration 059
+keeps `record_customer_payment` compatible with migration 057 and updates a
+work-order-only receipt snapshot to `partial` or `paid` before an invoice exists;
+the route prevents the cumulative receipt from exceeding a known positive work-
+order amount, and invoice issuance later adopts and fully reconciles those
+receipts. Migration 060 (`060_work_order_payment_limit.sql`) is prepared but
+**has not been applied**: it makes the database transaction reject un-invoiced
+receipts until the work order has a positive final amount, and rejects a
+cumulative receipt above that amount under the same work-order row lock. Apply
+060 before deploying the compatible application. Do not use
+`db push --include-all` to reconcile their migration history.
 Migration
 051's two unique indexes and five
 `SECURITY DEFINER` functions were verified in production;
@@ -90,14 +115,16 @@ consults history — two coexisting mechanisms, distinguished by what's being
 opened, both bypass the browser's shared history stack entirely:
 
 - **Formal documents** (invoices, work orders, complaints, quotations,
-  purchase invoices, purchase orders, payslips) each open in their own OS
-  popup window via `DocumentLink` (`src/components/ui/DocumentLink.tsx`,
+  purchase invoices, purchase orders, payslips) open in their own OS popup
+  window on desktop via `DocumentLink` (`src/components/ui/DocumentLink.tsx`,
   `window.open()` keyed by a stable `tabKey` so reopening the same document
-  focuses one window instead of stacking more). The popup's own page renders
-  without the sidebar via a `?__popup=1` flag threaded through `proxy.ts` →
-  `x-popup-mode` header → `(dashboard)/layout.tsx`, whose injected script
-  keeps that flag on subsequent client-side navigations inside the same
-  popup.
+  focuses one window instead of stacking more). On phone/tablet-sized or
+  coarse-pointer browsers, `DocumentLink` deliberately falls back to normal
+  same-window navigation because mobile browsers do not provide reliable
+  desktop-style popup windows. A desktop popup's own page renders without the
+  sidebar via a `?__popup=1` flag threaded through `proxy.ts` → `x-popup-mode`
+  header → `(dashboard)/layout.tsx`, whose injected script keeps that flag on
+  subsequent client-side navigations inside the same popup.
 - **Main-module sidebar navigation** (Dashboard, Complaints, Work Orders,
   Customers, Quotations, etc.) opens as an in-app tab: `TabContext`/
   `tabState.ts` dedupes tabs by `tabKey` in React state, and `TabShell`
@@ -117,6 +144,24 @@ opened, both bypass the browser's shared history stack entirely:
   genuine top-level OS popup window (native `window.open()` behavior, not
   nested in the iframe) — no glue code connects the two systems.
 
+### Technician work orders
+An active technician can see and mutate only work orders assigned directly to
+their login (`assigned_to`) or through their active linked staff row
+(`assigned_staff_id` → `staff.user_id`). Both application routes and RLS must
+honour those two assignment forms. Direct authenticated work-order writes are
+revoked by migration 058; all mutations go through the guarded server APIs.
+Technician-created work orders are forced to self-assignment server-side.
+Technicians may add/remove inventory parts on their own job and advance only
+through valid job-status transitions, but cannot set or receive billing prices,
+edit assignment or financial fields, create/remove custom or service line items,
+or cancel a work order. Payment collection is cash only on their own work order;
+route and `record_customer_payment` independently enforce this. Migration 059
+keeps the work-order payment snapshot current for pre-invoice receipts.
+Migration 060 (not yet applied) requires a positive work-order total before an
+un-invoiced receipt and enforces the cumulative limit under the work-order row
+lock. Work-order list/detail pages hide pricing and invoice controls from
+technicians.
+
 After a successful submit use `router.replace()`, never `push()` or
 `window.location.href`, or the completed form stays in the stack.
 
@@ -131,6 +176,14 @@ Three ways stock moves; all three must write to `inventory_transactions`:
 1. Purchase invoice received — always did
 2. Part issued to a job — **was missing until 11 Aug**
 3. Manual stock adjustment — **was missing until 11 Aug**
+
+Migration 058 (manually applied 18 Oct 2026; production effects not yet
+independently verified) preserves the stock+ledger atomic RPC and adds the
+database-side `current_stock + delta >= 0` condition needed to prevent concurrent
+part issues from driving stock negative. It also makes `work_orders` direct
+browser access read-only; technician status changes now use
+`/api/work-orders/[id]`. The TypeScript availability check is only a friendly
+pre-check; do not remove the RPC guard.
 
 Cancelling a purchase invoice used to leave the stock on the books. It now
 reverses and writes a reversal row, refusing if the goods were already fitted.

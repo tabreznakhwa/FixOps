@@ -44,6 +44,7 @@ export function TechnicianDashboard({
   const [attendance, setAttendance] = useState<Attendance | null>(initialAttendance ?? null)
   const [attendanceLoading, setAttendanceLoading] = useState(false)
   const [attendanceError, setAttendanceError] = useState('')
+  const [statusError, setStatusError] = useState('')
   const supabase = createClient()
   const router = useRouter()
   const pingTimer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -102,22 +103,30 @@ export function TechnicianDashboard({
 
   async function updateStatus(jobId: string, newStatus: string) {
     setUpdating(true)
-    // The generated Database type does not yet include work_orders.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
-      .from('work_orders')
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq('id', jobId)
+    setStatusError('')
+    try {
+      const response = await fetch(`/api/work-orders/${jobId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      const data = await response.json().catch(() => null) as { error?: string } | null
+      if (!response.ok) {
+        setStatusError(data?.error ?? 'Failed to update job status')
+        return
+      }
 
-    if (!error) {
       setLocalJobs((prev) =>
         prev.map((j) => j.id === jobId ? { ...j, status: newStatus } : j)
       )
       if (selectedJob?.id === jobId) {
         setSelectedJob((prev) => prev ? { ...prev, status: newStatus } : null)
       }
+    } catch {
+      setStatusError('Network error. Please try again.')
+    } finally {
+      setUpdating(false)
     }
-    setUpdating(false)
   }
 
   async function signOut() {
@@ -176,7 +185,7 @@ export function TechnicianDashboard({
         /* Job Detail View */
         <div className="p-4 space-y-4 max-w-lg mx-auto">
           <button
-            onClick={() => setSelectedJob(null)}
+            onClick={() => { setSelectedJob(null); setStatusError('') }}
             className="text-sm text-slate-400 hover:text-white transition-colors"
           >
             ← Back to jobs
@@ -272,13 +281,18 @@ export function TechnicianDashboard({
               )
             }
             return (
-              <button
-                onClick={() => updateStatus(selectedJob.id, action.next)}
-                disabled={updating}
-                className={`w-full py-4 ${action.color} rounded-2xl font-bold text-lg transition-all active:scale-95 disabled:opacity-50`}
-              >
-                {updating ? 'Updating...' : action.label}
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={() => updateStatus(selectedJob.id, action.next)}
+                  disabled={updating}
+                  className={`w-full py-4 ${action.color} rounded-2xl font-bold text-lg transition-all active:scale-95 disabled:opacity-50`}
+                >
+                  {updating ? 'Updating...' : action.label}
+                </button>
+                {statusError && (
+                  <p className="text-sm text-red-400 text-center">{statusError}</p>
+                )}
+              </div>
             )
           })()}
         </div>
@@ -354,7 +368,7 @@ export function TechnicianDashboard({
                 Today&apos;s Jobs ({todayJobs.length})
               </h2>
               <div className="space-y-3">
-                {todayJobs.map((job) => <JobCard key={job.id} job={job} onSelect={() => setSelectedJob(job)} onUpdateStatus={updateStatus} updating={updating} />)}
+                {todayJobs.map((job) => <JobCard key={job.id} job={job} onSelect={() => { setSelectedJob(job); setStatusError('') }} onUpdateStatus={updateStatus} updating={updating} />)}
               </div>
             </div>
           )}
@@ -366,7 +380,7 @@ export function TechnicianDashboard({
                 Other Jobs ({otherJobs.length})
               </h2>
               <div className="space-y-3">
-                {otherJobs.map((job) => <JobCard key={job.id} job={job} onSelect={() => setSelectedJob(job)} onUpdateStatus={updateStatus} updating={updating} />)}
+                {otherJobs.map((job) => <JobCard key={job.id} job={job} onSelect={() => { setSelectedJob(job); setStatusError('') }} onUpdateStatus={updateStatus} updating={updating} />)}
               </div>
             </div>
           )}

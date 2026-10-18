@@ -39,18 +39,23 @@ interface Props {
   returnTo?: string
 }
 
+type ActionState = {
+  error?: string
+  success?: boolean
+  workOrderId?: string
+  returnTo?: string | null
+} | null
+
 export function EditWorkOrderForm({ wo, technicians, currentAssigneeKey, detailHref, returnTo }: Props) {
   const router = useRouter()
-  const [state, action, pending] = useActionState(updateWorkOrder, null)
+  const [state, action, pending] = useActionState<ActionState, FormData>(updateWorkOrder, null)
   const [assignedKey, setAssignedKey] = useState(currentAssigneeKey)
 
   useEffect(() => {
-    if ((state as any)?.success && (state as any)?.workOrderId) {
-      router.replace((state as any).returnTo ?? detailHref)
+    if (state?.success && state.workOrderId) {
+      router.replace(state.returnTo ?? detailHref)
     }
-  }, [state, router])
-
-  const selectedTech = technicians.find(t => `${t.type}:${t.id}` === assignedKey)
+  }, [state, router, detailHref])
 
   const systemUsers = technicians.filter(t => t.type === 'user')
   const staffMembers = technicians.filter(t => t.type === 'staff')
@@ -59,7 +64,6 @@ export function EditWorkOrderForm({ wo, technicians, currentAssigneeKey, detailH
     <form action={action} className="space-y-6">
       <input type="hidden" name="id" value={wo.id} />
       <input type="hidden" name="assigned_key" value={assignedKey} />
-      <input type="hidden" name="technician_name" value={selectedTech?.full_name ?? ''} />
       <input type="hidden" name="return_to" value={returnTo ?? ''} />
 
       {state?.error && (

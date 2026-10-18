@@ -1,7 +1,6 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { getAuthedProfile } from '@/lib/auth/session'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { NewWorkOrderForm } from './NewWorkOrderForm'
@@ -30,23 +29,28 @@ export default async function NewWorkOrderPage({
   // non-sensitive assignment fields after proxy authorization.
   const admin = createAdminClient()
 
-  const { profile } = await getAuthedProfile()
-  if (!profile || profile.status !== 'active' || !profile.organization_id) redirect('/login')
+  const { user, profile } = await getAuthedProfile()
+  if (!user || !profile || profile.status !== 'active' || !profile.organization_id) redirect('/login')
+  const isTechnician = profile.role === 'technician'
 
   const [customerRows, usersRes, staffRes, complaintsRes] = await Promise.all([
     fetchAllCustomers(supabase, 'id, full_name, mobile_number, company_name'),
-    supabase
-      .from('users')
-      .select('id, full_name, role')
-      .in('role', ['technician', 'admin', 'manager'])
-      .eq('status', 'active')
-      .order('full_name'),
-    admin
-      .from('staff')
-      .select('id, full_name, designation')
-      .eq('employment_status', 'active')
-      .eq('organization_id', profile.organization_id)
-      .order('full_name'),
+    isTechnician
+      ? Promise.resolve({ data: [] })
+      : supabase
+          .from('users')
+          .select('id, full_name, role')
+          .in('role', ['technician', 'admin', 'manager'])
+          .eq('status', 'active')
+          .order('full_name'),
+    isTechnician
+      ? Promise.resolve({ data: [] })
+      : admin
+          .from('staff')
+          .select('id, full_name, designation')
+          .eq('employment_status', 'active')
+          .eq('organization_id', profile.organization_id)
+          .order('full_name'),
     supabase
       .from('complaints')
       .select('id, complaint_number, description, priority, customer_id')
@@ -81,13 +85,12 @@ export default async function NewWorkOrderPage({
     job_description: string
     complaint_number: string
     assigned_key: string
-    technician_name: string
   } | null = null
 
   if (params.complaint_id) {
-    const { data: linkedRaw } = await (supabase as any)
+    const { data: linkedRaw } = await supabase
       .from('complaints')
-      .select('id, complaint_number, description, priority, service_category, customer_id, assigned_to, assigned_staff_id, technician_name')
+      .select('id, complaint_number, description, priority, service_category, customer_id, assigned_to, assigned_staff_id')
       .eq('id', params.complaint_id)
       .single()
 
@@ -95,7 +98,7 @@ export default async function NewWorkOrderPage({
       const linked = linkedRaw as {
         id: string; complaint_number: string; description: string
         priority: string; service_category: string | string[] | null; customer_id: string
-        assigned_to: string | null; assigned_staff_id: string | null; technician_name: string | null
+        assigned_to: string | null; assigned_staff_id: string | null
       }
       const cats = Array.isArray(linked.service_category)
         ? linked.service_category
@@ -115,7 +118,6 @@ export default async function NewWorkOrderPage({
         job_description: linked.description,
         complaint_number: linked.complaint_number,
         assigned_key: assignedKey,
-        technician_name: linked.technician_name ?? '',
       }
     }
   }
@@ -149,6 +151,7 @@ export default async function NewWorkOrderPage({
           complaints={complaints}
           prefill={prefill}
           returnTo={back.href}
+          isTechnician={isTechnician}
         />
       </div>
     </div>

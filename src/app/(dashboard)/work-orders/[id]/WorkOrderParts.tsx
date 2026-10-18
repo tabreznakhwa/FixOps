@@ -99,6 +99,7 @@ interface Props {
   existingParts: LineItem[]
   isCompleted: boolean
   customServices: string[]
+  hidePrices?: boolean
 }
 
 type TabType = 'custom' | 'part' | 'service'
@@ -352,11 +353,18 @@ function ServiceCombobox({ value, onChange, customServices = [] }: { value: stri
 const TYPE_ICON: Record<TabType, string> = { custom: '✏️', part: '📦', service: '🔧' }
 const TYPE_LABEL: Record<TabType, string> = { custom: 'Custom', part: 'Part', service: 'Service' }
 
-export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isCompleted, customServices }: Props) {
+export function WorkOrderParts({
+  workOrderId,
+  inventoryItems,
+  existingParts,
+  isCompleted,
+  customServices,
+  hidePrices = false,
+}: Props) {
   const router = useRouter()
   const [items, setItems] = useState<LineItem[]>(existingParts)
   const [showForm, setShowForm] = useState(false)
-  const [tab, setTab] = useState<TabType>('custom')
+  const [tab, setTab] = useState<TabType>(hidePrices ? 'part' : 'custom')
 
   // Form state
   const [description, setDescription] = useState('')
@@ -469,7 +477,7 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
 
     const desc = description.trim()
     const qty = parseFloat(quantity)
-    const price = parseFloat(unitPrice)
+    const price = hidePrices ? 0 : parseFloat(unitPrice)
 
     if (!desc) { setError('Description is required'); return }
     if (isNaN(qty) || qty <= 0) { setError('Quantity must be greater than 0'); return }
@@ -531,7 +539,7 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
     <div className="bg-white rounded-xl border border-slate-200 p-5">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold text-slate-900">Line Items</h2>
-        {items.length > 0 && (
+        {!hidePrices && items.length > 0 && (
           <span className="text-sm font-bold text-slate-700">
             Total: KWD {total.toFixed(3)}
           </span>
@@ -541,10 +549,10 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
       {/* Column headers */}
       {items.length > 0 && (
         <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider px-1 mb-2">
-          <div className="col-span-6">Description</div>
+          <div className={hidePrices ? 'col-span-10' : 'col-span-6'}>Description</div>
           <div className="col-span-2 text-right">Qty</div>
-          <div className="col-span-2 text-right">Unit Price</div>
-          <div className="col-span-2 text-right">Total</div>
+          {!hidePrices && <div className="col-span-2 text-right">Unit Price</div>}
+          {!hidePrices && <div className="col-span-2 text-right">Total</div>}
         </div>
       )}
 
@@ -619,26 +627,32 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
                       <p className="text-sm font-medium text-slate-800 truncate">{item.description}</p>
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      {item.quantity} × KWD {Number(item.unit_price).toFixed(3)} = KWD {(item.quantity * item.unit_price).toFixed(3)}
+                      {hidePrices
+                        ? `Quantity: ${item.quantity}`
+                        : `${item.quantity} × KWD ${Number(item.unit_price).toFixed(3)} = KWD ${(item.quantity * item.unit_price).toFixed(3)}`}
                     </p>
                   </div>
                   {!isCompleted && (
                     <>
-                      <button
-                        onClick={() => startEdit(item)}
-                        title="Edit line item"
-                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition flex-shrink-0"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleRemove(item.id)}
-                        disabled={removing === item.id}
-                        title="Remove line item"
-                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition flex-shrink-0"
-                      >
-                        {removing === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                      </button>
+                      {!hidePrices && (
+                        <button
+                          onClick={() => startEdit(item)}
+                          title="Edit line item"
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition flex-shrink-0"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+                      {(!hidePrices || item.item_type === 'part') && (
+                        <button
+                          onClick={() => handleRemove(item.id)}
+                          disabled={removing === item.id}
+                          title="Remove line item"
+                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition flex-shrink-0"
+                        >
+                          {removing === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
@@ -654,7 +668,7 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
           <form onSubmit={handleAdd} className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50">
             {/* Type tabs */}
             <div className="flex rounded-lg border border-slate-200 bg-white overflow-hidden text-xs font-semibold divide-x divide-slate-200 w-fit">
-              {(['custom', 'part', 'service'] as TabType[]).map(t => (
+              {(hidePrices ? ['part'] as TabType[] : ['custom', 'part', 'service'] as TabType[]).map(t => (
                 <button
                   key={t}
                   type="button"
@@ -682,7 +696,7 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
                     Stock: <span className={selectedInvItem.current_stock <= 0 ? 'text-red-500 font-semibold' : 'text-slate-600 font-semibold'}>
                       {selectedInvItem.current_stock} {selectedInvItem.unit_of_measure}
                     </span>
-                    {' '}· KWD {selectedInvItem.selling_price.toFixed(3)}
+                    {!hidePrices && ` · KWD ${selectedInvItem.selling_price.toFixed(3)}`}
                   </p>
                 )}
               </div>
@@ -729,24 +743,26 @@ export function WorkOrderParts({ workOrderId, inventoryItems, existingParts, isC
                   required
                 />
               </div>
-              <div className="col-span-7 md:col-span-3">
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  Unit Price (KWD)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.001"
-                  value={unitPrice}
-                  onChange={e => setUnitPrice(e.target.value)}
-                  placeholder="0.000"
-                  className={`${inputCls} text-right`}
-                />
-              </div>
+              {!hidePrices && (
+                <div className="col-span-7 md:col-span-3">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    Unit Price (KWD)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    value={unitPrice}
+                    onChange={e => setUnitPrice(e.target.value)}
+                    placeholder="0.000"
+                    className={`${inputCls} text-right`}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Line total preview */}
-            {parseFloat(quantity) > 0 && parseFloat(unitPrice) >= 0 && (
+            {!hidePrices && parseFloat(quantity) > 0 && parseFloat(unitPrice) >= 0 && (
               <p className="text-xs text-slate-500 text-right">
                 Line total: <span className="font-bold text-slate-800">
                   KWD {(parseFloat(quantity) * parseFloat(unitPrice)).toFixed(3)}

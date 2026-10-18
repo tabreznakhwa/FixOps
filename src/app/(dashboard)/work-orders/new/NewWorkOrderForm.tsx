@@ -26,7 +26,7 @@ interface Complaint {
 interface Prefill {
   complaint_id: string; customer_id: string; priority: string
   category: string; job_description: string; complaint_number: string
-  assigned_key: string; technician_name: string
+  assigned_key: string
 }
 
 function CustomerCombobox({ customers, value, onChange }: { customers: Customer[]; value: string; onChange: (id: string) => void }) {
@@ -105,9 +105,10 @@ interface Props {
   complaints: Complaint[]
   prefill?: Prefill | null
   returnTo: string
+  isTechnician: boolean
 }
 
-export function NewWorkOrderForm({ customers, technicians, complaints, prefill, returnTo }: Props) {
+export function NewWorkOrderForm({ customers, technicians, complaints, prefill, returnTo, isTechnician }: Props) {
   const router = useRouter()
   const destination = safeReturnTo(returnTo) ?? '/work-orders'
   const [submitting, setSubmitting] = useState(false)
@@ -115,7 +116,7 @@ export function NewWorkOrderForm({ customers, technicians, complaints, prefill, 
   const [form, setForm] = useState({
     customer_id: prefill?.customer_id ?? '',
     complaint_id: prefill?.complaint_id ?? '',
-    assigned_key: prefill?.assigned_key ?? '', // format: "user:UUID" or "staff:UUID"
+    assigned_key: isTechnician ? '' : (prefill?.assigned_key ?? ''), // format: "user:UUID" or "staff:UUID"
     service_category: prefill?.category ?? 'ac_maintenance',
     priority: prefill?.priority ?? 'medium',
     job_description: prefill?.job_description ?? '',
@@ -125,20 +126,6 @@ export function NewWorkOrderForm({ customers, technicians, complaints, prefill, 
     estimated_amount: '',
     notes: '',
   })
-
-  // Apply prefill values after mount (useState initializer can miss them in Next.js)
-  useEffect(() => {
-    if (!prefill) return
-    setForm(f => ({
-      ...f,
-      complaint_id: prefill.complaint_id,
-      customer_id: prefill.customer_id,
-      priority: prefill.priority.toLowerCase(),
-      service_category: prefill.category.toLowerCase(),
-      job_description: prefill.job_description,
-      assigned_key: prefill.assigned_key,
-    }))
-  }, [prefill?.complaint_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (field: keyof typeof form) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -163,12 +150,10 @@ export function NewWorkOrderForm({ customers, technicians, complaints, prefill, 
     if (!form.customer_id) { setError('Please select a customer'); return }
     if (!form.job_description.trim()) { setError('Please enter a job description'); return }
 
-    // Parse assigned_key → assigned_to (user UUID) + technician_name + assigned_staff_id
+    // Send only the assignee ID; the server validates it and derives the name.
     const [pType, pId] = form.assigned_key ? form.assigned_key.split(':') : []
-    const person = technicians.find(t => t.id === pId && t.type === pType)
     const assigned_to = pType === 'user' ? pId ?? null : null
     const assigned_staff_id = pType === 'staff' ? pId ?? null : null
-    const technician_name = person?.full_name ?? null
 
     setSubmitting(true)
     setError('')
@@ -181,13 +166,12 @@ export function NewWorkOrderForm({ customers, technicians, complaints, prefill, 
           complaint_id: form.complaint_id || null,
           assigned_to,
           assigned_staff_id,
-          technician_name,
           service_category: form.service_category,
           priority: form.priority,
           job_description: form.job_description.trim(),
           notes: form.notes || null,
           estimated_hours: form.estimated_hours ? Number(form.estimated_hours) : null,
-          estimated_amount: form.estimated_amount ? Number(form.estimated_amount) : null,
+          estimated_amount: isTechnician ? null : (form.estimated_amount ? Number(form.estimated_amount) : null),
           scheduled_date: form.scheduled_date || null,
           scheduled_time: form.scheduled_time || null,
         }),
@@ -304,33 +288,40 @@ export function NewWorkOrderForm({ customers, technicians, complaints, prefill, 
       {/* Scheduling & Assignment */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
         <h2 className="font-semibold text-slate-900">Scheduling & Assignment</h2>
-        <div>
-          <label className={labelClass}>Assign Technician <span className="text-slate-400 font-normal">(optional)</span></label>
-          <div className="relative">
-            <select value={form.assigned_key} onChange={set('assigned_key')} className={inputClass + ' appearance-none pr-9'}>
-              <option value="">Unassigned</option>
-              {systemUsers.length > 0 && (
-                <optgroup label="System Users (App access)">
-                  {systemUsers.map(t => (
-                    <option key={t.id} value={`user:${t.id}`}>
-                      {t.full_name} — {t.role}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {staffMembers.length > 0 && (
-                <optgroup label="Staff Members">
-                  {staffMembers.map(t => (
-                    <option key={t.id} value={`staff:${t.id}`}>
-                      {t.full_name}{t.role ? ` — ${t.role}` : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+        {isTechnician ? (
+          <div>
+            <label className={labelClass}>Assigned Technician</label>
+            <div className={inputClass + ' bg-slate-50'}>Assigned to you</div>
           </div>
-        </div>
+        ) : (
+          <div>
+            <label className={labelClass}>Assign Technician <span className="text-slate-400 font-normal">(optional)</span></label>
+            <div className="relative">
+              <select value={form.assigned_key} onChange={set('assigned_key')} className={inputClass + ' appearance-none pr-9'}>
+                <option value="">Unassigned</option>
+                {systemUsers.length > 0 && (
+                  <optgroup label="System Users (App access)">
+                    {systemUsers.map(t => (
+                      <option key={t.id} value={`user:${t.id}`}>
+                        {t.full_name} — {t.role}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {staffMembers.length > 0 && (
+                  <optgroup label="Staff Members">
+                    {staffMembers.map(t => (
+                      <option key={t.id} value={`staff:${t.id}`}>
+                        {t.full_name}{t.role ? ` — ${t.role}` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Scheduled Date</label>
@@ -346,10 +337,12 @@ export function NewWorkOrderForm({ customers, technicians, complaints, prefill, 
             <label className={labelClass}>Estimated Hours</label>
             <input type="number" min="0.5" step="0.5" value={form.estimated_hours} onChange={set('estimated_hours')} placeholder="e.g. 2.5" className={inputClass} />
           </div>
-          <div>
-            <label className={labelClass}>Estimated Amount (KWD)</label>
-            <input type="number" min="0" step="0.01" value={form.estimated_amount} onChange={set('estimated_amount')} placeholder="e.g. 500.00" className={inputClass} />
-          </div>
+          {!isTechnician && (
+            <div>
+              <label className={labelClass}>Estimated Amount (KWD)</label>
+              <input type="number" min="0" step="0.001" value={form.estimated_amount} onChange={set('estimated_amount')} placeholder="e.g. 500.000" className={inputClass} />
+            </div>
+          )}
         </div>
       </div>
 

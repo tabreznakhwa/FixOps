@@ -183,6 +183,7 @@ export interface Database {
           customer_id: string
           service_category: ServiceCategory | null
           assigned_to: string | null
+          assigned_staff_id: string | null
           scheduled_date: string | null
           scheduled_time: string | null
           priority: PriorityLevel
@@ -472,6 +473,26 @@ export interface Database {
       generate_sequence_number: {
         Args: { p_org_id: string; p_type: string; p_prefix?: string }
         Returns: string
+      }
+      record_customer_payment: {
+        Args: {
+          p_org_id: string
+          p_actor_id: string
+          p_customer_id: string
+          p_invoice_id: string | null
+          p_work_order_id: string | null
+          p_payment_date: string
+          p_amount_received: number
+          p_payment_mode: string
+          p_reference_number: string | null
+          p_notes: string | null
+          p_is_advance: boolean
+        }
+        Returns: Array<{
+          payment_id: string
+          payment_number: string
+          posting_id: string
+        }>
       }
       get_user_organization_id: {
         Args: Record<string, never>

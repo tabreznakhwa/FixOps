@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
+import {
+  authorizeWorkOrderMutation,
+  isAuthorizationResponse,
+} from '@/lib/workOrderMutationAccess'
 
 /**
  * Atomically apply a signed stock change AND record it in the
@@ -55,6 +59,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { data: { user } } = await supabaseUser.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const supabase = createAdminClient()
+    const authorization = await authorizeWorkOrderMutation(
+      supabase,
+      user.id,
+      workOrderId,
+    )
+    if (isAuthorizationResponse(authorization)) return authorization
+    const workOrder = authorization
+    if (['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(workOrder.status)) {
+      return NextResponse.json({ error: 'This work order can no longer be changed' }, { status: 409 })
+    }
+
+    const { data: profileRaw } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    const isTechnician = (profileRaw as { role: string } | null)?.role === 'technician'
+
     const body = await request.json()
     const { item_type, description, quantity, unit_price, inventory_item_id } = body as {
       item_type: 'custom' | 'part' | 'service'
@@ -67,25 +90,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!item_type || !description?.trim() || !quantity || quantity <= 0) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
+    if (isTechnician && item_type !== 'part') {
+      return NextResponse.json(
+        { error: 'Technicians may only add inventory parts' },
+        { status: 403 },
+      )
+    }
+    if (!isTechnician && (!Number.isFinite(Number(unit_price)) || Number(unit_price) < 0)) {
+      return NextResponse.json({ error: 'Invalid unit price' }, { status: 400 })
+    }
 
-    const supabase = createAdminClient()
-
-    // Get work order organization_id
-    const { data: wo } = await (supabase as any)
-      .from('work_orders')
-      .select('organization_id')
-      .eq('id', workOrderId)
-      .single()
-    if (!wo) return NextResponse.json({ error: 'Work order not found' }, { status: 404 })
-
-    // If part, validate and deduct inventory
-    let resolvedPrice = unit_price
+    // If part, validate and deduct inventory. A technician never controls the
+    // billing rate: always use the organization inventory price server-side.
+    let resolvedPrice = isTechnician ? 0 : Number(unit_price)
     let movement: { itemId: string; cost: number } | null = null
     if (item_type === 'part' && inventory_item_id) {
       const { data: invItem, error: invErr } = await (supabase as any)
         .from('inventory_items')
         .select('id, item_name, current_stock, selling_price, purchase_price, unit_of_measure')
         .eq('id', inventory_item_id)
+        .eq('organization_id', workOrder.organization_id)
         .single()
 
       if (invErr || !invItem) return NextResponse.json({ error: 'Inventory item not found' }, { status: 404 })
@@ -94,14 +118,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           error: `Insufficient stock. Available: ${invItem.current_stock} ${invItem.unit_of_measure}`,
         }, { status: 400 })
       }
-      resolvedPrice = unit_price || invItem.selling_price
+      resolvedPrice = isTechnician
+        ? Number(invItem.selling_price) || 0
+        : (Number(unit_price) || Number(invItem.selling_price) || 0)
 
       // Deduct stock and record the ledger entry atomically.
       const cost = Number(invItem.purchase_price) || 0
       await adjustStockLogged(supabase, {
         itemId: inventory_item_id,
         delta: -quantity,
-        orgId: wo.organization_id,
+        orgId: workOrder.organization_id,
         type: 'issued',
         // Ledger records cost, not sale price — this is what feeds COGS.
         unitCost: cost,
@@ -118,7 +144,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .from('work_order_line_items')
       .insert({
         work_order_id: workOrderId,
-        organization_id: wo.organization_id,
+        organization_id: workOrder.organization_id,
         item_type,
         description: description.trim(),
         quantity,
@@ -137,7 +163,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         await adjustStockLogged(supabase, {
           itemId: movement.itemId,
           delta: quantity,
-          orgId: wo.organization_id,
+          orgId: workOrder.organization_id,
           type: 'returned',
           unitCost: movement.cost,
           workOrderId,
@@ -188,6 +214,27 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { data: { user } } = await supabaseUser.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const supabase = createAdminClient()
+    const authorization = await authorizeWorkOrderMutation(
+      supabase,
+      user.id,
+      workOrderId,
+    )
+    if (isAuthorizationResponse(authorization)) return authorization
+    const workOrder = authorization
+    if (['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(workOrder.status)) {
+      return NextResponse.json({ error: 'This work order can no longer be changed' }, { status: 409 })
+    }
+
+    const { data: profileRaw } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    if ((profileRaw as { role: string } | null)?.role === 'technician') {
+      return NextResponse.json({ error: 'Technicians cannot edit line items' }, { status: 403 })
+    }
+
     const body = await request.json()
     const { line_item_id, description, quantity, unit_price } = body as {
       line_item_id: string
@@ -200,8 +247,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!description?.trim()) return NextResponse.json({ error: 'Description is required' }, { status: 400 })
     if (!(quantity > 0)) return NextResponse.json({ error: 'Quantity must be greater than zero' }, { status: 400 })
     if (!(unit_price >= 0)) return NextResponse.json({ error: 'Unit price cannot be negative' }, { status: 400 })
-
-    const supabase = createAdminClient()
 
     const { data: item, error: fetchErr } = await (supabase as any)
       .from('work_order_line_items')
@@ -222,6 +267,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .from('inventory_items')
         .select('current_stock, unit_of_measure, purchase_price')
         .eq('id', item.inventory_item_id)
+        .eq('organization_id', workOrder.organization_id)
         .single()
 
       if (!invItem) return NextResponse.json({ error: 'Inventory item not found' }, { status: 404 })
@@ -231,10 +277,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         }, { status: 400 })
       }
 
-      const { data: wo } = await (supabase as any)
-        .from('work_orders').select('organization_id').eq('id', workOrderId).single()
-      if (!wo) return NextResponse.json({ error: 'Work order not found' }, { status: 404 })
-      const woOrgId: string = wo.organization_id
+      const woOrgId = workOrder.organization_id
       orgId = woOrgId
       unitCost = Number(invItem.purchase_price) || 0
 
@@ -314,11 +357,21 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { data: { user } } = await supabaseUser.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const supabase = createAdminClient()
+    const authorization = await authorizeWorkOrderMutation(
+      supabase,
+      user.id,
+      workOrderId,
+    )
+    if (isAuthorizationResponse(authorization)) return authorization
+    const workOrder = authorization
+    if (['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(workOrder.status)) {
+      return NextResponse.json({ error: 'This work order can no longer be changed' }, { status: 409 })
+    }
+
     const body = await request.json()
     const { line_item_id } = body as { line_item_id: string }
     if (!line_item_id) return NextResponse.json({ error: 'Missing line_item_id' }, { status: 400 })
-
-    const supabase = createAdminClient()
 
     const { data: item, error: fetchErr } = await (supabase as any)
       .from('work_order_line_items')
@@ -329,14 +382,31 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     if (fetchErr || !item) return NextResponse.json({ error: 'Line item not found' }, { status: 404 })
 
+    const { data: profileRaw } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    const isTechnician = (profileRaw as { role: string } | null)?.role === 'technician'
+    if (isTechnician && item.item_type !== 'part') {
+      return NextResponse.json(
+        { error: 'Technicians may only remove inventory parts' },
+        { status: 403 },
+      )
+    }
+
     // Restore inventory stock if this was a part
     if (item.item_type === 'part' && item.inventory_item_id) {
       const { data: invItem } = await (supabase as any)
-        .from('inventory_items').select('purchase_price').eq('id', item.inventory_item_id).single()
+        .from('inventory_items')
+        .select('purchase_price')
+        .eq('id', item.inventory_item_id)
+        .eq('organization_id', workOrder.organization_id)
+        .single()
 
-      const { data: wo } = await (supabase as any)
-        .from('work_orders').select('organization_id').eq('id', workOrderId).single()
-      if (!wo) return NextResponse.json({ error: 'Work order not found' }, { status: 404 })
+      if (!invItem) {
+        return NextResponse.json({ error: 'Inventory item not found' }, { status: 404 })
+      }
 
       // Stock coming back is a return, so the ledger nets to zero for a part
       // that was issued and then removed — stock and ledger update together
@@ -344,7 +414,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       await adjustStockLogged(supabase, {
         itemId: item.inventory_item_id,
         delta: Number(item.quantity),
-        orgId: wo.organization_id,
+        orgId: workOrder.organization_id,
         type: 'returned',
         unitCost: Number(invItem?.purchase_price) || 0,
         workOrderId,
@@ -357,6 +427,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       .from('work_order_line_items')
       .delete()
       .eq('id', line_item_id)
+      .eq('work_order_id', workOrderId)
 
     if (deleteErr) throw deleteErr
 

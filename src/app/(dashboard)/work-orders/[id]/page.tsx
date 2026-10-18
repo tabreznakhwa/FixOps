@@ -1,4 +1,6 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
+import { getAuthedProfile } from '@/lib/auth/session'
+import { isWorkOrderAssignedToTechnician } from '@/lib/workOrderAccess'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -15,13 +17,15 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   const { id } = await params
   const query = await searchParams
   const { complaint_id, return_to } = query
-  const supabase = await createClient()
-  const admin = createAdminClient() as any
+  const { user, profile } = await getAuthedProfile()
+  if (!user || !profile || profile.status !== 'active' || !profile.organization_id) notFound()
 
-  const { data: raw } = await supabase
+  const admin = createAdminClient()
+  const { data: raw } = await admin
     .from('work_orders')
     .select('*, customers(full_name, mobile_number, email, area, city), users!work_orders_assigned_to_fkey(id, full_name), complaints(complaint_number, description)')
     .eq('id', id)
+    .eq('organization_id', profile.organization_id)
     .single()
 
   if (!raw) notFound()
@@ -31,23 +35,56 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     priority: string; status: string; payment_status: string; service_category: string | null
     scheduled_date: string | null; estimated_hours: number | null; estimated_amount: number | null
     final_amount: number; notes: string | null; created_at: string
-    organization_id: string; customer_id: string | null; technician_name: string | null; assigned_staff_id: string | null
+    organization_id: string; customer_id: string | null; technician_name: string | null
+    assigned_to: string | null; assigned_staff_id: string | null
     customers: { full_name: string; mobile_number: string; email: string | null; area: string | null; city: string | null } | null
     users: { id: string; full_name: string } | null
     complaints: { complaint_number: string; description: string } | null
   }
 
   const orgId = wo.organization_id
+  const isTechnician = profile.role === 'technician'
+  let ownStaffId: string | null = null
+
+  if (isTechnician && wo.assigned_to !== user.id) {
+    const { data: ownStaffRaw } = await admin
+      .from('staff')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('organization_id', orgId)
+      .eq('employment_status', 'active')
+      .maybeSingle()
+    ownStaffId = (ownStaffRaw as { id: string } | null)?.id ?? null
+  }
+
+  if (isTechnician && !isWorkOrderAssignedToTechnician({
+    userId: user.id,
+    staffId: ownStaffId,
+    workOrder: wo,
+  })) notFound()
 
   const [techniciansRaw, staffRaw, inventoryRaw, lineItemsRaw, woServicesRaw, invServicesRaw, invoiceRaw] = await Promise.all([
-    supabase.from('users').select('id, full_name, role').in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
+    isTechnician
+      ? Promise.resolve({ data: [] })
+      : admin.from('users').select('id, full_name, role').eq('organization_id', orgId).in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
     // Only non-sensitive staff directory fields cross this authorized server page.
-    admin.from('staff').select('id, full_name, designation').eq('employment_status', 'active').eq('organization_id', orgId),
-    admin.from('inventory_items').select('id, item_code, item_name, unit_of_measure, current_stock, selling_price').eq('is_active', true).eq('organization_id', orgId).order('item_name'),
-    // Use admin client so the UI sees the same rows as the final_amount calculation
+    isTechnician
+      ? Promise.resolve({ data: [] })
+      : admin.from('staff').select('id, full_name, designation').eq('employment_status', 'active').eq('organization_id', orgId),
+    admin.from('inventory_items').select(
+      isTechnician
+        ? 'id, item_code, item_name, unit_of_measure, current_stock'
+        : 'id, item_code, item_name, unit_of_measure, current_stock, selling_price'
+    ).eq('is_active', true).eq('organization_id', orgId).order('item_name'),
+    // Technicians receive no billing prices in the RSC payload.
     admin.from('work_order_line_items')
-      .select('id, item_type, description, quantity, unit_price, inventory_item_id')
+      .select(
+        isTechnician
+          ? 'id, item_type, description, quantity, inventory_item_id'
+          : 'id, item_type, description, quantity, unit_price, inventory_item_id'
+      )
       .eq('work_order_id', id)
+      .eq('organization_id', orgId)
       .order('created_at'),
     // All unique service/custom descriptions across all work orders
     admin.from('work_order_line_items')
@@ -61,7 +98,9 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
       .eq('organization_id', orgId)
       .order('description'),
     // Has this work order already been invoiced? Ignore cancelled invoices so admin can re-create.
-    admin.from('invoices').select('id, status').eq('work_order_id', id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    isTechnician
+      ? Promise.resolve({ data: null })
+      : admin.from('invoices').select('id, status').eq('organization_id', orgId).eq('work_order_id', id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ])
 
   const systemUsers = (techniciansRaw.data ?? []) as unknown as { id: string; full_name: string; role: string }[]
@@ -70,12 +109,23 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     ...systemUsers.map(u => ({ id: u.id, full_name: u.full_name, type: 'user' as const, role: u.role })),
     ...staffMembers.map(s => ({ id: s.id, full_name: s.full_name, type: 'staff' as const, role: s.designation ?? 'Technician' })),
   ]
-  const inventoryItems = (inventoryRaw.data ?? []) as unknown as {
-    id: string; item_code: string; item_name: string; unit_of_measure: string; current_stock: number; selling_price: number
-  }[]
-  const existingParts = (lineItemsRaw.data ?? []) as unknown as {
-    id: string; item_type: 'custom' | 'part' | 'service'; description: string; quantity: number; unit_price: number; inventory_item_id: string | null
-  }[]
+  const inventoryItems = (inventoryRaw.data ?? []).map((item: {
+    id: string
+    item_code: string
+    item_name: string
+    unit_of_measure: string
+    current_stock: number
+    selling_price?: number
+  }) => ({
+    ...item,
+    selling_price: isTechnician ? 0 : Number(item.selling_price) || 0,
+  }))
+  const existingParts = ((lineItemsRaw.data ?? []) as unknown as {
+    id: string; item_type: 'custom' | 'part' | 'service'; description: string; quantity: number; unit_price?: number; inventory_item_id: string | null
+  }[]).map(item => ({
+    ...item,
+    unit_price: isTechnician ? 0 : Number(item.unit_price) || 0,
+  }))
 
   // Build unified list of previously-used service/custom labels (server-side dedup)
   const customServices = [
@@ -108,12 +158,14 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
             <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${getStatusColor(wo.status)}`}>
               {formatStatus(wo.status)}
             </span>
-            <Link
-              href={editHref}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
-            >
-              <Edit className="w-4 h-4" /> Edit
-            </Link>
+            {!isTechnician && (
+              <Link
+                href={editHref}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
+              >
+                <Edit className="w-4 h-4" /> Edit
+              </Link>
+            )}
             <BackButton href={back.href} label={back.label} />
           </div>
         }
@@ -154,8 +206,9 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
             workOrderId={wo.id}
             inventoryItems={inventoryItems}
             existingParts={existingParts}
-            isCompleted={['invoiced', 'paid', 'cancelled'].includes(wo.status)}
+            isCompleted={['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(wo.status)}
             customServices={customServices}
+            hidePrices={isTechnician}
           />
 
           {/* Financials + schedule */}
@@ -174,16 +227,18 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
                   <dd className="text-slate-800 font-medium">{wo.estimated_hours}h</dd>
                 </div>
               )}
-              {wo.estimated_amount && (
+              {!isTechnician && wo.estimated_amount && (
                 <div>
                   <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Estimated Amount</dt>
                   <dd className="text-slate-800 font-medium">{formatCurrency(wo.estimated_amount)}</dd>
                 </div>
               )}
-              <div>
-                <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Final Amount</dt>
-                <dd className="text-slate-800 font-bold text-base">{formatCurrency(wo.final_amount)}</dd>
-              </div>
+              {!isTechnician && (
+                <div>
+                  <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Final Amount</dt>
+                  <dd className="text-slate-800 font-bold text-base">{formatCurrency(wo.final_amount)}</dd>
+                </div>
+              )}
               <div>
                 <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Payment Status</dt>
                 <dd>
@@ -246,11 +301,12 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
             }
             technicians={technicians}
             customerId={wo.customer_id}
-            finalAmount={wo.final_amount}
+            finalAmount={isTechnician ? null : wo.final_amount}
             paymentStatus={wo.payment_status}
             existingInvoiceId={existingInvoiceId}
             existingInvoiceStatus={existingInvoiceStatus}
             workOrderHref={workOrderPath}
+            isTechnician={isTechnician}
           />
         </div>
       </div>
