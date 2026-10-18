@@ -81,11 +81,12 @@ keeps `record_customer_payment` compatible with migration 057 and updates a
 work-order-only receipt snapshot to `partial` or `paid` before an invoice exists;
 the route prevents the cumulative receipt from exceeding a known positive work-
 order amount, and invoice issuance later adopts and fully reconciles those
-receipts. Migration 060 (`060_work_order_payment_limit.sql`) is prepared but
-**has not been applied**: it makes the database transaction reject un-invoiced
-receipts until the work order has a positive final amount, and rejects a
-cumulative receipt above that amount under the same work-order row lock. Apply
-060 before deploying the compatible application. Do not use
+receipts. Migration 060 (`060_work_order_payment_limit.sql`) was manually
+applied by the user on 18 Oct 2026; its production function body, grants,
+rejection behavior and migration-history entry have not yet been independently
+verified. It makes the database transaction reject un-invoiced receipts until
+the work order has a positive final amount, and rejects a cumulative receipt
+above that amount under the same work-order row lock. Do not use
 `db push --include-all` to reconcile their migration history.
 Migration
 051's two unique indexes and five
@@ -157,7 +158,8 @@ edit assignment or financial fields, create/remove custom or service line items,
 or cancel a work order. Payment collection is cash only on their own work order;
 route and `record_customer_payment` independently enforce this. Migration 059
 keeps the work-order payment snapshot current for pre-invoice receipts.
-Migration 060 (not yet applied) requires a positive work-order total before an
+Migration 060 (manually applied 18 Oct 2026; production effects not yet
+independently verified) requires a positive work-order total before an
 un-invoiced receipt and enforces the cumulative limit under the work-order row
 lock. Work-order list/detail pages hide pricing and invoice controls from
 technicians.
