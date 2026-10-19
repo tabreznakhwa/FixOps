@@ -154,8 +154,9 @@ export function WorkOrderActions({
         </div>
       )}
 
-      {/* Mark Complete */}
-      {!isCompleted && !isCancelled && (!isTechnician || technicianCanComplete) && (
+      {/* Mark Complete — only the assigned technician can do this; once they
+          do, admin/manager/owner/call_center proceed straight to invoicing. */}
+      {!isCompleted && !isCancelled && isTechnician && technicianCanComplete && (
         <div className="border-t border-slate-100 pt-4">
           <button
             onClick={() => {

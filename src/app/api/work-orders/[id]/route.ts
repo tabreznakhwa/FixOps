@@ -113,6 +113,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
+    // Only the assigned technician may move a work order to completed — no
+    // other role has this action, even though they can set other statuses.
+    if (!isTechnician && updates.status === 'completed') {
+      return NextResponse.json(
+        { error: 'Only the assigned technician can mark this work order as completed' },
+        { status: 403 },
+      )
+    }
+
     if (!isTechnician && ('assigned_to' in updates || 'assigned_staff_id' in updates)) {
       const assignedTo = typeof updates.assigned_to === 'string'
         ? updates.assigned_to

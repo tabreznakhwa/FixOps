@@ -32,6 +32,8 @@ for (const marker of [
   "on_the_way: new Set(['work_started'])",
   "allowedNextStatuses?.has(nextStatus)",
   "['invoiced', 'paid', 'cancelled', 'completed', 'verified'].includes(workOrder.status)",
+  "!isTechnician && updates.status === 'completed'",
+  'Only the assigned technician can mark this work order as completed',
 ]) {
   assert.ok(route.includes(marker), `work-order PATCH route is missing: ${marker}`)
 }
@@ -48,8 +50,13 @@ assert.equal(
 
 const actions = read('src/app/(dashboard)/work-orders/[id]/WorkOrderActions.tsx')
 assert.ok(
+  actions.includes('isTechnician && technicianCanComplete'),
+  'only the assigned technician may see Mark Complete, and only from a valid active-work state',
+)
+assert.equal(
   actions.includes('(!isTechnician || technicianCanComplete)'),
-  'technician detail must only offer completion from a valid active-work state',
+  false,
+  'admin/manager/owner/call_center must no longer have their own Mark Complete action',
 )
 
 const dashboard = read('src/components/technician/TechnicianDashboard.tsx')

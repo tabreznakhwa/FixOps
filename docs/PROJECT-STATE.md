@@ -1,7 +1,7 @@
 # FixOps — current state
 
 Read this first. It exists so a new session does not have to rediscover the app
-by exploration. Last updated 18 Oct 2026.
+by exploration. Last updated 19 Oct 2026.
 
 **Note:** commits `fccbb1d`…`2ca13b6` (Pay Salaries modal portal/zoom fixes, a
 Vercel function-invocation-spike fix replacing `force-dynamic` with ISR
@@ -157,8 +157,14 @@ their own open job, enter the customer-facing unit price, see line totals and
 the final work-order amount, and advance only through valid job-status
 transitions. Internal inventory purchase cost remains private and inventory
 movement is still valued from `purchase_price`; technicians still cannot edit
-assignment or other financial fields or cancel a work order. Payment collection
-is cash only on their own work order;
+assignment or other financial fields or cancel a work order. Only the assigned
+technician can mark a work order completed — admin, manager, owner and
+call_center no longer have a Mark Complete action of their own (enforced both
+in `WorkOrderActions` and server-side in the work-order PATCH route) and move
+straight to invoicing once the technician completes the job. A work order
+assigned only to a staff member with no linked login therefore has no path to
+`completed` until it is reassigned to someone who can log in and complete it
+themselves. Payment collection is cash only on their own work order;
 route and `record_customer_payment` independently enforce this. Migration 059
 keeps the work-order payment snapshot current for pre-invoice receipts.
 Migration 060 (manually applied 18 Oct 2026; production effects not yet
