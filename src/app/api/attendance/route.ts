@@ -33,8 +33,6 @@ export async function POST(request: NextRequest) {
       date,
       check_in,
       check_out,
-      hours_worked,
-      overtime_hours,
       status,
       notes,
       is_public_holiday,
@@ -101,7 +99,8 @@ export async function POST(request: NextRequest) {
 
     const isOtEligible = staff.overtime_eligible
     const isHoliday = isFriday(date) || Boolean(is_public_holiday)
-    if (isKiosk && [check_in, check_out].some((value) => {
+    const isWorkedStatus = ['present', 'half_day'].includes(status)
+    if (isWorkedStatus && [check_in, check_out].some((value) => {
       if (typeof value !== 'string' || !/^\d{2}:\d{2}$/.test(value)) return true
       const [hour, minute] = value.split(':').map(Number)
       return hour > 23 || minute > 59
@@ -118,19 +117,19 @@ export async function POST(request: NextRequest) {
       .eq('date', date)
       .maybeSingle()
 
-    const kioskBreakdown = isKiosk
+    const breakdown = isWorkedStatus
       ? calcAttendanceBreakdown(check_in, check_out, isHoliday, date)
       : null
-    if (isKiosk && !kioskBreakdown) {
-      return NextResponse.json({ error: 'Check-in and check-out times are invalid' }, { status: 400 })
+    if (isWorkedStatus && !breakdown) {
+      return NextResponse.json({ error: 'Check-in and check-out times are required' }, { status: 400 })
     }
 
     const payload = {
-      check_in: check_in || null,
-      check_out: check_out || null,
-      hours_worked: kioskBreakdown?.hoursWorked ?? Number(hours_worked ?? 0),
+      check_in: isWorkedStatus ? check_in : null,
+      check_out: isWorkedStatus ? check_out : null,
+      hours_worked: breakdown?.hoursWorked ?? 0,
       overtime_hours: payableOvertimeHours(
-        kioskBreakdown?.normalOtPaidHrs ?? Number(overtime_hours ?? 0),
+        breakdown?.normalOtPaidHrs ?? 0,
         {
           overtimeEligible: isOtEligible,
           isFridayOrHoliday: isHoliday,
@@ -139,9 +138,11 @@ export async function POST(request: NextRequest) {
       status,
       notes: notes?.trim() || null,
       is_public_holiday: Boolean(is_public_holiday ?? false),
-      friday_ot_amount: isKiosk && isHoliday
+      friday_ot_amount: isKiosk && isHoliday && isWorkedStatus
         ? Number(staff.friday_ot_amount ?? 0)
-        : Number(body.friday_ot_amount ?? 0),
+        : isHoliday && isWorkedStatus
+          ? Number(body.friday_ot_amount ?? 0)
+          : 0,
     }
 
     let record, error

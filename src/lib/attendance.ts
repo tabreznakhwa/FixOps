@@ -1,6 +1,6 @@
 // Kuwait company duty rules — shared by the HR attendance form and technician self clock-in
-export const DUTY_START = '08:30'    // 8:30 AM — default check-in pre-fill only
-export const DUTY_END = '17:30'      // 5:30 PM — default check-out pre-fill only
+export const DUTY_START = '08:30'    // 8:30 AM — first shift start and default check-in
+export const DUTY_END = '17:30'      // 5:30 PM — default check-out pre-fill
 const LUNCH_START_M = 13 * 60        // 1:00 PM in minutes
 const LUNCH_END_M = 14 * 60          // 2:00 PM in minutes
 const FIXED_OT_END_M = 20 * 60       // 8:00 PM in minutes
@@ -8,34 +8,39 @@ const STANDARD_HOURS = 8
 const FRIDAY_FIXED_OT_HOURS = 8     // Friday/holiday: first 8 worked hours = fixed OT
 const OT_MULTIPLIER = 1.25           // Normal OT: 1 hr = 1.25 paid hrs
 
-// From this date the 8-hour duty is anchored to the employee's clock-in time —
-// no fixed 8:30–5:30 schedule and no daily fixed-OT window. Overtime begins once
-// 8 hours have actually been WORKED, lunch excluded.
-// Before it, the old seasonal rules apply unchanged.
+// From this date overtime begins once 8 hours have actually been worked, lunch
+// excluded. Before it, the old seasonal rules apply unchanged. The early-arrival
+// clamp below is layered onto this rule from its own later cutover date.
 const CLOCK_IN_ANCHOR_START = '2026-10-01'
+
+// From this date early arrivals are recorded at their real time but credited no
+// earlier than the inferred shift start. Clock-ins before 1:30 PM are first
+// shift; clock-ins from 1:30 PM are second shift.
+const SHIFT_CLAMP_START = '2026-10-19'
+const SECOND_SHIFT_INFERENCE_M = 13 * 60 + 30
+const FIRST_SHIFT_START_M = 8 * 60 + 30
+const SECOND_SHIFT_START_M = 14 * 60
 
 // ── Shifts and the lunch hour ──────────────────────────────────────────────
 // Morning staff take an hour for lunch; evening staff work straight through.
-// There is deliberately no shift field: people move between shifts constantly,
-// so anything stored per employee would be wrong most of the time, and guessing
-// the shift from the clock-in time misreads a late arrival as an evening start.
+// There is deliberately no shift field because people move between shifts.
+// The clock-in time therefore selects the shift for each attendance record.
 //
-// Instead the lunch hour detects itself. It is deducted only when the working
-// window actually covers 1–2 PM, so a morning shift (08:30–17:30) always loses
-// the hour and an evening shift (from 2 PM) never does — without the system
-// needing to know, or be told, which shift anyone is on.
-//
-// For anyone working their normal shift this matches fixed 5:30 PM / 10 PM
-// overtime boundaries exactly:
-//   Morning 08:30–17:30 → 9 clock − 1 lunch = 8 worked → no overtime
-//   Evening 14:00–22:00 → 8 clock − 0 lunch = 8 worked → no overtime
-// and a late arrival simply has to work the full 8 hours before overtime starts.
+// The lunch hour is deducted only when the credited working window covers
+// 1–2 PM. Overtime begins after 8 credited hours, so a late arrival still has
+// to complete the full duty before overtime starts.
 
 /**
  * Plain-language description of the duty rule in force on a date, so the HR
  * attendance forms can never describe a rule other than the one being applied.
  */
 export function dutyHints(date: string): { dutyStart: string; overtime: string } {
+  if (usesShiftClamp(date)) {
+    return {
+      dutyStart: 'Credit starts no earlier than 8:30 AM or 2:00 PM',
+      overtime: 'Overtime after 8 credited hours',
+    }
+  }
   if (usesClockInAnchor(date)) {
     return {
       dutyStart: '8-hour duty starts at clock-in',
@@ -71,6 +76,11 @@ export function usesClockInAnchor(dateStr?: string): boolean {
   return dateStr >= CLOCK_IN_ANCHOR_START
 }
 
+export function usesShiftClamp(dateStr?: string): boolean {
+  if (!dateStr) return false
+  return usesClockInAnchor(dateStr) && dateStr >= SHIFT_CLAMP_START
+}
+
 export interface AttendanceBreakdown {
   hoursWorked: number
   lunchDeducted: boolean
@@ -96,16 +106,22 @@ export function calcAttendanceBreakdown(
   if (outM < inM) outM += 24 * 60
 
   const anchored = usesClockInAnchor(date)
+  const clampEarlyArrival = !isFridayOrHoliday && usesShiftClamp(date)
+  let effectiveInM = inM
+  if (clampEarlyArrival) {
+    const officialStartM = inM < SECOND_SHIFT_INFERENCE_M
+      ? FIRST_SHIFT_START_M
+      : SECOND_SHIFT_START_M
+    effectiveInM = Math.max(inM, officialStartM)
+  }
 
-  // Lunch (1–2 PM), deducted only when the working window actually covers it.
-  // This is what separates the shifts without any shift field: a morning shift
-  // spans 1–2 PM and loses the hour, an evening shift starting at 2 PM does not.
+  // Lunch (1–2 PM), deducted only when the credited working window covers it.
   // It applies on every day — summer, winter, Friday and public holiday alike.
-  const lunchDeduct = inM >= LUNCH_END_M || outM <= LUNCH_START_M
+  const lunchDeduct = effectiveInM >= LUNCH_END_M || outM <= LUNCH_START_M
     ? 0
-    : Math.max(0, Math.min(outM, LUNCH_END_M) - Math.max(inM, LUNCH_START_M))
+    : Math.max(0, Math.min(outM, LUNCH_END_M) - Math.max(effectiveInM, LUNCH_START_M))
 
-  const netMins = outM - inM - lunchDeduct
+  const netMins = Math.max(0, outM - effectiveInM - lunchDeduct)
   const totalHours = Math.round((netMins / 60) * 4) / 4
 
   if (isFridayOrHoliday) {
@@ -124,8 +140,8 @@ export function calcAttendanceBreakdown(
     }
   }
 
-  // Regular day — from 1 Oct 2026 the 8-hour duty starts at clock-in and
-  // overtime is everything beyond 8 WORKED hours (lunch already excluded above).
+  // Regular day — from 1 Oct 2026 overtime is everything beyond 8 worked
+  // hours. From 19 Oct, early time before the inferred shift start is excluded.
   if (anchored) {
     const hoursWorked = Math.max(0, Math.min(totalHours, STANDARD_HOURS))
     const normalOtActualHrs = Math.round(Math.max(0, totalHours - STANDARD_HOURS) * 4) / 4

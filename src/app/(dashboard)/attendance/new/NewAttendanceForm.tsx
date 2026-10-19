@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, dutyHints, DUTY_START, DUTY_END } from '@/lib/attendance'
+import { calcAttendanceBreakdown, isFriday, usesClockInAnchor, usesShiftClamp, dutyHints, DUTY_START, DUTY_END } from '@/lib/attendance'
 import { SickLeaveUsageNote } from '@/components/attendance/SickLeaveUsageNote'
 import { safeReturnTo } from '@/lib/backNav'
 
@@ -73,6 +73,7 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
   const isFridayDate = isFriday(date)
   const isFridayOrHoliday = isFridayDate || isPublicHoliday
   const anchored = usesClockInAnchor(date)
+  const shiftClamp = usesShiftClamp(date)
 
   const showTimes = status === 'present' || status === 'half_day'
   const hints = dutyHints(date)
@@ -90,8 +91,6 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
       status,
       check_in: showTimes ? checkIn || null : null,
       check_out: showTimes ? checkOut || null : null,
-      hours_worked: breakdown ? breakdown.hoursWorked : 0,
-      overtime_hours: breakdown ? breakdown.normalOtPaidHrs : 0,
       friday_ot_amount: isFridayOrHoliday && showTimes ? Number(fridayOtAmount) || 0 : 0,
       is_public_holiday: isPublicHoliday,
       notes: (fd.get('notes') as string) || null,
@@ -330,7 +329,9 @@ export function NewAttendanceForm({ staff, lockedStaffId, isKiosk, dateLockedToT
                     <div className="flex items-center justify-between px-4 py-3">
                       <div>
                         <p className="font-semibold text-slate-800">Regular Hours</p>
-                        <p className="text-xs text-slate-400 mt-0.5">8-hour duty from clock-in</p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {shiftClamp ? 'Official shift start used for early arrivals' : '8-hour duty from clock-in'}
+                        </p>
                       </div>
                       <p className="font-bold text-slate-900 text-base">{fmtHrs(breakdown.hoursWorked)}</p>
                     </div>

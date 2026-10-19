@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
-import { isFriday, payableOvertimeHours } from '@/lib/attendance'
+import { calcAttendanceBreakdown, isFriday, payableOvertimeHours } from '@/lib/attendance'
 
 // Attendance is not yet represented in the manually maintained Database type.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -23,7 +23,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const body = await request.json()
-    const { date, check_in, check_out, hours_worked, overtime_hours, status, notes, is_public_holiday } = body
+    const { date, check_in, check_out, status, notes, is_public_holiday } = body
 
     if (!date) return NextResponse.json({ error: 'Date is required' }, { status: 400 })
     if (!status) return NextResponse.json({ error: 'Status is required' }, { status: 400 })
@@ -56,22 +56,38 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       isOtEligible = (staffData as { overtime_eligible: boolean } | null)?.overtime_eligible ?? true
     }
     const isHoliday = isFriday(date) || Boolean(is_public_holiday)
+    const isWorkedStatus = ['present', 'half_day'].includes(status)
+    if (isWorkedStatus && [check_in, check_out].some((value) => {
+      if (typeof value !== 'string' || !/^\d{2}:\d{2}$/.test(value)) return true
+      const [hour, minute] = value.split(':').map(Number)
+      return hour > 23 || minute > 59
+    })) {
+      return NextResponse.json({ error: 'Check-in and check-out times are required' }, { status: 400 })
+    }
+    const breakdown = isWorkedStatus
+      ? calcAttendanceBreakdown(check_in, check_out, isHoliday, date)
+      : null
+    if (isWorkedStatus && !breakdown) {
+      return NextResponse.json({ error: 'Check-in and check-out times are required' }, { status: 400 })
+    }
 
     const { data: updated, error } = await admin
       .from('attendance')
       .update({
         date,
-        check_in: check_in || null,
-        check_out: check_out || null,
-        hours_worked: Number(hours_worked ?? 0),
-        overtime_hours: payableOvertimeHours(Number(overtime_hours ?? 0), {
+        check_in: isWorkedStatus ? check_in : null,
+        check_out: isWorkedStatus ? check_out : null,
+        hours_worked: breakdown?.hoursWorked ?? 0,
+        overtime_hours: payableOvertimeHours(breakdown?.normalOtPaidHrs ?? 0, {
           overtimeEligible: isOtEligible,
           isFridayOrHoliday: isHoliday,
         }),
         status,
         notes: notes?.trim() || null,
         is_public_holiday: Boolean(is_public_holiday ?? false),
-        friday_ot_amount: Number(body.friday_ot_amount ?? 0),
+        friday_ot_amount: isHoliday && isWorkedStatus
+          ? Number(body.friday_ot_amount ?? 0)
+          : 0,
       })
       .eq('id', id)
       .eq('organization_id', profile.organization_id)
