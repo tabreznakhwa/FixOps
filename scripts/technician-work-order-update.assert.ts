@@ -26,10 +26,10 @@ for (const marker of [
   "updates.technician_name = assignee.full_name",
   "'payment_status'",
   'const TECHNICIAN_STATUS_TRANSITIONS: Record<string, Set<string>>',
-  "new: new Set(['accepted'])",
-  "assigned: new Set(['accepted'])",
-  "accepted: new Set(['on_the_way'])",
-  "on_the_way: new Set(['work_started'])",
+  "new: new Set(['accepted', 'completed'])",
+  "assigned: new Set(['accepted', 'completed'])",
+  "accepted: new Set(['on_the_way', 'completed'])",
+  "on_the_way: new Set(['work_started', 'completed'])",
   "allowedNextStatuses?.has(nextStatus)",
   "['invoiced', 'paid', 'cancelled', 'completed', 'verified'].includes(workOrder.status)",
   "!isTechnician && updates.status === 'completed'",
@@ -51,8 +51,22 @@ assert.equal(
 const actions = read('src/app/(dashboard)/work-orders/[id]/WorkOrderActions.tsx')
 assert.ok(
   actions.includes('isTechnician && technicianCanComplete'),
-  'only the assigned technician may see Mark Complete, and only from a valid active-work state',
+  'only the assigned technician may see Mark Complete, and only on an active work order',
 )
+for (const status of [
+  "'new'",
+  "'assigned'",
+  "'accepted'",
+  "'on_the_way'",
+  "'work_started'",
+  "'waiting_parts'",
+  "'waiting_approval'",
+]) {
+  assert.ok(
+    actions.includes(status),
+    `technician Mark Complete must remain available from active status: ${status}`,
+  )
+}
 assert.equal(
   actions.includes('(!isTechnician || technicianCanComplete)'),
   false,

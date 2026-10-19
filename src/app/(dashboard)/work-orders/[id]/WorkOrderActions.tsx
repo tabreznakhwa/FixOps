@@ -44,6 +44,10 @@ export function WorkOrderActions({
   const isCancelled = currentStatus === 'cancelled'
   const isPaid = paymentStatus === 'paid'
   const technicianCanComplete = [
+    'new',
+    'assigned',
+    'accepted',
+    'on_the_way',
     'work_started',
     'waiting_parts',
     'waiting_approval',

@@ -27,10 +27,10 @@ const PRIVILEGED_FIELDS = new Set([
 ])
 const TECHNICIAN_FIELDS = new Set(['status', 'notes'])
 const TECHNICIAN_STATUS_TRANSITIONS: Record<string, Set<string>> = {
-  new: new Set(['accepted']),
-  assigned: new Set(['accepted']),
-  accepted: new Set(['on_the_way']),
-  on_the_way: new Set(['work_started']),
+  new: new Set(['accepted', 'completed']),
+  assigned: new Set(['accepted', 'completed']),
+  accepted: new Set(['on_the_way', 'completed']),
+  on_the_way: new Set(['work_started', 'completed']),
   work_started: new Set(['waiting_parts', 'waiting_approval', 'completed']),
   waiting_parts: new Set(['work_started', 'waiting_approval', 'completed']),
   waiting_approval: new Set(['work_started', 'completed']),

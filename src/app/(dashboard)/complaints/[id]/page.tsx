@@ -39,7 +39,7 @@ export default async function ComplaintDetailPage({
   // Only non-sensitive staff directory fields cross this authorized server page.
   const admin = createAdminClient()
 
-  const { profile } = await getAuthedProfile()
+  const { user, profile } = await getAuthedProfile()
   if (!profile || profile.status !== 'active' || !profile.organization_id) redirect('/login')
 
   const { data: raw } = await supabase
@@ -64,16 +64,11 @@ export default async function ComplaintDetailPage({
     users: { id: string; full_name: string } | null
   }
 
-  const { data: { user: authUser } } = await supabase.auth.getUser()
-
-  const [usersRes, staffRes, workOrdersRes, internalNotesRes, currentUserRes] = await Promise.all([
+  const [usersRes, staffRes, workOrdersRes, internalNotesRes] = await Promise.all([
     supabase.from('users').select('id, full_name, role').in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
     admin.from('staff').select('id, full_name, designation').eq('employment_status', 'active').eq('organization_id', profile.organization_id),
     supabase.from('work_orders').select('id, work_order_number, status').eq('complaint_id', id).order('created_at', { ascending: false }),
     supabase.from('complaint_internal_notes').select('id, note, author_name, created_at, created_by, updated_at').eq('complaint_id', id).order('created_at', { ascending: false }),
-    authUser
-      ? supabase.from('users').select('role').eq('id', authUser.id).single()
-      : Promise.resolve({ data: null }),
   ])
   const systemUsers = (usersRes.data ?? []) as unknown as { id: string; full_name: string; role: string }[]
   const staffMembers = (staffRes.data ?? []) as unknown as { id: string; full_name: string; designation: string | null }[]
@@ -86,8 +81,7 @@ export default async function ComplaintDetailPage({
     id: string; note: string; author_name: string; created_at: string
     created_by: string | null; updated_at: string | null
   }[]
-  const currentUserRole = (currentUserRes.data as { role: string } | null)?.role ?? null
-  const canEditAnyNote = currentUserRole !== null && ['owner', 'admin', 'manager'].includes(currentUserRole)
+  const canEditAnyNote = ['owner', 'admin', 'manager'].includes(profile.role)
 
   const categories = Array.isArray(complaint.service_category)
     ? complaint.service_category
@@ -380,7 +374,7 @@ export default async function ComplaintDetailPage({
           <InternalNotes
             complaintId={complaint.id}
             initialNotes={internalNotes}
-            currentUserId={authUser?.id ?? null}
+            currentUserId={user?.id ?? null}
             canEditAnyNote={canEditAnyNote}
           />
         </div>

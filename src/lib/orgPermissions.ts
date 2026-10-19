@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { cache } from 'react'
 import { createAdminClient } from './supabase/server'
 import {
   DEFAULT_PERMISSIONS, LOCKED_ROLES, ALL_MODULES,
@@ -13,7 +15,7 @@ function isTableMissing(err: unknown): boolean {
  * Falls back to DEFAULT_PERMISSIONS if the table doesn't exist yet or has no rows.
  * Locked roles (owner/admin) always return full regardless of DB.
  */
-export async function getRoleAccess(orgId: string, role: string): Promise<ModuleAccess> {
+export const getRoleAccess = cache(async (orgId: string, role: string): Promise<ModuleAccess> => {
   if (LOCKED_ROLES.includes(role)) {
     return { operations: 'full', finance: 'full', hr: 'full', inventory: 'full', reports: 'full', settings: 'full' }
   }
@@ -40,7 +42,7 @@ export async function getRoleAccess(orgId: string, role: string): Promise<Module
   }
 
   return defaults
-}
+})
 
 /**
  * Loads the full permissions matrix for all roles in an org.

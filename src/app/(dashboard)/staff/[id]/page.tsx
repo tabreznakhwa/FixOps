@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@/lib/supabase/server'
+import { getAuthedProfile } from '@/lib/auth/session'
 import { notFound } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
-import Link from 'next/link'
-import { Phone, Mail, CreditCard, Calendar, Briefcase, DollarSign, AlertTriangle } from 'lucide-react'
+import { Phone, Mail, Calendar, Briefcase, DollarSign, AlertTriangle } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
 import { formatCurrency, formatDate, daysUntil } from '@/lib/utils'
 import { StaffEditForm } from './StaffEditForm'
@@ -24,11 +25,43 @@ export default async function StaffDetailPage({
   const back = resolveBack(query.return_to, '/staff', 'Staff')
   const supabase = await createClient()
 
-  const { data: staffRaw } = await (supabase as any)
-    .from('staff')
-    .select('*')
-    .eq('id', id)
-    .single()
+  const [
+    { data: staffRaw },
+    { profile },
+    { data: slipsRaw },
+    { data: advancesRaw },
+    { data: repaymentsRaw },
+    { data: bonusesRaw },
+  ] = await Promise.all([
+    (supabase as any)
+      .from('staff')
+      .select('*')
+      .eq('id', id)
+      .single(),
+    getAuthedProfile(),
+    (supabase as any)
+      .from('salary_slips')
+      .select('net_salary, payment_status, salary_runs(salary_month, salary_year)')
+      .eq('staff_id', id)
+      .order('created_at', { ascending: false })
+      .limit(6),
+    (supabase as any)
+      .from('staff_advances')
+      .select('id, type, amount, issued_date, payment_method, notes')
+      .eq('staff_id', id)
+      .order('issued_date', { ascending: false }),
+    (supabase as any)
+      .from('staff_advance_repayments')
+      .select('id, amount, repayment_date, payment_method, notes')
+      .eq('staff_id', id)
+      .order('repayment_date', { ascending: false }),
+    (supabase as any)
+      .from('staff_bonuses')
+      .select('id, bonus_date, amount, payment_mode, notes')
+      .eq('staff_id', id)
+      .eq('is_voided', false)
+      .order('bonus_date', { ascending: false }),
+  ])
 
   if (!staffRaw) notFound()
 
@@ -46,62 +79,37 @@ export default async function StaffDetailPage({
   }
 
   // Login accounts available to link — same org, not already linked to a different staff record
-  const { data: { user: authUser } } = await supabase.auth.getUser()
-  const { data: myProfileRaw } = await (supabase as any).from('users').select('organization_id, role').eq('id', authUser?.id).single()
-  const orgId = (myProfileRaw as { organization_id: string; role: string } | null)?.organization_id
-  const canEdit = ['owner', 'admin', 'hr', 'manager'].includes((myProfileRaw as { role: string } | null)?.role ?? '')
+  const orgId = profile?.organization_id
+  const canEdit = ['owner', 'admin', 'hr', 'manager'].includes(profile?.role ?? '')
 
-  const { data: candidateUsersRaw } = await (supabase as any)
-    .from('users')
-    .select('id, full_name, role')
-    .eq('organization_id', orgId)
-    .eq('status', 'active')
-    .order('full_name')
-  const { data: linkedStaffRaw } = await (supabase as any)
-    .from('staff')
-    .select('user_id')
-    .not('user_id', 'is', null)
-    .neq('id', s.id)
+  const [{ data: candidateUsersRaw }, { data: linkedStaffRaw }] = await Promise.all([
+    (supabase as any)
+      .from('users')
+      .select('id, full_name, role')
+      .eq('organization_id', orgId)
+      .eq('status', 'active')
+      .order('full_name'),
+    (supabase as any)
+      .from('staff')
+      .select('user_id')
+      .not('user_id', 'is', null)
+      .neq('id', s.id),
+  ])
   const linkedUserIds = new Set(((linkedStaffRaw ?? []) as Array<{ user_id: string }>).map((r) => r.user_id))
   const allUsers = (candidateUsersRaw ?? []) as Array<{ id: string; full_name: string; role: string }>
   const availableUsers = allUsers.filter((u) => !linkedUserIds.has(u.id))
   const linkedUser = s.user_id ? allUsers.find((u) => u.id === s.user_id) ?? null : null
 
-  const { data: slipsRaw } = await (supabase as any)
-    .from('salary_slips')
-    .select('net_salary, payment_status, salary_runs(salary_month, salary_year)')
-    .eq('staff_id', id)
-    .order('created_at', { ascending: false })
-    .limit(6)
   const slips = (slipsRaw ?? []) as Array<{
     net_salary: number; payment_status: string
     salary_runs: { salary_month: number; salary_year: number } | null
   }>
-
-  const { data: advancesRaw } = await (supabase as any)
-    .from('staff_advances')
-    .select('id, type, amount, issued_date, payment_method, notes')
-    .eq('staff_id', id)
-    .order('issued_date', { ascending: false })
   const advances = (advancesRaw ?? []) as Array<{
     id: string; type: string; amount: number; issued_date: string; payment_method: string | null; notes: string | null
   }>
-
-  const { data: repaymentsRaw } = await (supabase as any)
-    .from('staff_advance_repayments')
-    .select('id, amount, repayment_date, payment_method, notes')
-    .eq('staff_id', id)
-    .order('repayment_date', { ascending: false })
   const repayments = (repaymentsRaw ?? []) as Array<{
     id: string; amount: number; repayment_date: string; payment_method: string | null; notes: string | null
   }>
-
-  const { data: bonusesRaw } = await (supabase as any)
-    .from('staff_bonuses')
-    .select('id, bonus_date, amount, payment_mode, notes')
-    .eq('staff_id', id)
-    .eq('is_voided', false)
-    .order('bonus_date', { ascending: false })
   const bonuses = (bonusesRaw ?? []) as Array<{
     id: string; bonus_date: string; amount: number; payment_mode: string; notes: string | null
   }>

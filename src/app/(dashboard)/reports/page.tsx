@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
@@ -86,7 +87,39 @@ export default async function ReportsPage({
   if (from) invQuery = invQuery.gte('invoice_date', from.split('T')[0])
   if (to) invQuery = invQuery.lte('invoice_date', to.split('T')[0])
 
-  const { data: invoicesRaw } = await (invQuery as any)
+  // Monthly revenue — last 6 months always (ignores range filter for the bar chart)
+  const sixMonthsAgo = new Date()
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
+  sixMonthsAgo.setDate(1)
+
+  // Payment mode breakdown
+  let pmQuery = supabase
+    .from('payments')
+    .select('payment_mode, amount_received')
+    .eq('is_cancelled', false)
+  if (from) pmQuery = pmQuery.gte('payment_date', from.split('T')[0])
+  if (to) pmQuery = pmQuery.lte('payment_date', to.split('T')[0])
+
+  const [
+    { data: invoicesRaw },
+    { data: allInvoicesRaw },
+    { data: paymentsRaw },
+    { data: agingRaw },
+  ] = await Promise.all([
+    invQuery as any,
+    (supabase as any)
+      .from('invoices')
+      .select('invoice_date, total_amount, amount_paid, status')
+      .not('status', 'in', '(cancelled,written_off)')
+      .gte('invoice_date', sixMonthsAgo.toISOString().split('T')[0])
+      .order('invoice_date', { ascending: true }),
+    pmQuery,
+    (supabase as any)
+      .from('invoices')
+      .select('balance_due, due_date, status')
+      .in('status', ['issued', 'partial', 'overdue'])
+      .gt('balance_due', 0),
+  ])
 
   const invoices = (invoicesRaw ?? []) as unknown as Array<{
     id: string
@@ -104,18 +137,6 @@ export default async function ReportsPage({
   const totalCollected = invoices.reduce((s, i) => s + i.amount_paid, 0)
   const totalOutstanding = invoices.reduce((s, i) => s + i.balance_due, 0)
   const collectionRate = totalInvoiced > 0 ? (totalCollected / totalInvoiced) * 100 : 0
-
-  // Monthly revenue — last 6 months always (ignores range filter for the bar chart)
-  const sixMonthsAgo = new Date()
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
-  sixMonthsAgo.setDate(1)
-
-  const { data: allInvoicesRaw } = await (supabase as any)
-    .from('invoices')
-    .select('invoice_date, total_amount, amount_paid, status')
-    .not('status', 'in', '(cancelled,written_off)')
-    .gte('invoice_date', sixMonthsAgo.toISOString().split('T')[0])
-    .order('invoice_date', { ascending: true })
 
   const allInvoices = (allInvoicesRaw ?? []) as unknown as Array<{
     invoice_date: string
@@ -143,14 +164,6 @@ export default async function ReportsPage({
   const monthlyData = Object.values(monthlyMap)
   const maxMonthly = Math.max(...monthlyData.map((m) => m.invoiced), 1)
 
-  // Payment mode breakdown
-  let pmQuery = supabase
-    .from('payments')
-    .select('payment_mode, amount_received')
-    .eq('is_cancelled', false)
-  if (from) pmQuery = pmQuery.gte('payment_date', from.split('T')[0])
-  if (to) pmQuery = pmQuery.lte('payment_date', to.split('T')[0])
-  const { data: paymentsRaw } = await pmQuery
   const payments = (paymentsRaw ?? []) as unknown as Array<{
     payment_mode: string
     amount_received: number
@@ -165,12 +178,6 @@ export default async function ReportsPage({
   const modeEntries = Object.entries(modeBreakdown).sort(([, a], [, b]) => b - a)
 
   // Receivables aging (based on all non-paid open invoices — ignores range filter)
-  const { data: agingRaw } = await (supabase as any)
-    .from('invoices')
-    .select('balance_due, due_date, status')
-    .in('status', ['issued', 'partial', 'overdue'])
-    .gt('balance_due', 0)
-
   const aging = (agingRaw ?? []) as unknown as Array<{
     balance_due: number
     due_date: string | null
