@@ -58,6 +58,7 @@ export default async function MyAttendancePage() {
       .eq('organization_id', profile.organization_id)
       .eq('staff_id', staffRecord.id)
       .gte('date', fromDate)
+      .lte('date', today)
       .order('date', { ascending: false })
       .limit(30)
     recentRecords = (records ?? []) as typeof recentRecords

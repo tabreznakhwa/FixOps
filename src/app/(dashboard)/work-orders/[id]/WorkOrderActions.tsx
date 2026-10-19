@@ -15,7 +15,7 @@ interface Props {
   currentAssigneeKey: string | null
   technicians: Person[]
   customerId: string | null
-  finalAmount: number | null
+  paymentAmount: number | null
   paymentStatus: string
   existingInvoiceId: string | null
   existingInvoiceStatus: string | null
@@ -25,7 +25,7 @@ interface Props {
 
 export function WorkOrderActions({
   workOrderId, currentStatus, currentAssigneeKey, technicians,
-  customerId, finalAmount, paymentStatus, existingInvoiceId, existingInvoiceStatus, workOrderHref,
+  customerId, paymentAmount, paymentStatus, existingInvoiceId, existingInvoiceStatus, workOrderHref,
   isTechnician,
 }: Props) {
   const router = useRouter()
@@ -178,12 +178,12 @@ export function WorkOrderActions({
       )}
 
       {/* Collect Payment */}
-      {!isCancelled && !isPaid && customerId && (
+      {!isCancelled && !isPaid && customerId && paymentAmount !== null && (
         <div className="border-t border-slate-100 pt-4">
           {!showPayForm ? (
             <button
               onClick={() => {
-                setPayAmount(finalAmount !== null && finalAmount > 0 ? finalAmount.toFixed(3) : '')
+                setPayAmount(paymentAmount !== null && paymentAmount > 0 ? paymentAmount.toFixed(3) : '')
                 setShowPayForm(true)
               }}
               className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"

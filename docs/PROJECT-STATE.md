@@ -152,17 +152,21 @@ their login (`assigned_to`) or through their active linked staff row
 honour those two assignment forms. Direct authenticated work-order writes are
 revoked by migration 058; all mutations go through the guarded server APIs.
 Technician-created work orders are forced to self-assignment server-side.
-Technicians may add/remove inventory parts on their own job and advance only
-through valid job-status transitions, but cannot set or receive billing prices,
-edit assignment or financial fields, create/remove custom or service line items,
-or cancel a work order. Payment collection is cash only on their own work order;
+Technicians may add, edit and remove Custom, Part and Service line items on
+their own open job, enter the customer-facing unit price, see line totals and
+the final work-order amount, and advance only through valid job-status
+transitions. Internal inventory purchase cost remains private and inventory
+movement is still valued from `purchase_price`; technicians still cannot edit
+assignment or other financial fields or cancel a work order. Payment collection
+is cash only on their own work order;
 route and `record_customer_payment` independently enforce this. Migration 059
 keeps the work-order payment snapshot current for pre-invoice receipts.
 Migration 060 (manually applied 18 Oct 2026; production effects not yet
 independently verified) requires a positive work-order total before an
 un-invoiced receipt and enforces the cumulative limit under the work-order row
-lock. Work-order list/detail pages hide pricing and invoice controls from
-technicians.
+lock. The work-order detail shows customer line-item pricing and its final
+amount to the assigned technician, while the work-order list and invoice
+controls remain hidden from technicians.
 
 After a successful submit use `router.replace()`, never `push()` or
 `window.location.href`, or the completed form stays in the stack.

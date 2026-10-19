@@ -43,15 +43,30 @@ const route = read('src/app/api/work-orders/[id]/line-items/route.ts')
 for (const marker of [
   "from '@/lib/workOrderMutationAccess'",
   ".eq('organization_id', workOrder.organization_id)",
-  "const isTechnician = (profileRaw as { role: string } | null)?.role === 'technician'",
-  "isTechnician && item_type !== 'part'",
-  "resolvedPrice = isTechnician",
-  "Technicians cannot edit line items",
-  "isTechnician && item.item_type !== 'part'",
-  "Technicians may only remove inventory parts",
+  "const isTechnician = workOrder.actorRole === 'technician'",
+  'let resolvedPrice = Number(unit_price)',
+  '? Number(unit_price)',
+  "select('current_stock, unit_of_measure, purchase_price')",
+  'unitCost = Number(invItem.purchase_price) || 0',
+  "select('purchase_price')",
   "['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(workOrder.status)",
+  ".update({ final_amount: newTotal, updated_at: new Date().toISOString() })",
 ]) {
   assert.ok(route.includes(marker), `line-items route is missing: ${marker}`)
+}
+
+for (const removedRestriction of [
+  "isTechnician && item_type !== 'part'",
+  'Technicians may only add inventory parts',
+  'Technicians cannot edit line items',
+  "isTechnician && item.item_type !== 'part'",
+  'Technicians may only remove inventory parts',
+]) {
+  assert.equal(
+    route.includes(removedRestriction),
+    false,
+    `line-items route still restricts technician line items: ${removedRestriction}`,
+  )
 }
 
 assert.equal(
@@ -64,17 +79,41 @@ assert.equal(
   3,
   'POST, PATCH and DELETE must each stop after an authorization failure',
 )
+assert.equal(
+  route.match(/\['completed', 'verified', 'invoiced', 'paid', 'cancelled'\]\.includes\(workOrder\.status\)/g)?.length,
+  3,
+  'POST, PATCH and DELETE must each reject closed work orders',
+)
+assert.equal(
+  route.match(/\.update\(\{ final_amount: newTotal, updated_at: new Date\(\)\.toISOString\(\) \}\)/g)?.length,
+  3,
+  'POST, PATCH and DELETE must each recalculate the work-order final amount',
+)
 
 const detail = read('src/app/(dashboard)/work-orders/[id]/page.tsx')
-assert.ok(
-  detail.includes("['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(wo.status)"),
-  'closed work orders must hide all line-item mutation controls',
-)
+for (const marker of [
+  "select('id, item_code, item_name, unit_of_measure, current_stock, selling_price')",
+  ".select('id, item_type, description, quantity, unit_price, inventory_item_id')",
+  'selling_price: Number(item.selling_price) || 0',
+  'unit_price: Number(item.unit_price) || 0',
+  'paymentAmount={paymentAmount}',
+  "['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(wo.status)",
+]) {
+  assert.ok(detail.includes(marker), `work-order detail is missing: ${marker}`)
+}
+assert.equal(detail.includes('hidePrices={isTechnician}'), false)
 
 const component = read('src/app/(dashboard)/work-orders/[id]/WorkOrderParts.tsx')
-assert.ok(
-  component.includes("(!hidePrices || item.item_type === 'part')"),
-  'technician UI must only offer removal for inventory parts',
-)
+for (const marker of [
+  "(['custom', 'part', 'service'] as TabType[]).map",
+  'const price = parseFloat(unitPrice)',
+  'Unit Price (KWD)',
+  'Total: KWD {total.toFixed(3)}',
+  'onClick={() => startEdit(item)}',
+  'onClick={() => handleRemove(item.id)}',
+]) {
+  assert.ok(component.includes(marker), `line-item component is missing: ${marker}`)
+}
+assert.equal(component.includes('hidePrices'), false, 'line-item pricing must not be hidden from technicians')
 
 console.log('technician work-order line-item assertions passed')

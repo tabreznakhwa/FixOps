@@ -105,8 +105,9 @@ for (const marker of [
 const actions = read('src/app/(dashboard)/work-orders/[id]/WorkOrderActions.tsx')
 for (const marker of [
   "payment_mode: isTechnician ? 'cash' : payMode",
-  'finalAmount: number | null',
-  'finalAmount !== null && finalAmount > 0',
+  'paymentAmount: number | null',
+  'paymentAmount !== null && paymentAmount > 0',
+  '!isPaid && customerId && paymentAmount !== null',
   '{!isTechnician && !isCancelled && (',
   '{!isTechnician && !isCompleted && !isCancelled && (',
 ]) {
@@ -115,11 +116,14 @@ for (const marker of [
 
 const detail = read('src/app/(dashboard)/work-orders/[id]/page.tsx')
 for (const marker of [
-  "isTechnician\n          ? 'id, item_type, description, quantity, inventory_item_id'",
-  'unit_price: isTechnician ? 0 : Number(item.unit_price) || 0',
-  'finalAmount={isTechnician ? null : wo.final_amount}',
+  ".select('id, item_type, description, quantity, unit_price, inventory_item_id')",
+  'unit_price: Number(item.unit_price) || 0',
+  'paymentAmount={paymentAmount}',
+  ".select('id, status, balance_due')",
+  ".from('payments')",
+  "Number(wo.final_amount) - amountAlreadyCollected",
 ]) {
-  assert.ok(detail.includes(marker), `technician financial redaction is missing: ${marker}`)
+  assert.ok(detail.includes(marker), `technician payment amount support is missing: ${marker}`)
 }
 
 console.log('technician work-order payment assertions passed')
