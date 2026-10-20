@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { getAuthedProfile } from '@/lib/auth/session'
 import { isWorkOrderAssignedToTechnician } from '@/lib/workOrderAccess'
+import { canEditExistingWorkOrderLineItem } from '@/lib/workOrderMutationAccess'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -149,9 +150,18 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
   } | null
   const existingInvoiceId = isTechnician ? null : existingInvoice?.id ?? null
   const existingInvoiceStatus = isTechnician ? null : existingInvoice?.status ?? null
-  const amountAlreadyCollected = ((receiptsRaw.data ?? []) as Array<{
+  const directReceipts = (receiptsRaw.data ?? []) as Array<{
     amount_received: number
-  }>).reduce((sum, receipt) => sum + Number(receipt.amount_received || 0), 0)
+  }>
+  const amountAlreadyCollected = directReceipts.reduce(
+    (sum, receipt) => sum + Number(receipt.amount_received || 0),
+    0,
+  )
+  const canEditLineItems = canEditExistingWorkOrderLineItem({
+    status: wo.status,
+    actorRole: profile.role,
+    hasFinancialActivity: Boolean(existingInvoice || directReceipts.length),
+  })
   const paymentAmount = existingInvoice && !['issued', 'partial', 'overdue'].includes(existingInvoice.status)
     ? null
     : Math.max(
@@ -229,6 +239,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
             inventoryItems={inventoryItems}
             existingParts={existingParts}
             isCompleted={['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(wo.status)}
+            canEditLineItems={canEditLineItems}
             customServices={customServices}
           />
 

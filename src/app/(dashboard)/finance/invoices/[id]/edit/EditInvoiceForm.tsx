@@ -27,6 +27,7 @@ interface Props {
     id: string; invoice_number: string; invoice_type: string; invoice_date: string
     due_date: string | null; ref_number: string | null; discount_amount: number; notes: string | null
     terms_and_conditions: string | null; customer_id: string; work_order_id: string | null
+    posting_sequence: number | null
   }
   items: { id: string; description: string; quantity: number; unit_price: number }[]
   customers: Customer[]
@@ -77,6 +78,7 @@ const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
 export function EditInvoiceForm({ invoice, items: initialItems, customers, workOrders, inventoryItems, detailHref }: Props) {
   const router = useRouter()
+  const isPosted = invoice.posting_sequence !== null
   const [customerId, setCustomerId] = useState(invoice.customer_id)
   const [invoiceType, setInvoiceType] = useState(invoice.invoice_type)
   const [invoiceDate, setInvoiceDate] = useState(invoice.invoice_date)
@@ -158,31 +160,37 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    if (!customerId) { setError('Please select a customer'); return }
-    if (items.some(it => !it.description.trim() || !it.unit_price)) {
+    if (!isPosted && !customerId) { setError('Please select a customer'); return }
+    if (!isPosted && items.some(it => !it.description.trim() || !it.unit_price)) {
       setError('All line items must have a description and unit price'); return
     }
     setLoading(true)
     try {
+      const metadata = {
+        due_date: dueDate || null,
+        work_order_id: workOrderId || null,
+        ref_number: refNumber.trim() || null,
+        notes: notes.trim() || null,
+        terms_and_conditions: termsAndConditions.trim() || null,
+      }
+      const body = isPosted
+        ? metadata
+        : {
+            customer_id: customerId,
+            invoice_type: invoiceType,
+            invoice_date: invoiceDate,
+            ...metadata,
+            discount_amount: discount,
+            items: items.map(it => ({
+              description: it.description.trim(),
+              quantity: parseFloat(it.quantity) || 1,
+              unit_price: parseFloat(it.unit_price) || 0,
+            })),
+          }
       const res = await fetch(`/api/invoices/${invoice.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_id: customerId,
-          invoice_type: invoiceType,
-          invoice_date: invoiceDate,
-          due_date: dueDate || null,
-          work_order_id: workOrderId || null,
-          ref_number: refNumber.trim() || null,
-          discount_amount: discount,
-          notes: notes.trim() || null,
-          terms_and_conditions: termsAndConditions.trim() || null,
-          items: items.map(it => ({
-            description: it.description.trim(),
-            quantity: parseFloat(it.quantity) || 1,
-            unit_price: parseFloat(it.unit_price) || 0,
-          })),
-        }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Failed to update invoice')
@@ -202,32 +210,43 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
         </div>
       )}
 
+      {isPosted && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl text-sm">
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span>This invoice has been posted. Accounting details and line items are locked; only the due date, REF number, linked work order, notes, and terms can be changed.</span>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-5">
         <h2 className="font-semibold text-slate-900">Invoice Details</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className={labelClass}>Customer *</label>
-            <select className={inputClass} value={customerId} onChange={e => { setCustomerId(e.target.value); setWorkOrderId('') }} required>
-              <option value="">Select customer…</option>
-              {customers.map(c => (
-                <option key={c.id} value={c.id}>{c.full_name}{c.company_name ? ` — ${c.company_name}` : ''}{c.mobile_number ? ` · ${c.mobile_number}` : ''}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Invoice Type *</label>
-            <select className={inputClass} value={invoiceType} onChange={e => setInvoiceType(e.target.value)}>
-              <option value="service">Service</option>
-              <option value="amc">AMC</option>
-              <option value="parts">Parts</option>
-              <option value="advance">Advance</option>
-              <option value="credit_note">Credit Note</option>
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Invoice Date *</label>
-            <input type="date" className={inputClass} value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} required />
-          </div>
+          {!isPosted && (
+            <>
+              <div>
+                <label className={labelClass}>Customer *</label>
+                <select className={inputClass} value={customerId} onChange={e => { setCustomerId(e.target.value); setWorkOrderId('') }} required>
+                  <option value="">Select customer…</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.full_name}{c.company_name ? ` — ${c.company_name}` : ''}{c.mobile_number ? ` · ${c.mobile_number}` : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Invoice Type *</label>
+                <select className={inputClass} value={invoiceType} onChange={e => setInvoiceType(e.target.value)}>
+                  <option value="service">Service</option>
+                  <option value="amc">AMC</option>
+                  <option value="parts">Parts</option>
+                  <option value="advance">Advance</option>
+                  <option value="credit_note">Credit Note</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Invoice Date *</label>
+                <input type="date" className={inputClass} value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} required />
+              </div>
+            </>
+          )}
           <div>
             <label className={labelClass}>Due Date</label>
             <input type="date" className={inputClass} value={dueDate} onChange={e => setDueDate(e.target.value)} />
@@ -254,10 +273,11 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
       </div>
 
       {/* Line Items */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <h2 className="font-semibold text-slate-900 mb-4">Line Items</h2>
-        <div className="space-y-3">
-          <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
+      {!isPosted && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <h2 className="font-semibold text-slate-900 mb-4">Line Items</h2>
+          <div className="space-y-3">
+            <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
             <div className="col-span-7">Description</div>
             <div className="col-span-2 text-right">Qty</div>
             <div className="col-span-2 text-right">Unit Price (KWD)</div>
@@ -333,23 +353,25 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
             )
           })}
         </div>
-        <button type="button" onClick={addItem} className="mt-4 flex items-center gap-2 text-sm text-blue-600 font-semibold hover:text-blue-700 transition">
-          <Plus className="w-4 h-4" /> Add Line Item
-        </button>
-      </div>
+          <button type="button" onClick={addItem} className="mt-4 flex items-center gap-2 text-sm text-blue-600 font-semibold hover:text-blue-700 transition">
+            <Plus className="w-4 h-4" /> Add Line Item
+          </button>
+        </div>
+      )}
 
       {/* Totals */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-          <h2 className="font-semibold text-slate-900">Discount</h2>
-          <div>
-            <label className={labelClass}>Discount Amount (KWD)</label>
-            <input type="number" min="0" step="0.001" className={inputClass} value={discountAmount} onChange={e => setDiscountAmount(e.target.value)} />
+      {!isPosted && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+            <h2 className="font-semibold text-slate-900">Discount</h2>
+            <div>
+              <label className={labelClass}>Discount Amount (KWD)</label>
+              <input type="number" min="0" step="0.001" className={inputClass} value={discountAmount} onChange={e => setDiscountAmount(e.target.value)} />
+            </div>
           </div>
-        </div>
-        <div className="bg-slate-50 rounded-xl border border-slate-200 p-5">
-          <h2 className="font-semibold text-slate-900 mb-4">Totals</h2>
-          <div className="space-y-2.5 text-sm">
+          <div className="bg-slate-50 rounded-xl border border-slate-200 p-5">
+            <h2 className="font-semibold text-slate-900 mb-4">Totals</h2>
+            <div className="space-y-2.5 text-sm">
             <div className="flex justify-between text-slate-600">
               <span>Subtotal</span><span className="font-medium text-slate-900">{fmt(subtotal)}</span>
             </div>
@@ -364,7 +386,8 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-slate-200 p-5">

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import {
   authorizeWorkOrderMutation,
+  canEditExistingWorkOrderLineItem,
   isAuthorizationResponse,
 } from '@/lib/workOrderMutationAccess'
 
@@ -216,7 +217,37 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     )
     if (isAuthorizationResponse(authorization)) return authorization
     const workOrder = authorization
-    if (['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(workOrder.status)) {
+    let hasFinancialActivity = false
+    if (['completed', 'verified'].includes(workOrder.status)) {
+      const [invoiceResult, paymentResult] = await Promise.all([
+        (supabase as any)
+          .from('invoices')
+          .select('id')
+          .eq('organization_id', workOrder.organization_id)
+          .eq('work_order_id', workOrderId)
+          .neq('status', 'cancelled')
+          .limit(1)
+          .maybeSingle(),
+        (supabase as any)
+          .from('payments')
+          .select('id')
+          .eq('organization_id', workOrder.organization_id)
+          .eq('work_order_id', workOrderId)
+          .is('invoice_id', null)
+          .eq('is_cancelled', false)
+          .eq('is_advance', false)
+          .limit(1)
+          .maybeSingle(),
+      ])
+      if (invoiceResult.error) throw invoiceResult.error
+      if (paymentResult.error) throw paymentResult.error
+      hasFinancialActivity = Boolean(invoiceResult.data || paymentResult.data)
+    }
+    if (!canEditExistingWorkOrderLineItem({
+      status: workOrder.status,
+      actorRole: workOrder.actorRole,
+      hasFinancialActivity,
+    })) {
       return NextResponse.json({ error: 'This work order can no longer be changed' }, { status: 409 })
     }
 

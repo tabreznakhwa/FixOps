@@ -175,7 +175,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const ALLOWED_FIELDS = ['status', 'notes', 'terms_and_conditions', 'due_date', 'invoice_date']
+    const ALLOWED_FIELDS = ['status', 'notes', 'terms_and_conditions', 'due_date', 'invoice_date', 'ref_number']
     const updatePayload: Record<string, unknown> = {}
 
     for (const field of ALLOWED_FIELDS) {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { isWorkOrderAssignedToTechnician } from '../src/lib/workOrderAccess'
+import { canEditExistingWorkOrderLineItem } from '../src/lib/workOrderMutationAccess'
 
 const root = resolve(import.meta.dirname, '..')
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8').replace(/\r\n/g, '\n')
@@ -21,6 +22,34 @@ assert.equal(isWorkOrderAssignedToTechnician({
   staffId: 'staff-2',
   workOrder: { assigned_to: null, assigned_staff_id: 'staff-1' },
 }), false)
+
+for (const actorRole of ['owner', 'admin']) {
+  for (const status of ['completed', 'verified']) {
+    assert.equal(canEditExistingWorkOrderLineItem({
+      status, actorRole, hasFinancialActivity: false,
+    }), true)
+    assert.equal(canEditExistingWorkOrderLineItem({
+      status, actorRole, hasFinancialActivity: true,
+    }), false)
+  }
+}
+for (const actorRole of ['technician', 'manager', 'call_center']) {
+  for (const status of ['completed', 'verified']) {
+    assert.equal(canEditExistingWorkOrderLineItem({
+      status, actorRole, hasFinancialActivity: false,
+    }), false)
+  }
+}
+for (const status of ['invoiced', 'paid', 'cancelled']) {
+  for (const actorRole of ['owner', 'admin', 'manager', 'call_center', 'technician']) {
+    assert.equal(canEditExistingWorkOrderLineItem({
+      status, actorRole, hasFinancialActivity: false,
+    }), false)
+  }
+}
+assert.equal(canEditExistingWorkOrderLineItem({
+  status: 'work_started', actorRole: 'technician', hasFinancialActivity: false,
+}), true)
 
 const access = read('src/lib/workOrderMutationAccess.ts')
 for (const marker of [
@@ -49,7 +78,10 @@ for (const marker of [
   "select('current_stock, unit_of_measure, purchase_price')",
   'unitCost = Number(invItem.purchase_price) || 0',
   "select('purchase_price')",
-  "['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(workOrder.status)",
+  'canEditExistingWorkOrderLineItem({',
+  "['completed', 'verified'].includes(workOrder.status)",
+  ".from('invoices')",
+  ".from('payments')",
   ".update({ final_amount: newTotal, updated_at: new Date().toISOString() })",
 ]) {
   assert.ok(route.includes(marker), `line-items route is missing: ${marker}`)
@@ -81,8 +113,13 @@ assert.equal(
 )
 assert.equal(
   route.match(/\['completed', 'verified', 'invoiced', 'paid', 'cancelled'\]\.includes\(workOrder\.status\)/g)?.length,
-  3,
-  'POST, PATCH and DELETE must each reject closed work orders',
+  2,
+  'POST and DELETE must retain their existing closed-work-order lock',
+)
+assert.equal(
+  route.match(/canEditExistingWorkOrderLineItem\(\{/g)?.length,
+  1,
+  'PATCH must apply the role-aware existing-line-item edit policy',
 )
 assert.equal(
   route.match(/\.update\(\{ final_amount: newTotal, updated_at: new Date\(\)\.toISOString\(\) \}\)/g)?.length,
@@ -98,6 +135,10 @@ for (const marker of [
   'unit_price: Number(item.unit_price) || 0',
   'paymentAmount={paymentAmount}',
   "['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(wo.status)",
+  'const canEditLineItems = canEditExistingWorkOrderLineItem({',
+  'actorRole: profile.role,',
+  'hasFinancialActivity: Boolean(existingInvoice || directReceipts.length)',
+  'canEditLineItems={canEditLineItems}',
 ]) {
   assert.ok(detail.includes(marker), `work-order detail is missing: ${marker}`)
 }
@@ -109,7 +150,10 @@ for (const marker of [
   'const price = parseFloat(unitPrice)',
   'Unit Price (KWD)',
   'Total: KWD {total.toFixed(3)}',
+  'canEditLineItems: boolean',
+  '{canEditLineItems && (',
   'onClick={() => startEdit(item)}',
+  '{!isCompleted && (',
   'onClick={() => handleRemove(item.id)}',
 ]) {
   assert.ok(component.includes(marker), `line-item component is missing: ${marker}`)

@@ -18,6 +18,21 @@ export type AuthorizedWorkOrder = {
   actorRole: string
 }
 
+export function canEditExistingWorkOrderLineItem({
+  status,
+  actorRole,
+  hasFinancialActivity,
+}: {
+  status: string
+  actorRole: string
+  hasFinancialActivity: boolean
+}): boolean {
+  if (['invoiced', 'paid', 'cancelled'].includes(status)) return false
+  if (!['completed', 'verified'].includes(status)) return true
+
+  return ['owner', 'admin'].includes(actorRole) && !hasFinancialActivity
+}
+
 export async function authorizeWorkOrderMutation(
   admin: ReturnType<typeof createAdminClient>,
   userId: string,

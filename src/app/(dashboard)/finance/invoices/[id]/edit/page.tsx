@@ -24,7 +24,7 @@ export default async function EditInvoicePage({ params, searchParams }: { params
 
   const { data: invoiceRaw } = await (supabase as any)
     .from('invoices')
-    .select('id, invoice_number, invoice_type, invoice_date, due_date, ref_number, status, discount_amount, notes, terms_and_conditions, customer_id, work_order_id')
+    .select('id, invoice_number, invoice_type, invoice_date, due_date, ref_number, status, posting_sequence, discount_amount, notes, terms_and_conditions, customer_id, work_order_id')
     .eq('id', id)
     .single()
 

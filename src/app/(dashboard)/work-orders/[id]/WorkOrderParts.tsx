@@ -98,6 +98,7 @@ interface Props {
   inventoryItems: InventoryItem[]
   existingParts: LineItem[]
   isCompleted: boolean
+  canEditLineItems: boolean
   customServices: string[]
 }
 
@@ -357,6 +358,7 @@ export function WorkOrderParts({
   inventoryItems,
   existingParts,
   isCompleted,
+  canEditLineItems,
   customServices,
 }: Props) {
   const router = useRouter()
@@ -628,24 +630,24 @@ export function WorkOrderParts({
                       {item.quantity} × KWD {Number(item.unit_price).toFixed(3)} = KWD {(item.quantity * item.unit_price).toFixed(3)}
                     </p>
                   </div>
+                  {canEditLineItems && (
+                    <button
+                      onClick={() => startEdit(item)}
+                      title="Edit line item"
+                      className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition flex-shrink-0"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
                   {!isCompleted && (
-                    <>
-                      <button
-                        onClick={() => startEdit(item)}
-                        title="Edit line item"
-                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition flex-shrink-0"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleRemove(item.id)}
-                        disabled={removing === item.id}
-                        title="Remove line item"
-                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition flex-shrink-0"
-                      >
-                        {removing === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                      </button>
-                    </>
+                    <button
+                      onClick={() => handleRemove(item.id)}
+                      disabled={removing === item.id}
+                      title="Remove line item"
+                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition flex-shrink-0"
+                    >
+                      {removing === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    </button>
                   )}
                 </div>
               )}
