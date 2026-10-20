@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { getAuthedProfile } from '@/lib/auth/session'
 import { isWorkOrderAssignedToTechnician } from '@/lib/workOrderAccess'
-import { canEditExistingWorkOrderLineItem } from '@/lib/workOrderMutationAccess'
+import { canMutateWorkOrderLineItems } from '@/lib/workOrderMutationAccess'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -157,11 +157,12 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     (sum, receipt) => sum + Number(receipt.amount_received || 0),
     0,
   )
-  const canEditLineItems = canEditExistingWorkOrderLineItem({
+  const canEditLineItems = canMutateWorkOrderLineItems({
     status: wo.status,
     actorRole: profile.role,
     hasFinancialActivity: Boolean(existingInvoice || directReceipts.length),
   })
+  const canEditJobDetails = !['invoiced', 'paid', 'cancelled'].includes(wo.status) && !existingInvoice
   const paymentAmount = existingInvoice && !['issued', 'partial', 'overdue'].includes(existingInvoice.status)
     ? null
     : Math.max(
@@ -190,7 +191,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
             <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${getStatusColor(wo.status)}`}>
               {formatStatus(wo.status)}
             </span>
-            {!isTechnician && (
+            {(!isTechnician || canEditJobDetails) && (
               <Link
                 href={editHref}
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
@@ -238,7 +239,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
             workOrderId={wo.id}
             inventoryItems={inventoryItems}
             existingParts={existingParts}
-            isCompleted={['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(wo.status)}
+            isCompleted={!canEditLineItems}
             canEditLineItems={canEditLineItems}
             customServices={customServices}
           />

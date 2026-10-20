@@ -4,17 +4,7 @@ import { useActionState, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateWorkOrder } from '../../actions'
 import { Loader2, AlertCircle, ChevronDown } from 'lucide-react'
-
-const SERVICE_CATEGORIES = [
-  { value: 'ac_maintenance', label: 'AC Maintenance' },
-  { value: 'plumbing', label: 'Plumbing' },
-  { value: 'electrical', label: 'Electrical' },
-  { value: 'general', label: 'General Maintenance' },
-  { value: 'installation', label: 'Installation' },
-  { value: 'inspection', label: 'Inspection' },
-  { value: 'quotation', label: 'Quotation' },
-  { value: 'emergency', label: 'Emergency' },
-]
+import { WORK_ORDER_SERVICE_CATEGORIES } from '@/lib/workOrderCategories'
 
 const PRIORITIES = ['low', 'medium', 'high', 'emergency'] as const
 
@@ -81,7 +71,7 @@ export function EditWorkOrderForm({ wo, technicians, currentAssigneeKey, detailH
             <label className={labelCls}>Service Category</label>
             <div className="relative">
               <select name="service_category" defaultValue={wo.service_category ?? ''} className={inputCls + ' appearance-none pr-9'}>
-                {SERVICE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                {WORK_ORDER_SERVICE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             </div>

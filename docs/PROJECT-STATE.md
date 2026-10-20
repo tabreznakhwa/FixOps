@@ -168,11 +168,16 @@ honour those two assignment forms. Direct authenticated work-order writes are
 revoked by migration 058; all mutations go through the guarded server APIs.
 Technician-created work orders are forced to self-assignment server-side.
 Technicians may add, edit and remove Custom, Part and Service line items on
-their own open job, enter the customer-facing unit price, see line totals and
-the final work-order amount, and advance only through valid job-status
-transitions. Internal inventory purchase cost remains private and inventory
-movement is still valued from `purchase_price`; technicians still cannot edit
-assignment or other financial fields or cancel a work order. Only the assigned
+their assigned job, including after completion/verification, until a non-cancelled
+invoice (draft included) or active direct Work Order payment exists. They may
+also edit only service category, job description and internal notes until a
+non-cancelled invoice exists; priority, assignment, scheduling, estimates,
+final amount and payment fields remain privileged. They can enter the customer-
+facing unit price, see line totals and the final work-order amount, and advance
+only through valid job-status transitions. Internal inventory purchase cost
+remains private and inventory movement is still valued from `purchase_price`;
+technicians still cannot edit assignment or other financial fields or cancel a
+work order. Only the assigned
 technician can mark a work order completed — admin, manager, owner and
 call_center no longer have a Mark Complete action of their own (enforced both
 in `WorkOrderActions` and server-side in the work-order PATCH route) and move
@@ -187,7 +192,14 @@ independently verified) requires a positive work-order total before an
 un-invoiced receipt and enforces the cumulative limit under the work-order row
 lock. The work-order detail shows customer line-item pricing and its final
 amount to the assigned technician, while the work-order list and invoice
-controls remain hidden from technicians.
+controls remain hidden from technicians. `work_order_line_items` RLS/grants are
+not established by the tracked migration history; verify live `pg_policies` and
+role grants before rollout. If `authenticated` has direct DML access, harden it
+separately using migration 058's server-only mutation pattern rather than
+assuming the admin-client API routes are the only write path. The application
+currently checks invoice/payment activity immediately before a separate write;
+a concurrent invoice/payment creation can still race that check until these
+mutations share a row-locked database transaction.
 
 ### Customer settlement discounts
 

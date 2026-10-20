@@ -14,11 +14,14 @@ export type AuthorizedWorkOrder = {
   organization_id: string
   assigned_to: string | null
   assigned_staff_id: string | null
+  complaint_id: string | null
   status: string
   actorRole: string
 }
 
-export function canEditExistingWorkOrderLineItem({
+type AdminClient = ReturnType<typeof createAdminClient>
+
+export function canMutateWorkOrderLineItems({
   status,
   actorRole,
   hasFinancialActivity,
@@ -27,10 +30,51 @@ export function canEditExistingWorkOrderLineItem({
   actorRole: string
   hasFinancialActivity: boolean
 }): boolean {
-  if (['invoiced', 'paid', 'cancelled'].includes(status)) return false
+  if (['invoiced', 'paid', 'cancelled'].includes(status) || hasFinancialActivity) return false
   if (!['completed', 'verified'].includes(status)) return true
 
-  return ['owner', 'admin'].includes(actorRole) && !hasFinancialActivity
+  return ['owner', 'admin', 'technician'].includes(actorRole)
+}
+
+export async function hasNonCancelledWorkOrderInvoice(
+  admin: AdminClient,
+  organizationId: string,
+  workOrderId: string,
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from('invoices')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .eq('work_order_id', workOrderId)
+    .neq('status', 'cancelled')
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return Boolean(data)
+}
+
+export async function hasWorkOrderFinancialActivity(
+  admin: AdminClient,
+  organizationId: string,
+  workOrderId: string,
+): Promise<boolean> {
+  const [hasInvoice, paymentResult] = await Promise.all([
+    hasNonCancelledWorkOrderInvoice(admin, organizationId, workOrderId),
+    admin
+      .from('payments')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('work_order_id', workOrderId)
+      .is('invoice_id', null)
+      .eq('is_cancelled', false)
+      .eq('is_advance', false)
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  if (paymentResult.error) throw paymentResult.error
+  return hasInvoice || Boolean(paymentResult.data)
 }
 
 export async function authorizeWorkOrderMutation(
@@ -60,7 +104,7 @@ export async function authorizeWorkOrderMutation(
 
   const { data: workOrderRaw, error: workOrderError } = await admin
     .from('work_orders')
-    .select('organization_id, assigned_to, assigned_staff_id, status')
+    .select('organization_id, assigned_to, assigned_staff_id, complaint_id, status')
     .eq('id', workOrderId)
     .eq('organization_id', profile.organization_id)
     .single()

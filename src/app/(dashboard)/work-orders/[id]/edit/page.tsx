@@ -4,7 +4,10 @@ import { Header } from '@/components/layout/Header'
 import { notFound, redirect } from 'next/navigation'
 import { BackButton } from '@/components/ui/BackButton'
 import { EditWorkOrderForm } from './EditWorkOrderForm'
+import { TechnicianEditWorkOrderForm } from './TechnicianEditWorkOrderForm'
 import { resolveBack } from '@/lib/backNav'
+import { isWorkOrderAssignedToTechnician } from '@/lib/workOrderAccess'
+import { hasNonCancelledWorkOrderInvoice } from '@/lib/workOrderMutationAccess'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -13,13 +16,82 @@ export const metadata = { title: 'Edit Work Order' }
 export default async function EditWorkOrderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ return_to?: string }> }) {
   const { id } = await params
   const { return_to } = await searchParams
-  // Only non-sensitive staff directory fields cross this server boundary.
   const admin = createAdminClient()
 
   const { user, profile } = await getAuthedProfile()
   if (!user || !profile || profile.status !== 'active' || !profile.organization_id) redirect('/login')
-  if (profile.role === 'technician') notFound()
 
+  const detail = resolveBack(return_to, `/work-orders/${id}`, 'Work Order')
+
+  if (profile.role === 'technician') {
+    const { data: woRaw } = await (admin as any)
+      .from('work_orders')
+      .select('id, work_order_number, service_category, job_description, notes, status, assigned_to, assigned_staff_id')
+      .eq('id', id)
+      .eq('organization_id', profile.organization_id)
+      .single()
+
+    const wo = woRaw as {
+      id: string
+      work_order_number: string
+      service_category: string | null
+      job_description: string | null
+      notes: string | null
+      status: string
+      assigned_to: string | null
+      assigned_staff_id: string | null
+    } | null
+    if (!wo) notFound()
+
+    let ownStaffId: string | null = null
+    if (wo.assigned_to !== user.id) {
+      const { data: ownStaffRaw } = await admin
+        .from('staff')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('organization_id', profile.organization_id)
+        .eq('employment_status', 'active')
+        .maybeSingle()
+      ownStaffId = (ownStaffRaw as { id: string } | null)?.id ?? null
+    }
+
+    if (!isWorkOrderAssignedToTechnician({
+      userId: user.id,
+      staffId: ownStaffId,
+      workOrder: wo,
+    })) notFound()
+
+    const invoiceGenerated = await hasNonCancelledWorkOrderInvoice(
+      admin,
+      profile.organization_id,
+      id,
+    )
+    if (invoiceGenerated || ['invoiced', 'paid', 'cancelled'].includes(wo.status)) {
+      redirect(detail.href)
+    }
+
+    const editableWorkOrder = {
+      id: wo.id,
+      service_category: wo.service_category,
+      job_description: wo.job_description,
+      notes: wo.notes,
+    }
+
+    return (
+      <div className="animate-fade-in">
+        <Header
+          title={`Edit ${wo.work_order_number}`}
+          subtitle="Update job details"
+          actions={<BackButton href={detail.href} label="Cancel" />}
+        />
+        <div className="p-6 max-w-2xl">
+          <TechnicianEditWorkOrderForm wo={editableWorkOrder} detailHref={detail.href} />
+        </div>
+      </div>
+    )
+  }
+
+  // Only non-sensitive staff directory fields cross this server boundary.
   const [woRes, usersRes, staffRes] = await Promise.all([
     (admin as any)
       .from('work_orders')
@@ -53,8 +125,6 @@ export default async function EditWorkOrderPage({ params, searchParams }: { para
     : wo.assigned_staff_id
       ? `staff:${wo.assigned_staff_id}`
       : ''
-
-  const detail = resolveBack(return_to, `/work-orders/${id}`, 'Work Order')
 
   return (
     <div className="animate-fade-in">

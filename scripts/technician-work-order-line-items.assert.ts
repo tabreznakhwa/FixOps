@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { isWorkOrderAssignedToTechnician } from '../src/lib/workOrderAccess'
-import { canEditExistingWorkOrderLineItem } from '../src/lib/workOrderMutationAccess'
+import { canMutateWorkOrderLineItems } from '../src/lib/workOrderMutationAccess'
 
 const root = resolve(import.meta.dirname, '..')
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8').replace(/\r\n/g, '\n')
@@ -23,33 +23,36 @@ assert.equal(isWorkOrderAssignedToTechnician({
   workOrder: { assigned_to: null, assigned_staff_id: 'staff-1' },
 }), false)
 
-for (const actorRole of ['owner', 'admin']) {
+for (const actorRole of ['owner', 'admin', 'technician']) {
   for (const status of ['completed', 'verified']) {
-    assert.equal(canEditExistingWorkOrderLineItem({
+    assert.equal(canMutateWorkOrderLineItems({
       status, actorRole, hasFinancialActivity: false,
     }), true)
-    assert.equal(canEditExistingWorkOrderLineItem({
+    assert.equal(canMutateWorkOrderLineItems({
       status, actorRole, hasFinancialActivity: true,
     }), false)
   }
 }
-for (const actorRole of ['technician', 'manager', 'call_center']) {
+for (const actorRole of ['manager', 'call_center']) {
   for (const status of ['completed', 'verified']) {
-    assert.equal(canEditExistingWorkOrderLineItem({
+    assert.equal(canMutateWorkOrderLineItems({
       status, actorRole, hasFinancialActivity: false,
     }), false)
   }
 }
 for (const status of ['invoiced', 'paid', 'cancelled']) {
   for (const actorRole of ['owner', 'admin', 'manager', 'call_center', 'technician']) {
-    assert.equal(canEditExistingWorkOrderLineItem({
+    assert.equal(canMutateWorkOrderLineItems({
       status, actorRole, hasFinancialActivity: false,
     }), false)
   }
 }
-assert.equal(canEditExistingWorkOrderLineItem({
+assert.equal(canMutateWorkOrderLineItems({
   status: 'work_started', actorRole: 'technician', hasFinancialActivity: false,
 }), true)
+assert.equal(canMutateWorkOrderLineItems({
+  status: 'work_started', actorRole: 'technician', hasFinancialActivity: true,
+}), false)
 
 const access = read('src/lib/workOrderMutationAccess.ts')
 for (const marker of [
@@ -59,11 +62,17 @@ for (const marker of [
   "const { data: profileRaw } = await admin",
   ".select('organization_id, role, status')",
   "profile.status !== 'active'",
-  ".select('organization_id, assigned_to, assigned_staff_id, status')",
+  ".select('organization_id, assigned_to, assigned_staff_id, complaint_id, status')",
   ".eq('organization_id', profile.organization_id)",
   "profile.role === 'technician'",
   ".eq('employment_status', 'active')",
   'isWorkOrderAssignedToTechnician({',
+  'export async function hasNonCancelledWorkOrderInvoice(',
+  ".neq('status', 'cancelled')",
+  'export async function hasWorkOrderFinancialActivity(',
+  ".is('invoice_id', null)",
+  ".eq('is_cancelled', false)",
+  ".eq('is_advance', false)",
 ]) {
   assert.ok(access.includes(marker), `mutation access helper is missing: ${marker}`)
 }
@@ -78,10 +87,8 @@ for (const marker of [
   "select('current_stock, unit_of_measure, purchase_price')",
   'unitCost = Number(invItem.purchase_price) || 0',
   "select('purchase_price')",
-  'canEditExistingWorkOrderLineItem({',
-  "['completed', 'verified'].includes(workOrder.status)",
-  ".from('invoices')",
-  ".from('payments')",
+  'canMutateWorkOrderLineItems({',
+  'hasWorkOrderFinancialActivity(',
   ".update({ final_amount: newTotal, updated_at: new Date().toISOString() })",
 ]) {
   assert.ok(route.includes(marker), `line-items route is missing: ${marker}`)
@@ -93,6 +100,7 @@ for (const removedRestriction of [
   'Technicians cannot edit line items',
   "isTechnician && item.item_type !== 'part'",
   'Technicians may only remove inventory parts',
+  "['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(workOrder.status)",
 ]) {
   assert.equal(
     route.includes(removedRestriction),
@@ -112,20 +120,23 @@ assert.equal(
   'POST, PATCH and DELETE must each stop after an authorization failure',
 )
 assert.equal(
-  route.match(/\['completed', 'verified', 'invoiced', 'paid', 'cancelled'\]\.includes\(workOrder\.status\)/g)?.length,
-  2,
-  'POST and DELETE must retain their existing closed-work-order lock',
+  route.match(/await hasWorkOrderFinancialActivity\(/g)?.length,
+  3,
+  'POST, PATCH and DELETE must each check invoices and direct payments',
 )
 assert.equal(
-  route.match(/canEditExistingWorkOrderLineItem\(\{/g)?.length,
-  1,
-  'PATCH must apply the role-aware existing-line-item edit policy',
+  route.match(/canMutateWorkOrderLineItems\(\{/g)?.length,
+  3,
+  'POST, PATCH and DELETE must each apply the shared line-item policy',
 )
 assert.equal(
   route.match(/\.update\(\{ final_amount: newTotal, updated_at: new Date\(\)\.toISOString\(\) \}\)/g)?.length,
   3,
   'POST, PATCH and DELETE must each recalculate the work-order final amount',
 )
+assert.ok(route.includes(".rpc('adjust_inventory_stock_logged'"))
+assert.ok(route.includes("type: 'returned'"))
+assert.ok(route.includes("type: 'adjustment'"))
 
 const detail = read('src/app/(dashboard)/work-orders/[id]/page.tsx')
 for (const marker of [
@@ -134,10 +145,10 @@ for (const marker of [
   'selling_price: Number(item.selling_price) || 0',
   'unit_price: Number(item.unit_price) || 0',
   'paymentAmount={paymentAmount}',
-  "['completed', 'verified', 'invoiced', 'paid', 'cancelled'].includes(wo.status)",
-  'const canEditLineItems = canEditExistingWorkOrderLineItem({',
+  'const canEditLineItems = canMutateWorkOrderLineItems({',
   'actorRole: profile.role,',
   'hasFinancialActivity: Boolean(existingInvoice || directReceipts.length)',
+  'isCompleted={!canEditLineItems}',
   'canEditLineItems={canEditLineItems}',
 ]) {
   assert.ok(detail.includes(marker), `work-order detail is missing: ${marker}`)

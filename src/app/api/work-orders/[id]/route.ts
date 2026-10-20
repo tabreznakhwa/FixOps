@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
-import { createClient } from '@/lib/supabase/server'
-import { isWorkOrderAssignedToTechnician } from '@/lib/workOrderAccess'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
+import {
+  authorizeWorkOrderMutation,
+  hasNonCancelledWorkOrderInvoice,
+  isAuthorizationResponse,
+} from '@/lib/workOrderMutationAccess'
+import { isWorkOrderServiceCategory } from '@/lib/workOrderCategories'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -25,7 +29,8 @@ const PRIVILEGED_FIELDS = new Set([
   'scheduled_time',
   'service_category',
 ])
-const TECHNICIAN_FIELDS = new Set(['status', 'notes'])
+const TECHNICIAN_FIELDS = new Set(['status', 'notes', 'service_category', 'job_description'])
+const TECHNICIAN_DETAIL_FIELDS = ['notes', 'service_category', 'job_description'] as const
 const TECHNICIAN_STATUS_TRANSITIONS: Record<string, Set<string>> = {
   new: new Set(['accepted', 'completed']),
   assigned: new Set(['accepted', 'completed']),
@@ -36,14 +41,6 @@ const TECHNICIAN_STATUS_TRANSITIONS: Record<string, Set<string>> = {
   waiting_approval: new Set(['work_started', 'completed']),
 }
 
-type ExistingWorkOrder = {
-  organization_id: string
-  assigned_to: string | null
-  assigned_staff_id: string | null
-  complaint_id: string | null
-  status: string
-}
-
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   try {
@@ -52,57 +49,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const supabase = createAdminClient()
-    const { data: profileRaw } = await (supabase as any)
-      .from('users')
-      .select('organization_id, role, status')
-      .eq('id', user.id)
-      .single()
-    const profile = profileRaw as {
-      organization_id: string | null
-      role: string
-      status: string
-    } | null
-    if (
-      !profile ||
-      profile.status !== 'active' ||
-      !profile.organization_id ||
-      !['owner', 'admin', 'manager', 'call_center', 'technician'].includes(profile.role)
-    ) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    const { data: workOrderRaw, error: workOrderError } = await (supabase as any)
-      .from('work_orders')
-      .select('organization_id, assigned_to, assigned_staff_id, complaint_id, status')
-      .eq('id', id)
-      .eq('organization_id', profile.organization_id)
-      .single()
-    const workOrder = workOrderRaw as ExistingWorkOrder | null
-    if (workOrderError || !workOrder) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    }
-
-    const isTechnician = profile.role === 'technician'
-    if (isTechnician) {
-      const { data: ownStaffRaw } = await (supabase as any)
-        .from('staff')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('organization_id', profile.organization_id)
-        .eq('employment_status', 'active')
-        .maybeSingle()
-      const ownStaff = ownStaffRaw as { id: string } | null
-
-      if (!isWorkOrderAssignedToTechnician({
-        userId: user.id,
-        staffId: ownStaff?.id ?? null,
-        workOrder,
-      })) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-      }
-    }
+    const authorization = await authorizeWorkOrderMutation(supabase, user.id, id)
+    if (isAuthorizationResponse(authorization)) return authorization
+    const workOrder = authorization
+    const isTechnician = workOrder.actorRole === 'technician'
 
     const body = await request.json()
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+
     const allowed = isTechnician ? TECHNICIAN_FIELDS : PRIVILEGED_FIELDS
     const updates: Record<string, unknown> = {}
     for (const key of allowed) {
@@ -111,6 +67,61 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (!Object.keys(updates).length) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
+    }
+
+    if (isTechnician) {
+      if (['invoiced', 'paid', 'cancelled'].includes(workOrder.status)) {
+        return NextResponse.json({ error: 'This work order can no longer be updated' }, { status: 409 })
+      }
+
+      const updatesJobDetails = TECHNICIAN_DETAIL_FIELDS.some(field => field in updates)
+      if (updatesJobDetails && await hasNonCancelledWorkOrderInvoice(
+        supabase,
+        workOrder.organization_id,
+        id,
+      )) {
+        return NextResponse.json(
+          { error: 'An invoice has already been generated for this work order' },
+          { status: 409 },
+        )
+      }
+
+      if ('service_category' in updates) {
+        const category = updates.service_category
+        if (category !== null && !isWorkOrderServiceCategory(category)) {
+          return NextResponse.json({ error: 'Invalid service category' }, { status: 400 })
+        }
+      }
+
+      if ('job_description' in updates) {
+        const description = updates.job_description
+        if (typeof description !== 'string' || !description.trim()) {
+          return NextResponse.json({ error: 'Job description is required' }, { status: 400 })
+        }
+        updates.job_description = description.trim()
+      }
+
+      if ('notes' in updates) {
+        const notes = updates.notes
+        if (notes !== null && typeof notes !== 'string') {
+          return NextResponse.json({ error: 'Invalid notes' }, { status: 400 })
+        }
+        updates.notes = typeof notes === 'string' ? (notes.trim() || null) : null
+      }
+
+      if ('status' in updates) {
+        const nextStatus = updates.status
+        const allowedNextStatuses = TECHNICIAN_STATUS_TRANSITIONS[workOrder.status]
+        if (
+          typeof nextStatus !== 'string' ||
+          !allowedNextStatuses?.has(nextStatus)
+        ) {
+          return NextResponse.json(
+            { error: `Cannot move this work order from ${workOrder.status} to ${String(nextStatus)}` },
+            { status: 409 },
+          )
+        }
+      }
     }
 
     // Only the assigned technician may move a work order to completed — no
@@ -142,7 +153,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           .from('users')
           .select('id, full_name')
           .eq('id', assignedTo)
-          .eq('organization_id', profile.organization_id)
+          .eq('organization_id', workOrder.organization_id)
           .eq('status', 'active')
           .single()
         const assignee = assigneeRaw as { id: string; full_name: string } | null
@@ -157,7 +168,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           .from('staff')
           .select('id, full_name')
           .eq('id', assignedStaffId)
-          .eq('organization_id', profile.organization_id)
+          .eq('organization_id', workOrder.organization_id)
           .eq('employment_status', 'active')
           .single()
         const assignee = assigneeRaw as { id: string; full_name: string } | null
@@ -174,30 +185,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
     }
 
-    if (isTechnician) {
-      if (['invoiced', 'paid', 'cancelled', 'completed', 'verified'].includes(workOrder.status)) {
-        return NextResponse.json({ error: 'This work order can no longer be updated' }, { status: 409 })
-      }
-      if ('status' in updates) {
-        const nextStatus = updates.status
-        const allowedNextStatuses = TECHNICIAN_STATUS_TRANSITIONS[workOrder.status]
-        if (
-          typeof nextStatus !== 'string' ||
-          !allowedNextStatuses?.has(nextStatus)
-        ) {
-          return NextResponse.json(
-            { error: `Cannot move this work order from ${workOrder.status} to ${String(nextStatus)}` },
-            { status: 409 },
-          )
-        }
-      }
-    }
-
     const { data: updatedRows, error } = await (supabase as any)
       .from('work_orders')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id)
-      .eq('organization_id', profile.organization_id)
+      .eq('organization_id', workOrder.organization_id)
       .select('id')
 
     if (error) throw error
@@ -213,7 +205,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           .from('complaints')
           .update({ status: complaintStatus, updated_at: new Date().toISOString() })
           .eq('id', workOrder.complaint_id)
-          .eq('organization_id', profile.organization_id)
+          .eq('organization_id', workOrder.organization_id)
         if (complaintError) {
           console.error('Complaint status sync failed:', complaintError)
         }
