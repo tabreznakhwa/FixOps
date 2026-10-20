@@ -69,6 +69,7 @@ export default async function BankBookPage({
     .select('payment_date, payment_number, amount_received, payment_mode, reference_number, customers(full_name)')
     .in('payment_mode', BANK_MODES)
     .eq('is_cancelled', false)
+    .gt('amount_received', 0)
     .order('payment_date', { ascending: true })
     .limit(5000)
 

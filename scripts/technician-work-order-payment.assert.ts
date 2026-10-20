@@ -98,6 +98,7 @@ for (const marker of [
   "Number(workOrder.final_amount) <= 0",
   "Set a positive work order total before collecting payment",
   'amountAlreadyCollected + parsedAmount > Number(workOrder.final_amount)',
+  'p_discount_amount: 0',
 ]) {
   assert.ok(route.includes(marker), `route is missing: ${marker}`)
 }

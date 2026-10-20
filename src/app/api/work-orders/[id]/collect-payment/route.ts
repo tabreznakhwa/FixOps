@@ -178,6 +178,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         p_reference_number: workOrder.work_order_number,
         p_notes: `Work order payment — ${workOrder.work_order_number}`,
         p_is_advance: false,
+        p_discount_amount: 0,
       },
     )
     if (rpcError) throw rpcError

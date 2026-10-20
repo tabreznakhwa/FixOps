@@ -7,6 +7,7 @@ import { AlertCircle, Loader2 } from 'lucide-react'
 import { BackButton } from '@/components/ui/BackButton'
 import { useCurrentPath } from '@/lib/backNav.client'
 import { resolveBack, withReturnTo } from '@/lib/backNav'
+import { formatCurrency } from '@/lib/utils'
 
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white'
 
@@ -19,6 +20,7 @@ interface Payment {
   payment_number: string
   payment_date: string
   amount_received: number
+  discount_amount: number | null
   payment_mode: string
   reference_number: string | null
   notes: string | null
@@ -140,6 +142,36 @@ export default function PaymentDetailPage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Amount breakdown */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-2.5">
+          <h2 className="font-semibold text-slate-900 text-sm mb-1">Amount</h2>
+          <div className="flex justify-between text-sm">
+            <span className="text-slate-500">Cash Received</span>
+            <span className={`font-semibold ${payment.amount_received > 0 ? 'text-green-700' : 'text-slate-400'}`}>
+              {formatCurrency(payment.amount_received)}
+            </span>
+          </div>
+          {!!payment.discount_amount && (
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Settlement Discount</span>
+                <span className="font-semibold text-amber-600">{formatCurrency(payment.discount_amount)}</span>
+              </div>
+              <div className="flex justify-between text-sm border-t border-slate-100 pt-2.5">
+                <span className="font-bold text-slate-700">Total Settled</span>
+                <span className="font-bold text-slate-900">
+                  {formatCurrency(payment.amount_received + Number(payment.discount_amount ?? 0))}
+                </span>
+              </div>
+              {payment.amount_received === 0 && (
+                <p className="text-xs text-slate-400 italic pt-1">
+                  No cash was collected on this receipt — the invoice balance was settled entirely by discount.
+                </p>
+              )}
+            </>
+          )}
         </div>
 
         {!payment.is_cancelled && (

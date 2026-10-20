@@ -31,7 +31,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
 
   let query = supabase
     .from('payments')
-    .select('id, payment_number, payment_date, amount_received, payment_mode, reference_number, notes, is_advance, is_cancelled, customers(full_name), invoices(invoice_number)')
+    .select('id, payment_number, payment_date, amount_received, discount_amount, payment_mode, reference_number, notes, is_advance, is_cancelled, customers(full_name), invoices(invoice_number)')
     .eq('is_cancelled', false)
     .order('created_at', { ascending: false })
 
@@ -58,7 +58,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
 
   const { data: paymentsRaw } = await query.limit(hasDateFilter ? 1000 : 50)
   const payments = paymentsRaw as unknown as Array<{
-    id: string; payment_number: string; payment_date: string; amount_received: number; payment_mode: string;
+    id: string; payment_number: string; payment_date: string; amount_received: number; discount_amount: number | null; payment_mode: string;
     reference_number: string | null; notes: string | null; is_advance: boolean; is_cancelled: boolean;
     customers: { full_name: string } | null; invoices: { invoice_number: string } | null
   }>
@@ -201,7 +201,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Customer</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Invoice</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Mode</th>
-                  <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Amount</th>
+                  <th className="text-right text-xs font-semibold text-amber-600 uppercase tracking-wider px-4 py-3 hidden sm:table-cell">Discount</th>
+                  <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Cash Received</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden xl:table-cell">Notes</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -239,8 +240,26 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                           <p className="text-xs text-slate-400 mt-0.5">Ref: {p.reference_number}</p>
                         )}
                       </td>
+                      <td className="px-4 py-3.5 text-right hidden sm:table-cell">
+                        {p.discount_amount ? (
+                          <span className="text-sm font-medium text-amber-600">{formatCurrency(p.discount_amount)}</span>
+                        ) : (
+                          <span className="text-sm text-slate-300">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3.5 text-right">
-                        <span className="text-sm font-bold text-green-600">+{formatCurrency(p.amount_received)}</span>
+                        {p.amount_received > 0 ? (
+                          <span className="text-sm font-bold text-green-600">+{formatCurrency(p.amount_received)}</span>
+                        ) : p.discount_amount ? (
+                          <span className="text-xs text-slate-400 italic">Discount only — no cash</span>
+                        ) : (
+                          <span className="text-sm font-bold text-green-600">+{formatCurrency(p.amount_received)}</span>
+                        )}
+                        {!!p.discount_amount && (
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Settled {formatCurrency(p.amount_received + Number(p.discount_amount ?? 0))}
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 hidden xl:table-cell text-sm text-slate-500 max-w-[160px] truncate">
                         {p.notes ?? '—'}

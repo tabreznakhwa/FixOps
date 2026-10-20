@@ -21,7 +21,7 @@ export async function GET(
     const supabase = createAdminClient() as any
     const { data, error } = await supabase
       .from('payments')
-      .select('id, payment_number, payment_date, amount_received, payment_mode, reference_number, notes, is_advance, is_cancelled, cancelled_reason, customers(id, full_name, mobile_number), invoices(id, invoice_number, total_amount)')
+      .select('id, payment_number, payment_date, amount_received, discount_amount, payment_mode, reference_number, notes, is_advance, is_cancelled, cancelled_reason, customers(id, full_name, mobile_number), invoices(id, invoice_number, total_amount)')
       .eq('id', id)
       .eq('organization_id', profile.organization_id)
       .single()

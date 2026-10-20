@@ -39,7 +39,7 @@ export async function GET(
 
     const { data: payments } = await (supabase as any)
       .from('payments')
-      .select('id, payment_number, payment_date, amount_received, payment_mode, reference_number, notes, is_cancelled')
+      .select('id, payment_number, payment_date, amount_received, discount_amount, payment_mode, reference_number, notes, is_cancelled')
       .eq('invoice_id', id)
       .order('payment_date', { ascending: false })
 

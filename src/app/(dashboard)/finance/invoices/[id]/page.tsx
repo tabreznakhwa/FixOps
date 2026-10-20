@@ -82,7 +82,7 @@ export default async function InvoiceDetailPage({
 
   const { data: paymentsRaw } = await supabase
     .from('payments')
-    .select('id, payment_number, payment_date, amount_received, payment_mode, reference_number, notes, is_cancelled')
+    .select('id, payment_number, payment_date, amount_received, discount_amount, payment_mode, reference_number, notes, is_cancelled')
     .eq('invoice_id', id as unknown as string)
     .order('payment_date', { ascending: false })
 
@@ -91,11 +91,13 @@ export default async function InvoiceDetailPage({
     payment_number: string
     payment_date: string
     amount_received: number
+    discount_amount: number | null
     payment_mode: string
     reference_number: string | null
     notes: string | null
     is_cancelled: boolean
   }>
+
 
   // Fetch unlinked advance payments from this customer (can be applied to settle this invoice)
   const customerId = (invoiceRaw as any).customer_id as string
@@ -325,7 +327,7 @@ export default async function InvoiceDetailPage({
                   </div>
                   {invoice.amount_paid > 0 && (
                     <div className="flex justify-between text-green-700">
-                      <span>Paid</span>
+                      <span>Settled</span>
                       <span className="font-semibold">− {formatCurrency(invoice.amount_paid)}</span>
                     </div>
                   )}
@@ -367,7 +369,9 @@ export default async function InvoiceDetailPage({
                       <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Payment #</th>
                       <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Date</th>
                       <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Mode</th>
-                      <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Amount</th>
+                      <th className="text-right text-xs font-semibold text-amber-600 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Discount</th>
+                      <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Cash</th>
+                      <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Settled</th>
                       <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Status</th>
                     </tr>
                   </thead>
@@ -384,9 +388,27 @@ export default async function InvoiceDetailPage({
                         <td className="px-4 py-3.5 text-sm text-slate-600 hidden md:table-cell capitalize">
                           {pay.payment_mode.replace(/_/g, ' ')}
                         </td>
+                        <td className="px-4 py-3.5 text-right hidden lg:table-cell">
+                          {pay.discount_amount ? (
+                            <span className={`text-sm font-medium ${pay.is_cancelled ? 'line-through text-slate-400' : 'text-amber-600'}`}>
+                              {formatCurrency(pay.discount_amount)}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-slate-300">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3.5 text-right">
-                          <span className={`text-sm font-bold ${pay.is_cancelled ? 'line-through text-slate-400' : 'text-green-700'}`}>
-                            {formatCurrency(pay.amount_received)}
+                          {pay.amount_received > 0 || !pay.discount_amount ? (
+                            <span className={`text-sm font-bold ${pay.is_cancelled ? 'line-through text-slate-400' : 'text-green-700'}`}>
+                              {formatCurrency(pay.amount_received)}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">No cash</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-right hidden lg:table-cell">
+                          <span className={`text-sm font-semibold ${pay.is_cancelled ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                            {formatCurrency(pay.amount_received + Number(pay.discount_amount ?? 0))}
                           </span>
                         </td>
                         <td className="px-4 py-3.5">
@@ -452,7 +474,7 @@ export default async function InvoiceDetailPage({
                   <span className="font-semibold text-slate-900">{formatCurrency(invoice.total_amount)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Paid</span>
+                  <span className="text-slate-500">Settled</span>
                   <span className="font-semibold text-green-700">{formatCurrency(invoice.amount_paid)}</span>
                 </div>
                 <div className={`flex justify-between border-t border-slate-100 pt-2.5 ${invoice.balance_due > 0 ? 'text-amber-600' : 'text-green-700'}`}>

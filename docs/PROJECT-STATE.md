@@ -1,7 +1,7 @@
 # FixOps — current state
 
 Read this first. It exists so a new session does not have to rediscover the app
-by exploration. Last updated 19 Oct 2026.
+by exploration. Last updated 20 Oct 2026.
 
 **Note:** commits `fccbb1d`…`2ca13b6` (Pay Salaries modal portal/zoom fixes, a
 Vercel function-invocation-spike fix replacing `force-dynamic` with ISR
@@ -86,7 +86,22 @@ applied by the user on 18 Oct 2026; its production function body, grants,
 rejection behavior and migration-history entry have not yet been independently
 verified. It makes the database transaction reject un-invoiced receipts until
 the work order has a positive final amount, and rejects a cumulative receipt
-above that amount under the same work-order row lock. Do not use
+above that amount under the same work-order row lock. Migration 061
+(`061_customer_payment_settlement_discount.sql`) was manually applied by the
+user on 20 Oct 2026, but the local migration was subsequently hardened with
+explicit numeric-NaN rejection, tenant-scoped customer validation and stricter
+posting-component checks. **Rerun the latest migration 061 file before release**
+(it is idempotent), because the manually applied version may not include those
+hardening changes. Its production schema, function bodies, grants, reversal
+behavior and migration-history entry have not yet been independently verified.
+It adds a per-invoice customer settlement discount: each receipt stores cash
+and discount separately, posts the discount as a distinct non-cash AR credit,
+and treats cash + discount + customer-advance allocations as the invoice's
+settled amount. Cash/Bank Book and collection totals continue to sum only
+`amount_received`. Discounts remain forbidden for advances, opening
+receivables, invoice-less work-order receipts and technician collections.
+Cancelling a discounted receipt must reverse every cash/discount posting
+component atomically and rebuild the affected invoice snapshot. Do not use
 `db push --include-all` to reconcile their migration history.
 Migration
 051's two unique indexes and five
@@ -173,6 +188,26 @@ un-invoiced receipt and enforces the cumulative limit under the work-order row
 lock. The work-order detail shows customer line-item pricing and its final
 amount to the assigned technician, while the work-order list and invoice
 controls remain hidden from technicians.
+
+### Customer settlement discounts
+
+Migration 061 was manually applied on 20 Oct 2026, but its latest local file
+contains additional hardening and must be rerun before release. Its production
+effects have not yet been independently verified. A direct invoice payment may
+use cash plus a per-invoice settlement discount, including an ordinary partial
+cash payment or a full-discount settlement with zero cash. The payment row stores
+both values;
+the canonical AR journal posts cash as a `payment` credit and the discount as a
+separate `customer_payment_discount` adjustment credit. `invoices.amount_paid`
+is the total settled from active direct-payment cash, active settlement
+discounts, and active customer-advance allocations. Cash collection reports,
+Cash Book and Bank Book remain cash-only. Discounts are never allowed on
+advances, opening receivables, invoice-less work-order receipts or technician
+collections. With one selected invoice, Cash Received remains editable so a
+normal partial payment does not need to be misclassified as discount; multiple
+selected invoices retain the existing full-settlement-per-invoice behavior.
+Cancellation validates and reverses the exact one or two original posting
+components in one transaction before rebuilding invoice/work-order snapshots.
 
 After a successful submit use `router.replace()`, never `push()` or
 `window.location.href`, or the completed form stays in the stack.

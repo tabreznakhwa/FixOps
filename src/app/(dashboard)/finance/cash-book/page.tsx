@@ -64,6 +64,7 @@ export default async function CashBookPage({
     .select('payment_date, payment_number, amount_received, reference_number, customers(full_name)')
     .eq('payment_mode', 'cash')
     .eq('is_cancelled', false)
+    .gt('amount_received', 0)
     .order('payment_date', { ascending: true })
     .limit(5000)
 

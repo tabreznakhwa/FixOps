@@ -10,7 +10,7 @@ export type WorkOrderStatus = 'new' | 'assigned' | 'accepted' | 'on_the_way' | '
 export type PriorityLevel = 'low' | 'medium' | 'high' | 'emergency'
 export type ServiceCategory = 'ac_maintenance' | 'plumbing' | 'electrical' | 'general' | 'emergency' | 'amc_visit' | 'installation' | 'inspection' | 'quotation'
 export type InvoiceStatus = 'draft' | 'issued' | 'partial' | 'paid' | 'overdue' | 'cancelled' | 'written_off'
-export type PaymentMode = 'cash' | 'bank_transfer' | 'card' | 'pos' | 'cheque' | 'online' | 'other'
+export type PaymentMode = 'cash' | 'bank_transfer' | 'card' | 'pos' | 'cheque' | 'online' | 'knet' | 'other'
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid' | 'overdue' | 'written_off'
 export type AssetCondition = 'excellent' | 'good' | 'fair' | 'poor' | 'out_of_service'
 export type AssetStatus = 'available' | 'assigned' | 'maintenance' | 'disposed'
@@ -247,6 +247,7 @@ export interface Database {
           invoice_id: string | null
           payment_date: string
           amount_received: number
+          discount_amount: number
           payment_mode: PaymentMode
           reference_number: string | null
           is_advance: boolean
@@ -487,6 +488,7 @@ export interface Database {
           p_reference_number: string | null
           p_notes: string | null
           p_is_advance: boolean
+          p_discount_amount?: number
         }
         Returns: Array<{
           payment_id: string
