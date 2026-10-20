@@ -163,24 +163,25 @@ export function InvoiceTableClient({
                   {inv.notes ?? '—'}
                 </td>
                 <td className="px-4 py-3.5 text-right">
-                  <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <DocumentLink
-                      href={withReturnTo(`/finance/invoices/${inv.id}`, source)}
-                      tabLabel={inv.invoice_number}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1"
-                    >
-                      View
-                    </DocumentLink>
+                  <div className="flex items-center justify-end gap-1">
                     {canEdit && (
                       <Link
                         href={withReturnTo(`/finance/invoices/${inv.id}/edit`, source)}
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Edit invoice"
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       >
-                        <Pencil className="w-3.5 h-3.5" />
+                        <Pencil className="w-3.5 h-3.5" /> Edit
                       </Link>
                     )}
-                    {canDelete && <DeleteInvoiceButton id={inv.id} status={inv.status} />}
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <DocumentLink
+                        href={withReturnTo(`/finance/invoices/${inv.id}`, source)}
+                        tabLabel={inv.invoice_number}
+                        className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1"
+                      >
+                        View
+                      </DocumentLink>
+                      {canDelete && <DeleteInvoiceButton id={inv.id} status={inv.status} />}
+                    </div>
                   </div>
                 </td>
               </tr>

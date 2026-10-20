@@ -24,6 +24,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
   const listPath = currentPath('/work-orders', params)
   const hasDateFilter = Boolean(params.from || params.to || params.q)
   const isTechnician = profile.role === 'technician'
+  const canEdit = ['owner', 'admin'].includes(profile.role)
   let ownStaffId: string | null = null
 
   if (isTechnician) {
@@ -191,13 +192,23 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                         </td>
                       )}
                       <td className="px-4 py-3.5 text-right">
-                        <DocumentLink
-                          href={withReturnTo(`/work-orders/${wo.id}`, listPath)}
-                          tabLabel={wo.work_order_number}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-blue-600 hover:text-white transition-colors whitespace-nowrap"
-                        >
-                          View
-                        </DocumentLink>
+                        <div className="flex items-center justify-end gap-1">
+                          <DocumentLink
+                            href={withReturnTo(`/work-orders/${wo.id}`, listPath)}
+                            tabLabel={wo.work_order_number}
+                            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-blue-600 hover:text-white transition-colors whitespace-nowrap"
+                          >
+                            View
+                          </DocumentLink>
+                          {canEdit && (
+                            <Link
+                              href={withReturnTo(`/work-orders/${wo.id}/edit`, listPath)}
+                              className="text-xs font-semibold px-3 py-1.5 rounded-lg text-slate-600 hover:bg-blue-50 hover:text-blue-700 transition-colors whitespace-nowrap"
+                            >
+                              Edit
+                            </Link>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
