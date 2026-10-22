@@ -549,6 +549,7 @@ export interface Database {
           p_settlement_date: string
           p_amount: number
           p_expected_balance: number
+          p_recovery_override: number | null
           p_payment_method?: string
           p_notes?: string | null
         }

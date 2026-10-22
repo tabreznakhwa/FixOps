@@ -94,4 +94,36 @@ assert.equal(compareStaffAdvanceEvents(events[3], events[1]) > 0, true)
 assert.equal(advanceBalancesReconcile(180, 180.001), true)
 assert.equal(advanceBalancesReconcile(180, 180.002), false)
 
+// A leave settlement recovery offsets today's cash only. It is metadata, not a
+// separate ledger credit: the payout is the sole new debit until month-end.
+const startingBalance = 40
+const settlementEarned = 100
+const settlementRecovery = 25
+const settlementPayout = settlementEarned - settlementRecovery
+const balanceAfterSettlement = startingBalance + settlementPayout
+const partialSettlement = buildStaffAdvanceLedger([
+  {
+    source: 'advance_issue',
+    sourceId: 'leave-settlement',
+    date: '2026-07-20',
+    description: 'Leave settlement',
+    type: 'advance',
+    debit: settlementPayout,
+    credit: 0,
+  },
+  {
+    source: 'salary_recovery',
+    sourceId: 'month-end',
+    date: '2026-07-31',
+    description: 'Salary recovery',
+    type: 'recovery',
+    debit: 0,
+    credit: balanceAfterSettlement,
+  },
+], { openingAdvance: startingBalance, openingLoan: 0 })
+assert.equal(balanceAfterSettlement, 115)
+assert.equal(partialSettlement.rows[0].balance, balanceAfterSettlement)
+assert.equal(partialSettlement.periodClosingBalance, 0)
+assert.equal(partialSettlement.calculatedCurrentBalance, 0)
+
 console.log('staff ledger assertions passed')

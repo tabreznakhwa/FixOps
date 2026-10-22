@@ -311,6 +311,20 @@ anyone not yet joined. Friday/holiday OT is paid to **everyone**;
 paid as an advance (`staff.advance_balance` auto-recovers at month end) rather
 than an off-cycle run.
 
+Owner/admin can override **Existing advance recovered** during leave-settlement
+preview with zero, a partial amount, or the full available amount. Manager can
+still process a settlement but cannot override recovery. The recovery only nets
+that amount from today's cash (`payout = earned - recovery`); it is metadata on
+the settlement advance, not a repayment ledger credit. The canonical balance is
+still `prior balance + payout`, and month-end payroll recovers that full balance.
+Migration 062 (`062_leave_settlement_advance_recovery.sql`) was manually applied
+by the user on 22 Oct 2026; its production column types, function signature/grants
+and recovery behavior have not yet been independently verified. Never use
+`db push --include-all`. Migration 062 removes the old eight-argument RPC, so only
+the compatible application may process leave settlements; verify deployment
+before reopening settlement. There is still no leave-settlement cancel/void
+workflow.
+
 ### Leave applications
 Every active employee login linked through `staff.user_id`, including an
 `attendance_kiosk` login, can use `/my-leave` to request annual, sick or

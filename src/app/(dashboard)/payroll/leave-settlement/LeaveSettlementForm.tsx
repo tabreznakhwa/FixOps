@@ -27,7 +27,11 @@ interface Result {
   annualLeaveDays: number
   annualLeaveDeduction: number
   grossEarned: number
+  earnedBeforeRecovery: number
   outstandingAdvance: number
+  advanceRecovery: number
+  advanceRecoveryOverridden: boolean
+  unrecoveredAdvance: number
   netPayable: number
   unworkedDays: number
   warnings: string[]
@@ -39,7 +43,13 @@ const PAYMENT_METHODS = [
   { value: 'cheque', label: 'Cheque' },
 ]
 
-export function LeaveSettlementForm({ staff }: { staff: StaffRow[] }) {
+export function LeaveSettlementForm({
+  staff,
+  canEditAdvanceRecovery,
+}: {
+  staff: StaffRow[]
+  canEditAdvanceRecovery: boolean
+}) {
   const router = useRouter()
 
   const [staffId, setStaffId] = useState('')
@@ -49,10 +59,21 @@ export function LeaveSettlementForm({ staff }: { staff: StaffRow[] }) {
 
   const [preview, setPreview] = useState<Result | null>(null)
   const [done, setDone] = useState<Result | null>(null)
+  const [advanceRecovery, setAdvanceRecovery] = useState('')
+  const [recoveryOverridden, setRecoveryOverridden] = useState(false)
+  const [previewStale, setPreviewStale] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const selected = staff.find(s => s.id === staffId) ?? null
+
+  function resetPreview() {
+    setPreview(null)
+    setAdvanceRecovery('')
+    setRecoveryOverridden(false)
+    setPreviewStale(false)
+    setError('')
+  }
 
   async function call(isPreview: boolean) {
     if (!staffId) { setError('Select an employee'); return }
@@ -69,12 +90,29 @@ export function LeaveSettlementForm({ staff }: { staff: StaffRow[] }) {
           preview: isPreview,
           payment_method: paymentMethod,
           notes,
+          ...(canEditAdvanceRecovery && recoveryOverridden
+            ? { advance_recovery_amount: advanceRecovery }
+            : {}),
+          ...(!isPreview && preview
+            ? {
+                expected_advance_balance: preview.outstandingAdvance,
+                expected_net_payable: preview.netPayable,
+              }
+            : {}),
         }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Failed'); return }
-      if (isPreview) setPreview(data)
-      else { setDone(data); setPreview(null); router.refresh() }
+      if (isPreview) {
+        setPreview(data)
+        setAdvanceRecovery(Number(data.advanceRecovery).toFixed(3))
+        setRecoveryOverridden(Boolean(data.advanceRecoveryOverridden))
+        setPreviewStale(false)
+      } else {
+        setDone(data)
+        resetPreview()
+        router.refresh()
+      }
     } catch {
       setError('Network error. Please try again.')
     } finally {
@@ -93,12 +131,18 @@ export function LeaveSettlementForm({ staff }: { staff: StaffRow[] }) {
             </h3>
             <p className="text-sm text-slate-600 mt-1">
               Covering {done.daysCovered} days. Recorded as a salary advance — the
-              month-end payroll run will recover it automatically, so no further
-              action is needed.
+              month-end payroll run will recover the resulting advance balance
+              automatically, so no further action is needed.
             </p>
             <div className="flex gap-2 mt-4">
               <button
-                onClick={() => { setDone(null); setStaffId(''); setSettlementDate(''); setNotes('') }}
+                onClick={() => {
+                  setDone(null)
+                  setStaffId('')
+                  setSettlementDate('')
+                  setNotes('')
+                  resetPreview()
+                }}
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition"
               >
                 Settle another employee
@@ -126,7 +170,7 @@ export function LeaveSettlementForm({ staff }: { staff: StaffRow[] }) {
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Employee *</label>
           <select
             value={staffId}
-            onChange={e => { setStaffId(e.target.value); setPreview(null) }}
+            onChange={e => { setStaffId(e.target.value); resetPreview() }}
             className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Select employee…</option>
@@ -138,8 +182,8 @@ export function LeaveSettlementForm({ staff }: { staff: StaffRow[] }) {
           </select>
           {selected && (selected.advance_balance ?? 0) > 0 && (
             <p className="text-xs text-amber-700 mt-1.5">
-              Existing advance balance {formatCurrency(selected.advance_balance ?? 0)} — this will be
-              netted off the settlement.
+              Existing advance balance {formatCurrency(selected.advance_balance ?? 0)} — it is netted off
+              by default{canEditAdvanceRecovery ? ', and you can change the recovered amount after calculating.' : '.'}
             </p>
           )}
         </div>
@@ -149,7 +193,7 @@ export function LeaveSettlementForm({ staff }: { staff: StaffRow[] }) {
           <input
             type="date"
             value={settlementDate}
-            onChange={e => { setSettlementDate(e.target.value); setPreview(null) }}
+            onChange={e => { setSettlementDate(e.target.value); resetPreview() }}
             className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <p className="text-xs text-slate-500 mt-1.5">
@@ -216,7 +260,50 @@ export function LeaveSettlementForm({ staff }: { staff: StaffRow[] }) {
               {preview.fridayOvertime > 0 && row('Friday / holiday OT', preview.fridayOvertime)}
               {preview.absentDeduction > 0 && row(`Absence (${preview.absentDays} days)`, preview.absentDeduction, { negative: true })}
               {preview.annualLeaveDeduction > 0 && row(`Unpaid annual leave (${preview.annualLeaveDays} days)`, preview.annualLeaveDeduction, { negative: true })}
-              {preview.outstandingAdvance > 0 && row('Existing advance recovered', preview.outstandingAdvance, { negative: true })}
+              {canEditAdvanceRecovery ? (
+                <div className="py-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <label htmlFor="advance-recovery" className="text-sm text-slate-600">
+                      Existing advance recovered
+                    </label>
+                    <div className="relative w-40">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">KWD</span>
+                      <input
+                        id="advance-recovery"
+                        type="number"
+                        min="0"
+                        max={preview.outstandingAdvance}
+                        step="0.001"
+                        inputMode="decimal"
+                        value={advanceRecovery}
+                        onChange={e => {
+                          setAdvanceRecovery(e.target.value)
+                          setRecoveryOverridden(true)
+                          setPreviewStale(true)
+                          setError('')
+                        }}
+                        className="w-full pl-12 pr-3 py-2 text-right rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1.5 text-right">
+                    Balance {formatCurrency(preview.outstandingAdvance)} · maximum payable recovery{' '}
+                    {formatCurrency(Math.min(preview.outstandingAdvance, Math.max(0, preview.earnedBeforeRecovery)))}
+                  </p>
+                </div>
+              ) : (
+                row('Existing advance recovered', preview.advanceRecovery, { negative: true })
+              )}
+              {preview.unrecoveredAdvance > 0 && (
+                <div className="py-2 text-right">
+                  <p className="text-sm text-slate-600">
+                    Advance carried to month-end: {formatCurrency(preview.unrecoveredAdvance)}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    This remains in the resulting advance balance for month-end payroll to recover.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-between items-center pt-4 mt-3 border-t border-slate-200">
@@ -236,16 +323,27 @@ export function LeaveSettlementForm({ staff }: { staff: StaffRow[] }) {
             )}
 
             <div className="flex gap-2 mt-5">
+              {previewStale ? (
+                <button
+                  onClick={() => call(true)}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg disabled:opacity-60 transition"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
+                  Recalculate
+                </button>
+              ) : (
+                <button
+                  onClick={() => call(false)}
+                  disabled={loading || preview.netPayable <= 0}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg disabled:opacity-60 transition"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Confirm &amp; Pay {formatCurrency(preview.netPayable)}
+                </button>
+              )}
               <button
-                onClick={() => call(false)}
-                disabled={loading || preview.netPayable <= 0}
-                className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg disabled:opacity-60 transition"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Confirm &amp; Pay {formatCurrency(preview.netPayable)}
-              </button>
-              <button
-                onClick={() => setPreview(null)}
+                onClick={resetPreview}
                 className="px-4 py-2.5 border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"
               >
                 Cancel

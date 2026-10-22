@@ -18,13 +18,18 @@ export default async function LeaveSettlementPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const admin = createAdminClient() as any
+  const admin = createAdminClient()
   const { data: profileRaw } = await admin
-    .from('users').select('organization_id, role').eq('id', user.id).single()
-  const profile = profileRaw as { organization_id: string; role: string } | null
+    .from('users').select('organization_id, role, status').eq('id', user.id).single()
+  const profile = profileRaw as {
+    organization_id: string
+    role: string
+    status: string
+  } | null
 
-  // Pays money out — owner, admin and manager only.
-  if (!profile || !['owner', 'admin', 'manager'].includes(profile.role)) {
+  // Pays money out — active owner, admin and manager only.
+  if (!profile || profile.status !== 'active'
+    || !['owner', 'admin', 'manager'].includes(profile.role)) {
     redirect('/dashboard?error=unauthorized')
   }
 
@@ -61,7 +66,10 @@ export default async function LeaveSettlementPage({
           </p>
         </div>
 
-        <LeaveSettlementForm staff={staff} />
+        <LeaveSettlementForm
+          staff={staff}
+          canEditAdvanceRecovery={['owner', 'admin'].includes(profile.role)}
+        />
       </div>
     </div>
   )

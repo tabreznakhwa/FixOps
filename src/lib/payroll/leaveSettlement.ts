@@ -59,11 +59,49 @@ export interface SettlementResult {
   annualLeaveDays: number
   annualLeaveDeduction: number
   grossEarned: number
+  earnedBeforeRecovery: number
   outstandingAdvance: number
+  advanceRecovery: number
+  advanceRecoveryOverridden: boolean
+  unrecoveredAdvance: number
   netPayable: number
   /** Days in the window with no attendance record yet — i.e. not worked at the time of settlement. */
   unworkedDays: number
   warnings: string[]
+}
+
+export type ParsedAdvanceRecovery =
+  | { success: true; value: number }
+  | { success: false; error: string }
+
+export class AdvanceRecoveryValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AdvanceRecoveryValidationError'
+  }
+}
+
+/** Convert an exact KWD value to integer fils, rejecting malformed or over-precise input. */
+export function toKwdFils(value: unknown): number | null {
+  if (typeof value === 'string') {
+    const normalized = value.trim()
+    if (!/^\d{1,9}(\.\d{1,3})?$/.test(normalized)) return null
+    value = Number(normalized)
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null
+  if (Math.abs(value * 1000 - Math.round(value * 1000)) >= 1e-7) return null
+  return Math.round(value * 1000)
+}
+
+export function parseAdvanceRecoveryAmount(value: unknown): ParsedAdvanceRecovery {
+  const fils = toKwdFils(value)
+  if (fils === null) {
+    return {
+      success: false,
+      error: 'Advance recovery must be a valid KWD amount with up to three decimal places',
+    }
+  }
+  return { success: true, value: fils / 1000 }
 }
 
 function dayOfMonth(iso: string): number {
@@ -80,7 +118,8 @@ export function calcLeaveSettlement(
   attendance: SettlementAttendance[],
   monthStart: string,
   settlementDate: string,
-  today: string
+  today: string,
+  advanceRecoveryOverride?: number,
 ): SettlementResult {
   const warnings: string[] = []
 
@@ -147,11 +186,50 @@ export function calcLeaveSettlement(
     (basicEarned + allowanceEarned + foodEarned + fixedOtEarned + normalOvertime + fridayOvertime) * 1000
   ) / 1000
 
-  const outstandingAdvance = Number(staff.advance_balance) || 0
+  const rawOutstandingAdvance = staff.advance_balance === null
+    ? 0
+    : Number(staff.advance_balance)
+  if (!Number.isFinite(rawOutstandingAdvance)) {
+    throw new AdvanceRecoveryValidationError('The employee advance balance is not a valid KWD amount')
+  }
+  const outstandingAdvance = rawOutstandingAdvance
+  const outstandingAdvanceFils = toKwdFils(outstandingAdvance)
+  if (outstandingAdvanceFils === null) {
+    throw new AdvanceRecoveryValidationError('The employee advance balance is not a valid KWD amount')
+  }
 
-  const netBeforeFloor = Math.round(
-    (grossEarned - absentDeduction - annualLeaveDeduction - outstandingAdvance) * 1000
+  const earnedBeforeRecovery = Math.round(
+    (grossEarned - absentDeduction - annualLeaveDeduction) * 1000
   ) / 1000
+  const earnedBeforeRecoveryFils = Math.round(earnedBeforeRecovery * 1000)
+  const advanceRecoveryOverridden = advanceRecoveryOverride !== undefined
+  const recoveryFils = advanceRecoveryOverridden
+    ? toKwdFils(advanceRecoveryOverride)
+    : outstandingAdvanceFils
+
+  if (recoveryFils === null) {
+    throw new AdvanceRecoveryValidationError(
+      'Advance recovery must be a valid KWD amount with up to three decimal places'
+    )
+  }
+  if (advanceRecoveryOverridden && recoveryFils > outstandingAdvanceFils) {
+    throw new AdvanceRecoveryValidationError(
+      'Advance recovery cannot exceed the existing advance balance'
+    )
+  }
+  if (advanceRecoveryOverridden && recoveryFils > Math.max(0, earnedBeforeRecoveryFils)) {
+    throw new AdvanceRecoveryValidationError(
+      'Advance recovery cannot exceed the amount earned for this settlement'
+    )
+  }
+
+  // A default settlement still subtracts the full balance, even when earnings
+  // are lower. The resolved amount is also persisted as settlement metadata.
+  const advanceRecovery = recoveryFils / 1000
+  const unrecoveredAdvance = advanceRecoveryOverridden
+    ? Math.max(0, (outstandingAdvanceFils - recoveryFils) / 1000)
+    : 0
+  const netBeforeFloor = (earnedBeforeRecoveryFils - recoveryFils) / 1000
   const netPayable = Math.max(0, netBeforeFloor)
 
   // How much of the window is still in the future — the part being paid on trust.
@@ -168,9 +246,16 @@ export function calcLeaveSettlement(
       `${unworkedDays} of the ${daysCovered} days being paid are still in the future and have not been worked yet.`
     )
   }
-  if (outstandingAdvance > 0) {
+  if (advanceRecovery > 0) {
     warnings.push(
-      `An existing advance balance of KWD ${outstandingAdvance.toFixed(3)} has been netted off this payment.`
+      `KWD ${advanceRecovery.toFixed(3)} of the existing advance balance has been netted off this payment.`
+    )
+  } else if (advanceRecoveryOverridden && outstandingAdvance > 0) {
+    warnings.push('No existing advance has been netted off this payment.')
+  }
+  if (unrecoveredAdvance > 0) {
+    warnings.push(
+      `KWD ${unrecoveredAdvance.toFixed(3)} remains carried forward and will be recovered through month-end payroll.`
     )
   }
   if (netBeforeFloor < 0) {
@@ -193,7 +278,11 @@ export function calcLeaveSettlement(
     annualLeaveDays,
     annualLeaveDeduction,
     grossEarned,
+    earnedBeforeRecovery,
     outstandingAdvance,
+    advanceRecovery,
+    advanceRecoveryOverridden,
+    unrecoveredAdvance,
     netPayable,
     unworkedDays,
     warnings,

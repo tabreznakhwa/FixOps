@@ -217,9 +217,11 @@ expectAll('src/app/(dashboard)/user-guide/page.tsx', [
   'applicable seasonal Fixed OT',
 ])
 expectAll('docs/PROJECT-STATE.md', [
-  'Migration 056 (`056_unpaid_annual_leave_payroll.sql`) is prepared in the',
-  '**has not been run**',
-  'explicit paid snapshot',
+  'Migration 056',
+  '(`056_unpaid_annual_leave_payroll.sql`) were manually applied by the user on',
+  'production effects have not yet been independently verified',
+  'as an explicit paid',
+  'snapshot',
   'applicable seasonal fixed OT',
   'Paid runs remain non-resettable',
 ])
