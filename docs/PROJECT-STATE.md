@@ -1,7 +1,7 @@
 # FixOps — current state
 
 Read this first. It exists so a new session does not have to rediscover the app
-by exploration. Last updated 20 Oct 2026.
+by exploration. Last updated 22 Oct 2026.
 
 **Note:** commits `fccbb1d`…`2ca13b6` (Pay Salaries modal portal/zoom fixes, a
 Vercel function-invocation-spike fix replacing `force-dynamic` with ISR
@@ -324,6 +324,29 @@ and recovery behavior have not yet been independently verified. Never use
 the compatible application may process leave settlements; verify deployment
 before reopening settlement. There is still no leave-settlement cancel/void
 workflow.
+
+### Multi-invoice vendor payments
+
+Migration 063 (`063_multi_invoice_supplier_payments.sql`) was manually applied by
+the user on 22 Oct 2026. Its production function body, role grant, atomic rollback
+behavior and reconciliation effects have not yet been independently verified.
+The compatible application deployment status has not yet been verified. The Vendor
+Payment form can select one or more confirmed, posted credit purchase invoices for one supplier,
+including **Select all**. Purchase orders remain commitments, opening payables keep
+their dedicated lifecycle, and unallocated cash remains a Supplier Advance.
+
+One selected invoice may receive an ordinary partial cash payment and an optional
+settlement discount. A multi-invoice request must fully settle every selected
+invoice, with an independent optional discount per invoice and cash equal to that
+invoice's remaining balance less its discount. The route sends the entire ordered
+batch to `record_supplier_payment_batch` once. The RPC locks the exact invoice set
+in stable UUID order, rejects stale displayed balances, and commits or rolls back
+every source row, AP cash/discount posting and invoice snapshot together. It still
+creates one immutable `supplier_payments` row and a distinct posting batch per
+invoice, so `cancel_supplier_payment` can reverse one child payment without
+reopening the others. Cash/Bank Book totals remain cash-only; settlement discounts
+are separate non-cash AP adjustments. Deploy only the compatible application after
+verifying migration 063, and never use `db push --include-all`.
 
 ### Leave applications
 Every active employee login linked through `staff.user_id`, including an

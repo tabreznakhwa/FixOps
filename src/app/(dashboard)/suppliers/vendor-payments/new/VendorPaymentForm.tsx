@@ -4,7 +4,11 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency } from '@/lib/utils'
 import { safeReturnTo } from '@/lib/backNav'
-import { SUPPLIER_PAYMENT_MODES } from '@/lib/supplierPayments'
+import {
+  calculateSupplierInvoiceSettlement,
+  MAX_SUPPLIER_PAYMENT_SETTLEMENTS,
+  SUPPLIER_PAYMENT_MODES,
+} from '@/lib/supplierPayments'
 
 interface Supplier {
   id: string
@@ -43,7 +47,6 @@ const MODE_LABELS: Record<(typeof SUPPLIER_PAYMENT_MODES)[number], string> = {
 
 const inputClass = 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
-const KWD_RE = /^\d{1,9}(\.\d{1,3})?$/
 
 export function VendorPaymentForm({
   suppliers,
@@ -55,9 +58,17 @@ export function VendorPaymentForm({
   const router = useRouter()
   const destination = safeReturnTo(returnTo) ?? '/suppliers/vendor-payments'
   const [supplierId, setSupplierId] = useState(defaultSupplierId ?? '')
-  const [invoiceId, setInvoiceId] = useState(defaultInvoiceId ?? '')
-  const [amount, setAmount] = useState('')
-  const [discount, setDiscount] = useState('')
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>(
+    defaultInvoiceId ? [defaultInvoiceId] : [],
+  )
+  const [discountByInvoiceId, setDiscountByInvoiceId] = useState<Record<string, string>>({})
+  const [amount, setAmount] = useState(() => {
+    const invoice = defaultInvoiceId
+      ? openInvoices.find((candidate) => candidate.id === defaultInvoiceId)
+      : null
+    return invoice ? Number(invoice.balance_due).toFixed(3) : ''
+  })
+  const [amountManuallyEdited, setAmountManuallyEdited] = useState(false)
   const [mode, setMode] = useState<(typeof SUPPLIER_PAYMENT_MODES)[number]>('bank_transfer')
   const [reference, setReference] = useState('')
   const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' }))
@@ -69,63 +80,137 @@ export function VendorPaymentForm({
     () => supplierId ? openInvoices.filter((invoice) => invoice.supplier_id === supplierId) : [],
     [openInvoices, supplierId],
   )
-  const selectedInvoice = supplierInvoices.find((invoice) => invoice.id === invoiceId) ?? null
+  const selectedInvoices = supplierInvoices.filter((invoice) => selectedInvoiceIds.includes(invoice.id))
+  const isSingleInvoice = selectedInvoices.length === 1
+  const selectedSettlements = selectedInvoices.map((invoice) => ({
+    invoice,
+    settlement: calculateSupplierInvoiceSettlement(
+      invoice.balance_due,
+      discountByInvoiceId[invoice.id] ?? '0',
+      isSingleInvoice ? amount : undefined,
+    ),
+  }))
+  const totalCash = selectedSettlements.reduce(
+    (sum, row) => sum + (row.settlement.success ? row.settlement.value.cash : 0),
+    0,
+  )
+  const totalDiscount = selectedSettlements.reduce(
+    (sum, row) => sum + (row.settlement.success ? row.settlement.value.discount : 0),
+    0,
+  )
+  const totalSettled = totalCash + totalDiscount
+  const allSelected = supplierInvoices.length > 0
+    && selectedInvoiceIds.length === supplierInvoices.length
 
-  function settlementAmount(invoice: OpenInvoice | null, nextDiscount: string) {
-    if (!invoice) return ''
-    return Math.max(0, Number(invoice.balance_due) - Number(nextDiscount || 0)).toFixed(3)
+  function clearDiscountsExcept(invoiceIds: string[]) {
+    const allowed = new Set(invoiceIds)
+    setDiscountByInvoiceId((current) => Object.fromEntries(
+      Object.entries(current).filter(([invoiceId]) => allowed.has(invoiceId)),
+    ))
   }
 
-  function onSupplierChange(nextSupplierId: string) {
-    const invoiceStillMatches = openInvoices.some(
-      (invoice) => invoice.id === invoiceId && invoice.supplier_id === nextSupplierId,
-    )
-    setSupplierId(nextSupplierId)
-    if (!invoiceStillMatches) {
-      setInvoiceId('')
-      setDiscount('')
+  function suggestedCash(invoice: OpenInvoice | undefined, discount: string) {
+    if (!invoice) return ''
+    const settlement = calculateSupplierInvoiceSettlement(invoice.balance_due, discount)
+    return settlement.success ? settlement.value.cash.toFixed(3) : ''
+  }
+
+  function updateAmountForSelection(invoiceIds: string[]) {
+    setAmountManuallyEdited(false)
+    if (invoiceIds.length === 1) {
+      const invoice = supplierInvoices.find((candidate) => candidate.id === invoiceIds[0])
+      setAmount(suggestedCash(invoice, discountByInvoiceId[invoiceIds[0]] ?? '0'))
+    } else {
       setAmount('')
     }
   }
 
-  function onInvoiceChange(nextId: string) {
-    const invoice = supplierInvoices.find((candidate) => candidate.id === nextId) ?? null
-    setInvoiceId(nextId)
-    setDiscount('')
-    setAmount(settlementAmount(invoice, ''))
+  function onSupplierChange(nextSupplierId: string) {
+    const nextSelectedIds = selectedInvoiceIds.filter((invoiceId) => {
+      const invoice = openInvoices.find((candidate) => candidate.id === invoiceId)
+      return invoice?.supplier_id === nextSupplierId
+    })
+    setSupplierId(nextSupplierId)
+    setSelectedInvoiceIds(nextSelectedIds)
+    setAmountManuallyEdited(false)
+    clearDiscountsExcept(nextSelectedIds)
+    if (nextSelectedIds.length === 1) {
+      const invoice = openInvoices.find((candidate) => candidate.id === nextSelectedIds[0])
+      setAmount(suggestedCash(invoice, discountByInvoiceId[nextSelectedIds[0]] ?? '0'))
+    } else {
+      setAmount('')
+    }
+    setError('')
   }
 
-  function onDiscountChange(nextDiscount: string) {
-    setDiscount(nextDiscount)
-    setAmount(settlementAmount(selectedInvoice, nextDiscount))
+  function toggleInvoice(invoiceId: string) {
+    const next = selectedInvoiceIds.includes(invoiceId)
+      ? selectedInvoiceIds.filter((id) => id !== invoiceId)
+      : [...selectedInvoiceIds, invoiceId]
+    setSelectedInvoiceIds(next)
+    clearDiscountsExcept(next)
+    updateAmountForSelection(next)
+    setError('')
   }
 
-  async function handleSubmit(event: React.FormEvent) {
+  function selectAllInvoices() {
+    const next = allSelected ? [] : supplierInvoices.map((invoice) => invoice.id)
+    if (next.length > MAX_SUPPLIER_PAYMENT_SETTLEMENTS) {
+      setError(`A vendor payment can settle at most ${MAX_SUPPLIER_PAYMENT_SETTLEMENTS} invoices`)
+      return
+    }
+    setSelectedInvoiceIds(next)
+    clearDiscountsExcept(next)
+    updateAmountForSelection(next)
+    setError('')
+  }
+
+  function updateDiscount(invoiceId: string, value: string) {
+    setDiscountByInvoiceId((current) => ({ ...current, [invoiceId]: value }))
+    if (
+      !amountManuallyEdited
+      && selectedInvoiceIds.length === 1
+      && selectedInvoiceIds[0] === invoiceId
+    ) {
+      const invoice = supplierInvoices.find((candidate) => candidate.id === invoiceId)
+      setAmount(suggestedCash(invoice, value))
+    }
+  }
+
+  async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
 
-    const amountText = amount.trim()
-    const discountText = discount.trim() || '0'
-    if (!supplierId) { setError('Please select a supplier'); return }
-    if (!selectedInvoice) {
-      setError('Please select a purchase invoice; use Supplier Advances for unallocated payments')
+    if (!supplierId) {
+      setError('Please select a supplier')
       return
     }
-    if (!KWD_RE.test(amountText)) {
-      setError('Enter a cash amount with up to three decimal places')
+    if (selectedInvoices.length !== selectedInvoiceIds.length) {
+      setError('One or more selected invoices are no longer available')
       return
     }
-    if (!KWD_RE.test(discountText)) {
-      setError('Enter a discount with up to three decimal places')
+    if (selectedInvoices.length === 0) {
+      setError('Please select at least one purchase invoice')
       return
     }
-    if (Number(amountText) + Number(discountText) <= 0) {
-      setError('Cash paid or discount must be greater than zero')
-      return
-    }
-    if (Number(amountText) + Number(discountText) > Number(selectedInvoice.balance_due) + 0.0001) {
-      setError(`Payment plus discount cannot exceed ${formatCurrency(Number(selectedInvoice.balance_due))}`)
-      return
+
+    const settlements = []
+    for (const invoice of selectedInvoices) {
+      const settlement = calculateSupplierInvoiceSettlement(
+        invoice.balance_due,
+        discountByInvoiceId[invoice.id] ?? '0',
+        selectedInvoices.length === 1 ? amount : undefined,
+      )
+      if (!settlement.success) {
+        setError(`${invoice.invoice_number}: ${settlement.error}`)
+        return
+      }
+      settlements.push({
+        purchase_invoice_id: invoice.id,
+        expected_balance_due: Number(invoice.balance_due).toFixed(3),
+        amount_paid: settlement.value.cash.toFixed(3),
+        discount_amount: settlement.value.discount.toFixed(3),
+      })
     }
 
     setLoading(true)
@@ -135,24 +220,22 @@ export function VendorPaymentForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           supplier_id: supplierId,
-          purchase_invoice_id: invoiceId || null,
+          settlements,
           payment_date: date,
-          amount_paid: amountText,
-          discount_amount: discountText,
           payment_mode: mode,
           reference_number: reference.trim() || null,
           notes: notes.trim() || null,
         }),
       })
-      const data = await response.json()
+      const data = await response.json().catch(() => null) as { error?: string } | null
       if (!response.ok) {
-        setError(data.error ?? 'Failed to record payment')
+        setError(data?.error ?? 'Failed to record payment')
         return
       }
       router.replace(destination)
       router.refresh()
     } catch {
-      setError('Network error')
+      setError('Network error. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -160,7 +243,11 @@ export function VendorPaymentForm({
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
-      {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {error}
+        </p>
+      )}
 
       <div>
         <label className={labelClass}>Supplier <span className="text-red-500">*</span></label>
@@ -181,72 +268,158 @@ export function VendorPaymentForm({
 
       <div>
         <label className={labelClass}>
-          Purchase Invoice <span className="text-red-500">*</span>
+          Purchase invoices <span className="text-red-500">*</span>
         </label>
-        <select
-          value={invoiceId}
-          onChange={(event) => onInvoiceChange(event.target.value)}
-          disabled={!supplierId}
-          className={inputClass}
-        >
-          <option value="">— Select purchase invoice —</option>
-          {supplierInvoices.map((invoice) => (
-            <option key={invoice.id} value={invoice.id}>
-              {invoice.invoice_number}{invoice.supplier_invoice_number ? ` · ${invoice.supplier_invoice_number}` : ''} · {formatCurrency(Number(invoice.balance_due))}
-            </option>
-          ))}
-        </select>
-        {selectedInvoice && (
+        {!supplierId ? (
+          <div className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-400 bg-slate-50">
+            Select a supplier to see open invoices
+          </div>
+        ) : supplierInvoices.length === 0 ? (
+          <div className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-400 bg-slate-50">
+            No open posted purchase invoices for this supplier
+          </div>
+        ) : (
+          <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-96 overflow-y-auto">
+            <label className="flex items-center justify-between gap-3 px-3 py-2 text-sm cursor-pointer bg-slate-50 hover:bg-slate-100 sticky top-0 z-10">
+              <span className="flex items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={selectAllInvoices}
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-xs font-semibold text-slate-600">Select all</span>
+              </span>
+              <span className="text-xs text-slate-400">
+                {supplierInvoices.length} invoice{supplierInvoices.length !== 1 ? 's' : ''}
+              </span>
+            </label>
+
+            {supplierInvoices.map((invoice) => {
+              const isSelected = selectedInvoiceIds.includes(invoice.id)
+              const settlement = calculateSupplierInvoiceSettlement(
+                invoice.balance_due,
+                discountByInvoiceId[invoice.id] ?? '0',
+                isSelected && selectedInvoices.length === 1 ? amount : undefined,
+              )
+              return (
+                <div
+                  key={invoice.id}
+                  className={`px-3 py-2.5 text-sm ${isSelected ? 'bg-blue-50/40' : 'hover:bg-slate-50'}`}
+                >
+                  <label className="flex items-center justify-between gap-3 cursor-pointer">
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleInvoice(invoice.id)}
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="min-w-0">
+                        <span className="font-medium text-slate-900">{invoice.invoice_number}</span>
+                        {invoice.supplier_invoice_number && (
+                          <span className="text-xs text-slate-500 ml-1.5">({invoice.supplier_invoice_number})</span>
+                        )}
+                        <span className="block text-xs text-slate-400">
+                          {new Date(`${invoice.invoice_date}T00:00:00`).toLocaleDateString('en-GB')}
+                          {' · '}Total {formatCurrency(Number(invoice.total_amount))}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="text-slate-700 font-semibold flex-shrink-0">
+                      {formatCurrency(Number(invoice.balance_due))}
+                    </span>
+                  </label>
+
+                  {isSelected && (
+                    <div className="grid grid-cols-2 gap-3 mt-3 ml-6 p-3 rounded-lg border border-blue-100 bg-white">
+                      <div>
+                        <label htmlFor={`discount-${invoice.id}`} className="block text-xs font-medium text-slate-600 mb-1">
+                          Settlement discount (KWD)
+                        </label>
+                        <input
+                          id={`discount-${invoice.id}`}
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0.000"
+                          value={discountByInvoiceId[invoice.id] ?? ''}
+                          onChange={(event) => updateDiscount(invoice.id, event.target.value)}
+                          className="w-full border border-slate-200 rounded-md px-2.5 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {!settlement.success && (
+                          <p className="mt-1 text-xs text-red-600">{settlement.error}</p>
+                        )}
+                      </div>
+                      <div>
+                        <span className="block text-xs font-medium text-slate-600 mb-1">Cash paid</span>
+                        <div className="rounded-md bg-slate-50 px-2.5 py-2 font-semibold text-slate-900">
+                          {settlement.success ? formatCurrency(settlement.value.cash) : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {selectedInvoiceIds.length > 1 && (
           <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
-            Outstanding balance: <strong>{formatCurrency(Number(selectedInvoice.balance_due))}</strong>
-            {' · '}Invoice date: {new Date(`${selectedInvoice.invoice_date}T00:00:00`).toLocaleDateString('en-GB')}
+            {selectedInvoiceIds.length} invoices selected · Each invoice will get its own payment record
           </p>
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className={labelClass}>Payment Date <span className="text-red-500">*</span></label>
+          <label className={labelClass}>Payment date <span className="text-red-500">*</span></label>
           <input type="date" value={date} onChange={(event) => setDate(event.target.value)} required className={inputClass} />
         </div>
         <div>
-          <label className={labelClass}>Amount Paid <span className="text-red-500">*</span></label>
+          <label className={labelClass}>Amount paid <span className="text-red-500">*</span></label>
           <input
-            type="number"
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-            min="0"
-            step="0.001"
+            type="text"
+            inputMode="decimal"
+            value={selectedInvoices.length === 1
+              ? amount
+              : (selectedInvoices.length > 1 ? totalCash.toFixed(3) : '')}
+            onChange={(event) => {
+              setAmount(event.target.value)
+              setAmountManuallyEdited(true)
+            }}
+            readOnly={selectedInvoices.length !== 1}
             required
             placeholder="0.000"
-            className={`${inputClass} text-right font-semibold`}
+            className={`${inputClass} text-right font-semibold ${selectedInvoices.length !== 1 ? 'bg-slate-50' : ''}`}
           />
+          {selectedInvoices.length === 1 && (
+            <p className="text-xs text-slate-400 mt-1">Edit for a partial payment; cash plus discount cannot exceed the balance</p>
+          )}
+          {selectedInvoices.length > 1 && (
+            <p className="text-xs text-slate-400 mt-1">Calculated from each invoice balance minus its discount</p>
+          )}
         </div>
       </div>
 
-      <div>
-        <label className={labelClass}>
-          Settlement Discount <span className="text-slate-400 font-normal">(only for the selected invoice)</span>
-        </label>
-        <input
-          type="number"
-          value={discount}
-          onChange={(event) => onDiscountChange(event.target.value)}
-          min="0"
-          step="0.001"
-          placeholder="0.000"
-          disabled={!selectedInvoice}
-          className={`${inputClass} text-right disabled:bg-slate-100 disabled:text-slate-400`}
-        />
-        {selectedInvoice && Number(discount || 0) > 0 && (
-          <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
-            Settlement: {formatCurrency(Number(amount || 0))} cash + {formatCurrency(Number(discount || 0))} discount
-          </p>
-        )}
-      </div>
+      {selectedInvoices.length > 0 && (
+        <div className="grid grid-cols-3 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-right">
+          <div>
+            <p className="text-xs text-slate-500">Cash paid</p>
+            <p className="text-sm font-semibold text-slate-900">{formatCurrency(totalCash)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500">Discount</p>
+            <p className="text-sm font-semibold text-amber-700">{formatCurrency(totalDiscount)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500">Total settled</p>
+            <p className="text-sm font-semibold text-blue-700">{formatCurrency(totalSettled)}</p>
+          </div>
+        </div>
+      )}
 
       <div>
-        <label className={labelClass}>Payment Mode <span className="text-red-500">*</span></label>
+        <label className={labelClass}>Payment mode <span className="text-red-500">*</span></label>
         <select value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} required className={inputClass}>
           {SUPPLIER_PAYMENT_MODES.map((paymentMode) => (
             <option key={paymentMode} value={paymentMode}>{MODE_LABELS[paymentMode]}</option>
@@ -255,7 +428,7 @@ export function VendorPaymentForm({
       </div>
 
       <div>
-        <label className={labelClass}>Reference / Cheque No.</label>
+        <label className={labelClass}>Reference / cheque no.</label>
         <input
           type="text"
           value={reference}
@@ -279,10 +452,10 @@ export function VendorPaymentForm({
       <div className="flex gap-3">
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || selectedInvoices.length === 0}
           className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
         >
-          {loading ? 'Recording…' : 'Record Payment'}
+          {loading ? 'Recording…' : `Record payment${selectedInvoices.length > 1 ? ` for ${selectedInvoices.length} invoices` : ''}`}
         </button>
         <button
           type="button"

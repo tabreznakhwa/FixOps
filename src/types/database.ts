@@ -496,6 +496,24 @@ export interface Database {
           posting_id: string
         }>
       }
+      record_supplier_payment_batch: {
+        Args: {
+          p_org_id: string
+          p_actor_id: string
+          p_supplier_id: string
+          p_settlements: Json
+          p_payment_date: string
+          p_payment_mode: string
+          p_reference_number: string | null
+          p_notes: string | null
+        }
+        Returns: Array<{
+          settlement_position: number
+          supplier_payment_id: string
+          purchase_invoice_id: string
+          posting_id: string
+        }>
+      }
       get_user_organization_id: {
         Args: Record<string, never>
         Returns: string
