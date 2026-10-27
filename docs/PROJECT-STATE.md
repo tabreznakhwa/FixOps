@@ -329,10 +329,10 @@ workflow.
 
 Migration 063 (`063_multi_invoice_supplier_payments.sql`) was manually applied by
 the user on 22 Oct 2026. Its production function body, role grant, atomic rollback
-behavior and reconciliation effects have not yet been independently verified.
-The compatible application deployment status has not yet been verified. The Vendor
-Payment form can select one or more confirmed, posted credit purchase invoices for one supplier,
-including **Select all**. Purchase orders remain commitments, opening payables keep
+behavior and reconciliation effects have not yet been independently verified. The compatible
+application was deployed on 22 Oct 2026. The Vendor Payment form can select one or more
+confirmed, posted credit purchase invoices for one supplier, including **Select all**.
+Purchase orders remain commitments, opening payables keep
 their dedicated lifecycle, and unallocated cash remains a Supplier Advance.
 
 One selected invoice may receive an ordinary partial cash payment and an optional
@@ -347,6 +347,25 @@ invoice, so `cancel_supplier_payment` can reverse one child payment without
 reopening the others. Cash/Bank Book totals remain cash-only; settlement discounts
 are separate non-cash AP adjustments. Deploy only the compatible application after
 verifying migration 063, and never use `db push --include-all`.
+
+### Bank Book completeness
+
+On 27 Oct 2026, Bank Book was found to omit recent bank receipts once qualifying
+customer payments exceeded 1,000 rows. The page requested `.limit(5000)`, but
+PostgREST still enforced its 1,000-row response cap; because the query was ordered
+oldest-first, the newest rows disappeared without an error. Production contained
+1,008 qualifying customer payments, so eight online receipts dated 26 Oct 2026
+(total KWD 315) were excluded. The Yesterday preset and Kuwait date handling were
+correct.
+
+Every unbounded Bank Book source now uses explicit 1,000-row paging with stable
+source-date-plus-ID ordering. Queries run concurrently, aggregation is tested in
+`bankBook.ts`, and any failed or safety-limited source produces a visible
+**These figures are incomplete** warning instead of silently appearing as zero
+activity. Cash-only settlement semantics are unchanged: customer and supplier
+settlement discounts are non-cash and Cash Book still owns cash-mode records.
+Asset disposal paging also orders by its stable row ID. This application repair
+has not yet been committed or deployed.
 
 ### Leave applications
 Every active employee login linked through `staff.user_id`, including an

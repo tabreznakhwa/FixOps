@@ -64,6 +64,7 @@ export function fetchAllActiveAssetStaff(
 }
 
 export type AssetDisposalBookRow = {
+  id: string
   disposal_date: string
   disposal_proceeds: number
   disposal_payment_method: string
@@ -83,7 +84,7 @@ export async function fetchAllAssetDisposalsForBook(
   for (let offset = 0; ; offset += PAGE_SIZE) {
     let query = client
       .from('assets')
-      .select('disposal_date, disposal_proceeds, disposal_payment_method, disposal_reference, asset_code, asset_name')
+      .select('id, disposal_date, disposal_proceeds, disposal_payment_method, disposal_reference, asset_code, asset_name')
       .eq('organization_id', organizationId)
       .eq('status', 'disposed')
       .in('disposal_payment_method', paymentMethods)
@@ -93,7 +94,7 @@ export async function fetchAllAssetDisposalsForBook(
 
     const { data, error } = await query
       .order('disposal_date', { ascending: true })
-      .order('asset_code', { ascending: true })
+      .order('id', { ascending: true })
       .range(offset, offset + PAGE_SIZE - 1)
 
     if (error) throw new Error(error.message)
