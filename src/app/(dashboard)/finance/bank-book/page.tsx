@@ -1,4 +1,4 @@
-import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Landmark, TrendingUp, TrendingDown } from 'lucide-react'
@@ -21,7 +21,6 @@ export default async function BankBookPage({
   searchParams: Promise<{ from?: string; to?: string }>
 }) {
   const params = await searchParams
-  const supabase = await createClient()
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
   const allTime = !params.from && !params.to
@@ -33,10 +32,11 @@ export default async function BankBookPage({
   const financeAccess = await getRoleAccess(profile.organization_id, profile.role)
   if (financeAccess.finance === 'none') return null
 
-  // The hand-maintained Database type does not include several finance tables
-  // and relationships loaded by the books below.
+  // The caller has already been authorized for this organization and Finance.
+  // Use the service role for book sources so a missing table grant cannot turn a
+  // valid source into an incomplete report; every query is explicitly tenant-scoped.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const financeDb = supabase as any
+  const financeDb = createAdminClient() as any
   const { data: orgRaw, error: orgError } = await financeDb
     .from('organizations')
     .select('id, opening_bank_balance, opening_balance_date')
@@ -81,6 +81,7 @@ export default async function BankBookPage({
     paged<BankBookSources['receipts'][number]>('customer payments', (rangeFrom, rangeTo) => financeDb
       .from('payments')
       .select('id, payment_date, payment_number, amount_received, payment_mode, reference_number, customers(full_name)')
+      .eq('organization_id', profile.organization_id)
       .in('payment_mode', BANK_MODES)
       .eq('is_cancelled', false)
       .gt('amount_received', 0)
@@ -90,6 +91,7 @@ export default async function BankBookPage({
     paged<BankBookSources['supplierPayments'][number]>('supplier payments', (rangeFrom, rangeTo) => financeDb
       .from('supplier_payments')
       .select('id, payment_date, amount_paid, payment_mode, reference_number, suppliers(supplier_name)')
+      .eq('organization_id', profile.organization_id)
       .in('payment_mode', BANK_MODES)
       .eq('is_cancelled', false)
       .is('supplier_advance_id', null)
@@ -100,6 +102,7 @@ export default async function BankBookPage({
     paged<BankBookSources['supplierAdvances'][number]>('supplier advances', (rangeFrom, rangeTo) => financeDb
       .from('supplier_advances')
       .select('id, advance_date, amount, payment_mode, reference_number, suppliers(supplier_name)')
+      .eq('organization_id', profile.organization_id)
       .in('payment_mode', BANK_MODES)
       .eq('is_cancelled', false)
       .order('advance_date', { ascending: true })
@@ -108,6 +111,7 @@ export default async function BankBookPage({
     paged<BankBookSources['expenses'][number]>('expenses', (rangeFrom, rangeTo) => financeDb
       .from('expenses')
       .select('id, expense_date, expense_number, category, description, amount, payment_method, reference_number')
+      .eq('organization_id', profile.organization_id)
       .in('payment_method', ['bank_transfer', 'cheque'])
       .order('expense_date', { ascending: true })
       .order('id', { ascending: true })
@@ -115,6 +119,7 @@ export default async function BankBookPage({
     paged<BankBookSources['salaries'][number]>('salary payments', (rangeFrom, rangeTo) => financeDb
       .from('salary_slips')
       .select('id, payment_date, net_salary, payment_mode, staff(full_name), salary_runs(salary_month, salary_year)')
+      .eq('organization_id', profile.organization_id)
       .eq('payment_status', 'paid')
       .in('payment_mode', BANK_MODES)
       .order('payment_date', { ascending: true })
@@ -123,6 +128,7 @@ export default async function BankBookPage({
     paged<BankBookSources['advances'][number]>('staff advances', (rangeFrom, rangeTo) => financeDb
       .from('staff_advances')
       .select('id, issued_date, type, amount, payment_method, notes, settlement_recovery_amount, staff(full_name)')
+      .eq('organization_id', profile.organization_id)
       .in('payment_method', ['bank', 'bank_transfer', 'cheque'])
       .order('issued_date', { ascending: true })
       .order('id', { ascending: true })
@@ -130,6 +136,7 @@ export default async function BankBookPage({
     paged<BankBookSources['repayments'][number]>('staff advance repayments', (rangeFrom, rangeTo) => financeDb
       .from('staff_advance_repayments')
       .select('id, repayment_date, amount, notes, staff(full_name)')
+      .eq('organization_id', profile.organization_id)
       .eq('payment_method', 'bank')
       .order('repayment_date', { ascending: true })
       .order('id', { ascending: true })
@@ -137,6 +144,7 @@ export default async function BankBookPage({
     paged<BankBookSources['amcPayments'][number]>('AMC payments', (rangeFrom, rangeTo) => financeDb
       .from('amc_payments')
       .select('id, payment_date, amount, payment_mode, reference_number, amc_contracts(contract_number, customers(full_name))')
+      .eq('organization_id', profile.organization_id)
       .in('payment_mode', BANK_MODES)
       .eq('is_pre_opening', false)
       .order('payment_date', { ascending: true })
@@ -145,12 +153,14 @@ export default async function BankBookPage({
     paged<BankBookSources['transfers'][number]>('fund transfers', (rangeFrom, rangeTo) => financeDb
       .from('fund_transfers')
       .select('id, transfer_date, from_account, to_account, amount, reference_number, notes')
+      .eq('organization_id', profile.organization_id)
       .order('transfer_date', { ascending: true })
       .order('id', { ascending: true })
       .range(rangeFrom, rangeTo)),
     paged<BankBookSources['withdrawals'][number]>('owner withdrawals', (rangeFrom, rangeTo) => financeDb
       .from('owner_withdrawals')
       .select('id, withdrawal_date, amount, payment_mode, purpose, notes')
+      .eq('organization_id', profile.organization_id)
       .in('payment_mode', BANK_MODES)
       .order('withdrawal_date', { ascending: true })
       .order('id', { ascending: true })
@@ -158,6 +168,7 @@ export default async function BankBookPage({
     paged<BankBookSources['bonuses'][number]>('staff bonuses', (rangeFrom, rangeTo) => financeDb
       .from('staff_bonuses')
       .select('id, bonus_date, amount, payment_mode, notes, staff(full_name)')
+      .eq('organization_id', profile.organization_id)
       .in('payment_mode', BANK_MODES)
       .eq('is_voided', false)
       .order('bonus_date', { ascending: true })
@@ -165,15 +176,10 @@ export default async function BankBookPage({
       .range(rangeFrom, rangeTo)),
   ])
 
-  // Asset RLS is narrower than Finance access, so load only this book's
-  // disposal receipts through the service role after explicitly authorizing the
-  // active caller, tenant and effective Finance permission.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any
   let assetDisposals: BankBookSources['assetDisposals'] = []
   try {
     assetDisposals = await fetchAllAssetDisposalsForBook(
-      admin,
+      financeDb,
       profile.organization_id,
       ['bank_transfer', 'cheque'],
       openingDate,

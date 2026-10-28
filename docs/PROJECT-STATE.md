@@ -374,7 +374,13 @@ leave-settlement values `bank_transfer` and `cheque`; it labels rows carrying
 settlement recovery metadata as **Leave Settlement**. A 28 Oct 2026 repair added
 those newer values after three production leave settlements dated 31 Oct 2026
 were found to be excluded by the old `payment_method = 'bank'` filter. Cash Book
-continues to include only `cash`.
+continues to include only `cash`. After that deployment, Bank Book also exposed a
+pre-existing production privilege drift: `service_role` had no table privilege on
+`supplier_advances`, so the authenticated-source query produced the visible
+**These figures are incomplete** warning. Bank Book now uses the admin client only
+after the active caller's Finance authorization succeeds, and every source query
+has an explicit `organization_id` predicate. This avoids dependence on inconsistent
+table grants without weakening tenant isolation or hiding future query failures.
 
 ### Leave applications
 Every active employee login linked through `staff.user_id`, including an
