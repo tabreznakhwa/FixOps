@@ -374,13 +374,27 @@ leave-settlement values `bank_transfer` and `cheque`; it labels rows carrying
 settlement recovery metadata as **Leave Settlement**. A 28 Oct 2026 repair added
 those newer values after three production leave settlements dated 31 Oct 2026
 were found to be excluded by the old `payment_method = 'bank'` filter. Cash Book
-continues to include only `cash`. After that deployment, Bank Book also exposed a
-pre-existing production privilege drift: `service_role` had no table privilege on
-`supplier_advances`, so the authenticated-source query produced the visible
-**These figures are incomplete** warning. Bank Book now uses the admin client only
-after the active caller's Finance authorization succeeds, and every source query
-has an explicit `organization_id` predicate. This avoids dependence on inconsistent
-table grants without weakening tenant isolation or hiding future query failures.
+continues to include only `cash`. After that deployment, a diagnostic using the
+service-role client showed that production `service_role` has no table privilege on
+`supplier_advances`; this does not imply that the authenticated report query lacks
+access, because migration 055 grants authenticated SELECT and supplies the Finance
+role RLS policy. Ordinary Bank Book sources therefore remain on the authenticated,
+RLS-scoped client with explicit `organization_id` predicates. Only asset disposals,
+whose RLS is narrower than effective Finance access, use the admin client after the
+caller is authorized. Source failures remain visible rather than being treated as
+zero activity.
+
+### Staff profile employment status
+
+Migration 051's `update_staff_profile_with_opening_balance` originally assigned
+`p_updates->>'employment_status'` (PostgreSQL `text`) directly to the
+`public.employment_status` enum. Employee profile saves therefore failed with
+PostgreSQL 42804 even when the UI supplied a valid status. Migration 064 preserves
+the locked opening-balance update, validates the four allowed values, and casts the
+validated text explicitly to `public.employment_status`. The staff PATCH route also
+rejects invalid or missing statuses with HTTP 400 before calling the RPC. Migration
+`064_staff_employment_status_enum.sql` was manually applied on 28 Oct 2026. Never
+use `db push --include-all`.
 
 ### Leave applications
 Every active employee login linked through `staff.user_id`, including an

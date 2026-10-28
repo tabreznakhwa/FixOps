@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Landmark, TrendingUp, TrendingDown } from 'lucide-react'
@@ -21,6 +21,7 @@ export default async function BankBookPage({
   searchParams: Promise<{ from?: string; to?: string }>
 }) {
   const params = await searchParams
+  const supabase = await createClient()
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kuwait' })
   const allTime = !params.from && !params.to
@@ -32,11 +33,10 @@ export default async function BankBookPage({
   const financeAccess = await getRoleAccess(profile.organization_id, profile.role)
   if (financeAccess.finance === 'none') return null
 
-  // The caller has already been authorized for this organization and Finance.
-  // Use the service role for book sources so a missing table grant cannot turn a
-  // valid source into an incomplete report; every query is explicitly tenant-scoped.
+  // The hand-maintained Database type does not include several finance tables
+  // and relationships loaded by the books below.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const financeDb = createAdminClient() as any
+  const financeDb = supabase as any
   const { data: orgRaw, error: orgError } = await financeDb
     .from('organizations')
     .select('id, opening_bank_balance, opening_balance_date')
@@ -176,10 +176,15 @@ export default async function BankBookPage({
       .range(rangeFrom, rangeTo)),
   ])
 
+  // Asset RLS is narrower than Finance access, so load only this book's
+  // disposal receipts through the service role after explicitly authorizing the
+  // active caller, tenant and effective Finance permission.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any
   let assetDisposals: BankBookSources['assetDisposals'] = []
   try {
     assetDisposals = await fetchAllAssetDisposalsForBook(
-      financeDb,
+      admin,
       profile.organization_id,
       ['bank_transfer', 'cheque'],
       openingDate,
