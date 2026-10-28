@@ -364,8 +364,17 @@ source-date-plus-ID ordering. Queries run concurrently, aggregation is tested in
 **These figures are incomplete** warning instead of silently appearing as zero
 activity. Cash-only settlement semantics are unchanged: customer and supplier
 settlement discounts are non-cash and Cash Book still owns cash-mode records.
-Asset disposal paging also orders by its stable row ID. This application repair
-has not yet been committed or deployed.
+Asset disposal paging also orders by its stable row ID. This repair was deployed
+on 27 Oct 2026.
+
+Leave settlements are stored in `staff_advances` as the actual payout and use
+`payment_method = 'bank_transfer'` or `cheque` when paid from the bank. Bank Book
+must therefore include both the legacy staff-advance value `bank` and the newer
+leave-settlement values `bank_transfer` and `cheque`; it labels rows carrying
+settlement recovery metadata as **Leave Settlement**. A 28 Oct 2026 repair added
+those newer values after three production leave settlements dated 31 Oct 2026
+were found to be excluded by the old `payment_method = 'bank'` filter. Cash Book
+continues to include only `cash`.
 
 ### Leave applications
 Every active employee login linked through `staff.user_id`, including an

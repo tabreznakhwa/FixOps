@@ -31,7 +31,8 @@ const sources: BankBookSources = {
     { id: 'salary', payment_date: '2026-10-26', net_salary: 11, payment_mode: 'bank_transfer', staff: { full_name: 'Salary Staff' }, salary_runs: { salary_month: 10, salary_year: 2026 } },
   ],
   advances: [
-    { id: 'staff-advance', issued_date: '2026-10-26', type: 'loan', amount: 8, notes: 'Emergency', staff: { full_name: 'Advance Staff' } },
+    { id: 'staff-advance', issued_date: '2026-10-26', type: 'loan', amount: 8, payment_method: 'bank', notes: 'Emergency', settlement_recovery_amount: null, staff: { full_name: 'Advance Staff' } },
+    { id: 'leave-settlement', issued_date: '2026-10-27', type: 'advance', amount: 13, payment_method: 'bank_transfer', notes: 'Annual leave', settlement_recovery_amount: 0, staff: { full_name: 'Leave Staff' } },
   ],
   repayments: [
     { id: 'repayment', repayment_date: '2026-10-26', amount: 6, notes: null, staff: { full_name: 'Repayment Staff' } },
@@ -63,18 +64,24 @@ const periodBook = buildBankBook(sources, {
 })
 
 assert.equal(periodBook.totalBankIn, 172)
-assert.equal(periodBook.totalBankOut, 71)
-assert.equal(periodBook.closingBalance, 151)
+assert.equal(periodBook.totalBankOut, 84)
+assert.equal(periodBook.closingBalance, 138)
 assert.equal(periodBook.periodOpeningBalance, 65)
 assert.equal(periodBook.periodOpeningDate, '2026-10-25')
 assert.equal(periodBook.periodReceipts, 152)
-assert.equal(periodBook.periodPayments, 66)
-assert.equal(periodBook.entries.length, 14)
+assert.equal(periodBook.periodPayments, 79)
+assert.equal(periodBook.entries.length, 15)
 assert.ok(periodBook.entries.some((entry) => entry.id === 'receipt-receipt-from' && entry.mode === 'Online'))
 assert.ok(periodBook.entries.some((entry) => entry.id === 'receipt-receipt-to' && entry.mode === 'KNET'))
 assert.ok(periodBook.entries.some((entry) => entry.id === 'transfer-in-transfer-in' && entry.receipts === 12))
 assert.ok(periodBook.entries.some((entry) => entry.id === 'transfer-out-transfer-out' && entry.payments === 3))
 assert.ok(periodBook.entries.some((entry) => entry.id === 'asset-disposal-asset' && entry.receipts === 15))
+assert.ok(periodBook.entries.some((entry) => (
+  entry.id === 'staff-advance-leave-settlement'
+  && entry.narration === 'Leave Settlement — Leave Staff (Annual leave)'
+  && entry.mode === 'Bank Transfer'
+  && entry.payments === 13
+)))
 assert.equal(periodBook.entries[0].date, '2026-10-26')
 assert.equal(periodBook.entries.at(-1)?.date, '2026-10-27')
 for (let index = 1; index < periodBook.entries.length; index += 1) {
@@ -93,11 +100,11 @@ const allTimeBook = buildBankBook(sources, {
   to: '2026-10-27',
   allTime: true,
 })
-assert.equal(allTimeBook.entries.length, 16)
+assert.equal(allTimeBook.entries.length, 17)
 assert.equal(allTimeBook.periodOpeningBalance, 50)
 assert.equal(allTimeBook.periodOpeningDate, '2026-01-01')
 assert.equal(allTimeBook.periodReceipts, 172)
-assert.equal(allTimeBook.periodPayments, 71)
+assert.equal(allTimeBook.periodPayments, 84)
 
 assert.deepEqual(BANK_MODES, ['bank_transfer', 'cheque', 'pos', 'online', 'card', 'knet'])
 assert.equal(BANK_MODES.includes('cash' as never), false)
@@ -144,6 +151,7 @@ for (const marker of [
   "'expenses'",
   "'salary payments'",
   "'staff advances'",
+  ".in('payment_method', ['bank', 'bank_transfer', 'cheque'])",
   "'staff advance repayments'",
   "'AMC payments'",
   "'fund transfers'",

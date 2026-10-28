@@ -21,7 +21,7 @@ type SupplierPay = { id: string; payment_date: string; amount_paid: number; paym
 type SupplierAdvance = { id: string; advance_date: string; amount: number; payment_mode: string; reference_number: string | null; suppliers: { supplier_name: string } | null }
 type Expense = { id: string; expense_date: string; expense_number: string; category: string; description: string; amount: number; payment_method: string; reference_number: string | null }
 type Salary = { id: string; payment_date: string; net_salary: number; payment_mode: string; staff: { full_name: string } | null; salary_runs: { salary_month: number; salary_year: number } | null }
-type AdvancePay = { id: string; issued_date: string; type: string; amount: number; notes: string | null; staff: { full_name: string } | null }
+type AdvancePay = { id: string; issued_date: string; type: string; amount: number; payment_method: string; notes: string | null; settlement_recovery_amount: number | null; staff: { full_name: string } | null }
 type RepaymentPay = { id: string; repayment_date: string; amount: number; notes: string | null; staff: { full_name: string } | null }
 type AmcPay = { id: string; payment_date: string; amount: number; payment_mode: string; reference_number: string | null; amc_contracts: { contract_number: string; customers: { full_name: string } | null } | null }
 type Transfer = { id: string; transfer_date: string; from_account: string; to_account: string; amount: number; reference_number: string | null; notes: string | null }
@@ -149,8 +149,9 @@ export function buildBankBook(
     })),
     ...advances.filter((row) => inPeriod(row.issued_date)).map((row) => ({
       id: `staff-advance-${row.id}`, date: row.issued_date,
-      narration: `${row.type === 'loan' ? 'Loan' : 'Salary Advance'} — ${row.staff?.full_name ?? 'Staff'}${row.notes ? ` (${row.notes})` : ''}`,
-      mode: 'Bank Transfer', receipts: 0, payments: row.amount, ref: '—',
+      narration: `${row.settlement_recovery_amount !== null ? 'Leave Settlement' : row.type === 'loan' ? 'Loan' : 'Salary Advance'} — ${row.staff?.full_name ?? 'Staff'}${row.notes ? ` (${row.notes})` : ''}`,
+      mode: MODE_LABELS[row.payment_method] ?? (row.payment_method === 'bank' ? 'Bank Transfer' : row.payment_method),
+      receipts: 0, payments: row.amount, ref: '—',
     })),
     ...repayments.filter((row) => inPeriod(row.repayment_date)).map((row) => ({
       id: `staff-repayment-${row.id}`, date: row.repayment_date,

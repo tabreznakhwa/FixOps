@@ -122,8 +122,8 @@ export default async function BankBookPage({
       .range(rangeFrom, rangeTo)),
     paged<BankBookSources['advances'][number]>('staff advances', (rangeFrom, rangeTo) => financeDb
       .from('staff_advances')
-      .select('id, issued_date, type, amount, notes, staff(full_name)')
-      .eq('payment_method', 'bank')
+      .select('id, issued_date, type, amount, payment_method, notes, settlement_recovery_amount, staff(full_name)')
+      .in('payment_method', ['bank', 'bank_transfer', 'cheque'])
       .order('issued_date', { ascending: true })
       .order('id', { ascending: true })
       .range(rangeFrom, rangeTo)),
