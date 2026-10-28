@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/audit'
+
+const EMPLOYMENT_STATUSES = ['active', 'on_leave', 'terminated', 'resigned'] as const
 
 export async function PATCH(
   request: NextRequest,
@@ -70,6 +71,10 @@ export async function PATCH(
     if (!Number.isFinite(newOpeningAdvance) || newOpeningAdvance < 0
       || !Number.isFinite(newOpeningLoan) || newOpeningLoan < 0) {
       return NextResponse.json({ error: 'Opening advance and loan cannot be negative' }, { status: 400 })
+    }
+    if (typeof body.employment_status !== 'string'
+      || !EMPLOYMENT_STATUSES.includes(body.employment_status as typeof EMPLOYMENT_STATUSES[number])) {
+      return NextResponse.json({ error: 'Invalid employment status' }, { status: 400 })
     }
 
     const updates = {

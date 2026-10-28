@@ -144,7 +144,9 @@ assert.deepEqual(failureMessages, ['customer payments: database unavailable'])
 
 const page = read('src/app/(dashboard)/finance/bank-book/page.tsx')
 for (const marker of [
-  "const financeDb = createAdminClient() as any",
+  'const supabase = await createClient()',
+  'const financeDb = supabase as any',
+  'const admin = createAdminClient() as any',
   ".eq('organization_id', profile.organization_id)",
   "readPagedRows<T>(buildQuery, sourceFailures, source)",
   "'customer payments'",
@@ -168,6 +170,8 @@ for (const marker of [
   assert.ok(page.includes(marker), `Bank Book page is missing: ${marker}`)
 }
 assert.equal(page.includes('.limit(5000)'), false)
+assert.equal(page.includes('const financeDb = createAdminClient() as any'), false)
+assert.ok(page.includes('fetchAllAssetDisposalsForBook(\n      admin,'))
 assert.ok((page.match(/\.eq\('organization_id', profile\.organization_id\)/g) ?? []).length >= 11)
 assert.ok((page.match(/\.range\(rangeFrom, rangeTo\)/g) ?? []).length >= 11)
 assert.ok((page.match(/\.order\('id', \{ ascending: true \}\)/g) ?? []).length >= 11)
