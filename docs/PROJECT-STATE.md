@@ -325,6 +325,16 @@ the compatible application may process leave settlements; verify deployment
 before reopening settlement. There is still no leave-settlement cancel/void
 workflow.
 
+Leave settlements widened `staff.advance_balance` to three-decimal KWD, but the
+payroll form and `process_payroll` still rounded advance recovery to two decimals.
+For example, Anil Sequeira's live balance was KWD 250.146 while the submitted
+recovery became KWD 250.150, so the RPC correctly blocked the run as an
+over-deduction. Migration 065 widens `salary_slips.advance_deduction` to
+`numeric(13,3)` and makes payroll preserve exact fils for advance recovery; the UI
+also uses a 0.001 step and three-decimal parsing. Migration
+`065_payroll_advance_precision.sql` was manually applied on 1 Nov 2026; deploy the
+compatible application before retrying payroll.
+
 ### Multi-invoice vendor payments
 
 Migration 063 (`063_multi_invoice_supplier_payments.sql`) was manually applied by

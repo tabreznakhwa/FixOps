@@ -60,8 +60,8 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, annualLeav
     return Math.round((value + Number.EPSILON) * factor) / factor
   }
 
-  function parseManualDeduction(value: string) {
-    return roundMoney(parseFloat(value || '0') || 0, 2)
+  function parseManualDeduction(value: string, decimals = 2) {
+    return roundMoney(parseFloat(value || '0') || 0, decimals)
   }
 
   // Normal OT: hourlyRate × normalOtPaidHours (no ×1.25 — attendance already applied it)
@@ -92,7 +92,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, annualLeav
       const entriesArray = staff.map((s) => ({
         staff_id: s.id,
         food_deduction: parseManualDeduction(entries[s.id]?.food_deduction || '0'),
-        advance_deduction: parseManualDeduction(entries[s.id]?.advance_deduction || '0'),
+        advance_deduction: parseManualDeduction(entries[s.id]?.advance_deduction || '0', 3),
       }))
       const res = await fetch('/api/payroll/process', {
         method: 'POST',
@@ -236,7 +236,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, annualLeav
                 const annualLeaveDeduct = calcAnnualLeaveDeduction(s, annualLeaveDays, fixedOT)
 
                 const foodDeduct = parseManualDeduction(entries[s.id]?.food_deduction || '0')
-                const advDeduct = parseManualDeduction(entries[s.id]?.advance_deduction || '0')
+                const advDeduct = parseManualDeduction(entries[s.id]?.advance_deduction || '0', 3)
                 const advBalance = s.advance_balance ?? 0
 
                 const totalAllowance = roundMoney(allowance + food, 2)
@@ -331,7 +331,7 @@ export function PayrollEntryForm({ month, year, staff, absentDaysMap, annualLeav
                     {hasAdvances && (
                       <td className="px-3 py-3 text-right">
                         <input
-                          type="number" min="0" step="0.01" placeholder="0.00"
+                          type="number" min="0" step="0.001" placeholder="0.000"
                           max={advBalance > 0 ? advBalance : undefined}
                           value={entries[s.id]?.advance_deduction}
                           onChange={(e) => setEntry(s.id, 'advance_deduction', e.target.value)}
