@@ -21,6 +21,19 @@ export type AuthorizedWorkOrder = {
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
+export function canEditPrivilegedWorkOrderDetails({
+  status,
+  actorRole,
+  hasFinancialActivity,
+}: {
+  status: string
+  actorRole: string
+  hasFinancialActivity: boolean
+}): boolean {
+  if (!['owner', 'admin', 'manager', 'call_center'].includes(actorRole)) return false
+  return !['invoiced', 'paid', 'cancelled'].includes(status) && !hasFinancialActivity
+}
+
 export function canMutateWorkOrderLineItems({
   status,
   actorRole,

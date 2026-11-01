@@ -147,7 +147,8 @@ for (const marker of [
   'paymentAmount={paymentAmount}',
   'const canEditLineItems = canMutateWorkOrderLineItems({',
   'actorRole: profile.role,',
-  'hasFinancialActivity: Boolean(existingInvoice || directReceipts.length)',
+  'const hasFinancialActivity = Boolean(existingInvoice || directReceipts.length)',
+  'hasFinancialActivity,',
   'isCompleted={!canEditLineItems}',
   'canEditLineItems={canEditLineItems}',
 ]) {

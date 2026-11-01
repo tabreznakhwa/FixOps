@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import {
   authorizeWorkOrderMutation,
+  canEditPrivilegedWorkOrderDetails,
   hasNonCancelledWorkOrderInvoice,
+  hasWorkOrderFinancialActivity,
   isAuthorizationResponse,
 } from '@/lib/workOrderMutationAccess'
 import { isWorkOrderServiceCategory } from '@/lib/workOrderCategories'
@@ -67,6 +69,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (!Object.keys(updates).length) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
+    }
+
+    if (!isTechnician) {
+      const hasFinancialActivity = await hasWorkOrderFinancialActivity(
+        supabase,
+        workOrder.organization_id,
+        id,
+      )
+      if (!canEditPrivilegedWorkOrderDetails({
+        status: workOrder.status,
+        actorRole: workOrder.actorRole,
+        hasFinancialActivity,
+      })) {
+        return NextResponse.json(
+          { error: 'This work order can no longer be edited' },
+          { status: 409 },
+        )
+      }
     }
 
     if (isTechnician) {

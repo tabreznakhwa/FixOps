@@ -80,8 +80,10 @@ for (const marker of [
 
 const detail = read('src/app/(dashboard)/work-orders/[id]/page.tsx')
 for (const marker of [
-  "const canEditJobDetails = !['invoiced', 'paid', 'cancelled'].includes(wo.status) && !existingInvoice",
-  '{(!isTechnician || canEditJobDetails) && (',
+  'const canEditJobDetails = isTechnician',
+  "? !['invoiced', 'paid', 'cancelled'].includes(wo.status) && !existingInvoice",
+  ': canEditPrivilegedWorkOrderDetails({',
+  '{canEditJobDetails && (',
   'isCompleted={!canEditLineItems}',
 ]) {
   assert.ok(detail.includes(marker), `work-order detail is missing: ${marker}`)

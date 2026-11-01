@@ -7,7 +7,11 @@ import { EditWorkOrderForm } from './EditWorkOrderForm'
 import { TechnicianEditWorkOrderForm } from './TechnicianEditWorkOrderForm'
 import { resolveBack } from '@/lib/backNav'
 import { isWorkOrderAssignedToTechnician } from '@/lib/workOrderAccess'
-import { hasNonCancelledWorkOrderInvoice } from '@/lib/workOrderMutationAccess'
+import {
+  canEditPrivilegedWorkOrderDetails,
+  hasNonCancelledWorkOrderInvoice,
+  hasWorkOrderFinancialActivity,
+} from '@/lib/workOrderMutationAccess'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -92,15 +96,16 @@ export default async function EditWorkOrderPage({ params, searchParams }: { para
   }
 
   // Only non-sensitive staff directory fields cross this server boundary.
-  const [woRes, usersRes, staffRes] = await Promise.all([
+  const [woRes, usersRes, staffRes, hasFinancialActivity] = await Promise.all([
     (admin as any)
       .from('work_orders')
-      .select('id, work_order_number, service_category, priority, job_description, notes, scheduled_date, scheduled_time, estimated_hours, estimated_amount, final_amount, assigned_to, assigned_staff_id, technician_name')
+      .select('id, work_order_number, service_category, priority, job_description, notes, scheduled_date, scheduled_time, estimated_hours, estimated_amount, final_amount, assigned_to, assigned_staff_id, technician_name, status')
       .eq('id', id)
       .eq('organization_id', profile.organization_id)
       .single(),
     admin.from('users').select('id, full_name, role').eq('organization_id', profile.organization_id).in('role', ['technician', 'admin', 'manager']).eq('status', 'active'),
     admin.from('staff').select('id, full_name, designation').eq('employment_status', 'active').eq('organization_id', profile.organization_id),
+    hasWorkOrderFinancialActivity(admin, profile.organization_id, id),
   ])
 
   if (!woRes.data) notFound()
@@ -111,7 +116,14 @@ export default async function EditWorkOrderPage({ params, searchParams }: { para
     scheduled_date: string | null; scheduled_time: string | null;
     estimated_hours: number | null; estimated_amount: number | null; final_amount: number;
     assigned_to: string | null; assigned_staff_id: string | null; technician_name: string | null;
+    status: string;
   }
+
+  if (!canEditPrivilegedWorkOrderDetails({
+    status: wo.status,
+    actorRole: profile.role,
+    hasFinancialActivity,
+  })) redirect(detail.href)
 
   const systemUsers = (usersRes.data ?? []) as { id: string; full_name: string; role: string }[]
   const staffMembers = (staffRes.data ?? []) as { id: string; full_name: string; designation: string | null }[]

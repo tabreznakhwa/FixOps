@@ -1,7 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { getAuthedProfile } from '@/lib/auth/session'
 import { isWorkOrderAssignedToTechnician } from '@/lib/workOrderAccess'
-import { canMutateWorkOrderLineItems } from '@/lib/workOrderMutationAccess'
+import {
+  canEditPrivilegedWorkOrderDetails,
+  canMutateWorkOrderLineItems,
+} from '@/lib/workOrderMutationAccess'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -157,12 +160,19 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
     (sum, receipt) => sum + Number(receipt.amount_received || 0),
     0,
   )
+  const hasFinancialActivity = Boolean(existingInvoice || directReceipts.length)
   const canEditLineItems = canMutateWorkOrderLineItems({
     status: wo.status,
     actorRole: profile.role,
-    hasFinancialActivity: Boolean(existingInvoice || directReceipts.length),
+    hasFinancialActivity,
   })
-  const canEditJobDetails = !['invoiced', 'paid', 'cancelled'].includes(wo.status) && !existingInvoice
+  const canEditJobDetails = isTechnician
+    ? !['invoiced', 'paid', 'cancelled'].includes(wo.status) && !existingInvoice
+    : canEditPrivilegedWorkOrderDetails({
+        status: wo.status,
+        actorRole: profile.role,
+        hasFinancialActivity,
+      })
   const paymentAmount = existingInvoice && !['issued', 'partial', 'overdue'].includes(existingInvoice.status)
     ? null
     : Math.max(
@@ -191,7 +201,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
             <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${getStatusColor(wo.status)}`}>
               {formatStatus(wo.status)}
             </span>
-            {(!isTechnician || canEditJobDetails) && (
+            {canEditJobDetails && (
               <Link
                 href={editHref}
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition"

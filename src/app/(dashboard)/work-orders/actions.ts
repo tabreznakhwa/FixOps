@@ -4,6 +4,10 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { logAudit } from '@/lib/audit'
 import { returnToFromFormData } from '@/lib/backNav'
+import {
+  canEditPrivilegedWorkOrderDetails,
+  hasWorkOrderFinancialActivity,
+} from '@/lib/workOrderMutationAccess'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -37,6 +41,28 @@ export async function updateWorkOrder(
 
   const id = formData.get('id') as string
   if (!id) return { error: 'Work Order ID missing' }
+
+  const { data: workOrderRaw } = await admin
+    .from('work_orders')
+    .select('status')
+    .eq('id', id)
+    .eq('organization_id', profile.organization_id)
+    .single()
+  const workOrder = workOrderRaw as { status: string } | null
+  if (!workOrder) return { error: 'Work order not found' }
+
+  const hasFinancialActivity = await hasWorkOrderFinancialActivity(
+    admin,
+    profile.organization_id,
+    id,
+  )
+  if (!canEditPrivilegedWorkOrderDetails({
+    status: workOrder.status,
+    actorRole: profile.role,
+    hasFinancialActivity,
+  })) {
+    return { error: 'This work order can no longer be edited' }
+  }
 
   const jobDescription = (formData.get('job_description') as string)?.trim()
   if (!jobDescription) return { error: 'Job description is required' }
