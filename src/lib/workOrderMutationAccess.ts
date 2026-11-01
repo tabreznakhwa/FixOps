@@ -31,7 +31,9 @@ export function canEditPrivilegedWorkOrderDetails({
   hasFinancialActivity: boolean
 }): boolean {
   if (!['owner', 'admin', 'manager', 'call_center'].includes(actorRole)) return false
-  return !['invoiced', 'paid', 'cancelled'].includes(status) && !hasFinancialActivity
+  if (['invoiced', 'paid', 'cancelled'].includes(status)) return false
+  if (status === 'completed' && ['owner', 'admin'].includes(actorRole)) return true
+  return !hasFinancialActivity
 }
 
 export function canMutateWorkOrderLineItems({

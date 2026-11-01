@@ -36,7 +36,15 @@ for (const hasFinancialActivity of [false, true]) {
 }
 assert.equal(canEditPrivilegedWorkOrderDetails({
   status: 'completed', actorRole: 'admin', hasFinancialActivity: true,
-}), false)
+}), true)
+assert.equal(canEditPrivilegedWorkOrderDetails({
+  status: 'completed', actorRole: 'owner', hasFinancialActivity: true,
+}), true)
+for (const actorRole of ['manager', 'call_center']) {
+  assert.equal(canEditPrivilegedWorkOrderDetails({
+    status: 'completed', actorRole, hasFinancialActivity: true,
+  }), false)
+}
 assert.equal(canEditPrivilegedWorkOrderDetails({
   status: 'work_started', actorRole: 'manager', hasFinancialActivity: false,
 }), true)

@@ -183,11 +183,11 @@ call_center no longer have a Mark Complete action of their own (enforced both
 in `WorkOrderActions` and server-side in the work-order PATCH route) and move
 straight to invoicing once the technician completes the job. Owner and Admin
 may still correct a completed work order's job, schedule, assignment and amount
-details, as well as its line items, until the first non-cancelled invoice or
-active direct Work Order payment exists. Manager and Call Center retain their
-existing job-detail editing access before that financial boundary, but cannot
-change completed/verified line items. The edit page and both mutation paths
-enforce that same financial-activity boundary. A work order assigned only to a staff
+details even after payment activity exists. Completed line items remain locked
+once a non-cancelled invoice or active direct Work Order payment exists. Manager
+and Call Center retain their existing job-detail editing access before that
+financial boundary, but cannot change completed/verified line items. The edit
+page and both mutation paths enforce the same role-specific policy. A work order assigned only to a staff
 member with no linked login therefore has no path to `completed` until it is
 reassigned to someone who can log in and complete it
 themselves. Payment collection is cash only on their own work order;
