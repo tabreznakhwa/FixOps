@@ -30,7 +30,7 @@ for (const actorRole of ['owner', 'admin', 'technician']) {
     }), true)
     assert.equal(canMutateWorkOrderLineItems({
       status, actorRole, hasFinancialActivity: true,
-    }), false)
+    }), actorRole !== 'technician')
   }
 }
 for (const actorRole of ['manager', 'call_center']) {

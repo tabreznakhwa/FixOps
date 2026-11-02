@@ -60,7 +60,10 @@ assert.equal(canMutateWorkOrderLineItems({
 }), true)
 assert.equal(canMutateWorkOrderLineItems({
   status: 'completed', actorRole: 'admin', hasFinancialActivity: true,
-}), false)
+}), true)
+assert.equal(canMutateWorkOrderLineItems({
+  status: 'verified', actorRole: 'owner', hasFinancialActivity: true,
+}), true)
 
 const detailPage = read('src/app/(dashboard)/work-orders/[id]/page.tsx')
 for (const marker of [

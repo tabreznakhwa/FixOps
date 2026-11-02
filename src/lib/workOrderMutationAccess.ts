@@ -45,10 +45,14 @@ export function canMutateWorkOrderLineItems({
   actorRole: string
   hasFinancialActivity: boolean
 }): boolean {
-  if (['invoiced', 'paid', 'cancelled'].includes(status) || hasFinancialActivity) return false
+  if (['invoiced', 'paid', 'cancelled'].includes(status)) return false
+  if (['completed', 'verified'].includes(status) && ['owner', 'admin'].includes(actorRole)) {
+    return true
+  }
+  if (hasFinancialActivity) return false
   if (!['completed', 'verified'].includes(status)) return true
 
-  return ['owner', 'admin', 'technician'].includes(actorRole)
+  return actorRole === 'technician'
 }
 
 export async function hasNonCancelledWorkOrderInvoice(
