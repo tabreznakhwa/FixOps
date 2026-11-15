@@ -8,8 +8,8 @@ const read = (path: string) => readFileSync(resolve(root, path), 'utf8').replace
 const editPage = read('src/app/(dashboard)/finance/invoices/[id]/edit/page.tsx')
 for (const marker of [
   'posting_sequence, discount_amount',
-  "!['admin', 'owner', 'manager'].includes(role)",
-  "['cancelled', 'paid'].includes(invoiceRaw.status)",
+  "!['admin', 'owner'].includes(role)",
+  "!['draft', 'issued'].includes(invoiceRaw.status)",
 ]) {
   assert.ok(editPage.includes(marker), `invoice edit page is missing: ${marker}`)
 }
@@ -18,10 +18,11 @@ const form = read('src/app/(dashboard)/finance/invoices/[id]/edit/EditInvoiceFor
 for (const marker of [
   'posting_sequence: number | null',
   'const isPosted = invoice.posting_sequence !== null',
-  'const body = isPosted',
+  "const canEditFinancials = !isPosted || invoice.status === 'issued'",
+  'const body = !canEditFinancials',
   '? metadata',
-  'Accounting details and line items are locked',
-  '{!isPosted && (',
+  'This invoice has payment or cancellation activity.',
+  '{canEditFinancials && (',
 ]) {
   assert.ok(form.includes(marker), `invoice edit form is missing: ${marker}`)
 }
@@ -46,21 +47,22 @@ for (const marker of [
   'discount_amount:',
   'items:',
 ]) {
-  assert.ok(submitPayload.includes(marker), `draft invoice payload must retain: ${marker}`)
+  assert.ok(submitPayload.includes(marker), `editable invoice payload must retain: ${marker}`)
   assert.equal(
     submitPayload.slice(metadataStart, submitPayload.indexOf('? metadata')).includes(marker),
     false,
-    `posted metadata must omit financial field: ${marker}`,
+    `locked posted metadata must omit financial field: ${marker}`,
   )
 }
 
 const route = read('src/app/api/invoices/[id]/route.ts')
 for (const marker of [
-  "existing.status !== 'draft'",
-  'Posted invoice financials are immutable; cancel and create a replacement invoice',
+  "existing.status === 'issued' && Number(existing.amount_paid ?? 0) === 0",
+  "'revise_issued_customer_invoice'",
+  'Only unpaid issued invoices can have their accounting details and line items revised',
   "const ALLOWED_FIELDS = ['status', 'notes', 'terms_and_conditions', 'due_date', 'invoice_date', 'ref_number']",
   "currentInvoice.status !== 'draft' && 'invoice_date' in updatePayload",
-  "!['admin', 'owner', 'manager'].includes(profile.role)",
+  "!['admin', 'owner'].includes(profile.role)",
   ".eq('organization_id', profile.organization_id)",
 ]) {
   assert.ok(route.includes(marker), `invoice PATCH route is missing: ${marker}`)

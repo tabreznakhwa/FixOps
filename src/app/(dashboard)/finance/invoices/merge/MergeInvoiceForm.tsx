@@ -70,13 +70,12 @@ export function MergeInvoiceForm({
     setInvoices([])
     setSelectedIds(new Set())
     try {
-      const res = await fetch(`/api/invoices?customer_id=${customerId}&status_not=issued,partial,paid,overdue,cancelled,written_off`)
-      if (res.ok) {
-        const data = await res.json()
-        setInvoices(data.invoices ?? [])
-      }
-    } catch {
-      // ignore — show empty list
+      const res = await fetch(`/api/invoices?customer_id=${customerId}&status=issued&unpaid_only=true`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to load invoices')
+      setInvoices(data.invoices ?? [])
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load invoices')
     } finally {
       setInvoicesLoading(false)
     }
@@ -85,6 +84,7 @@ export function MergeInvoiceForm({
   function selectCustomer(c: Customer) {
     setSelectedCustomer(c)
     setCustomerSearch(c.full_name)
+    setError('')
     setShowDropdown(false)
     setSelectedIds(new Set())
     loadInvoices(c.id)
@@ -191,8 +191,8 @@ export function MergeInvoiceForm({
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
           <h2 className="font-semibold text-slate-900">Step 2 — Select Invoices to Merge</h2>
           <p className="text-sm text-slate-500">
-            Showing draft invoices eligible for merging for <span className="font-semibold text-slate-700">{selectedCustomer.full_name}</span>.
-            The merged invoice will replace these drafts.
+            Showing unpaid issued invoices eligible for merging for <span className="font-semibold text-slate-700">{selectedCustomer.full_name}</span>.
+            The merged invoice will replace them with one consolidated issued invoice.
           </p>
 
           {invoicesLoading ? (
@@ -202,7 +202,7 @@ export function MergeInvoiceForm({
             </div>
           ) : invoices.length === 0 ? (
             <div className="py-6 text-center text-sm text-slate-400">
-              No draft invoices eligible for merging were found for this customer.
+              No unpaid issued invoices eligible for merging were found for this customer.
             </div>
           ) : (
             <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -326,7 +326,7 @@ export function MergeInvoiceForm({
 
           <div className="flex items-center justify-between pt-2">
             <p className="text-sm text-slate-500">
-              Creates <span className="font-semibold text-slate-900">1 consolidated invoice</span> and cancels the {selectedIds.size} source invoices.
+              Creates <span className="font-semibold text-slate-900">1 consolidated issued invoice</span> and reverses the {selectedIds.size} source invoices.
             </p>
             <button
               onClick={handleSubmit}

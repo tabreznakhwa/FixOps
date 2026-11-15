@@ -118,7 +118,7 @@ export default async function InvoiceDetailPage({
   const { data: profileRaw } = await (supabase as any)
     .from('users').select('role').eq('id', user!.id).single()
   const role = (profileRaw as { role: string } | null)?.role ?? ''
-  const canEdit = ['admin', 'owner', 'manager'].includes(role) && !['cancelled', 'paid'].includes(invoice.status)
+  const canEdit = ['admin', 'owner'].includes(role) && ['draft', 'issued'].includes(invoice.status)
   const canManageLinks = ['admin', 'owner', 'manager'].includes(role)
 
   // Fetch work orders for the customer so admins can link/re-link (even on paid invoices)

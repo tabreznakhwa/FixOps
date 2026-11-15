@@ -122,13 +122,25 @@ export async function PATCH(
 
     // Full edit (admin/owner/manager only)
     if (body.items !== undefined) {
-      if (!['admin', 'owner', 'manager'].includes(profile.role)) {
+      if (!['admin', 'owner'].includes(profile.role)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
       const { customer_id, invoice_type, invoice_date, due_date, work_order_id, ref_number, discount_amount, notes, terms_and_conditions, items } = body
 
       if (!customer_id) return NextResponse.json({ error: 'Customer is required' }, { status: 400 })
       if (!Array.isArray(items) || items.length === 0) return NextResponse.json({ error: 'At least one line item is required' }, { status: 400 })
+      const discount = Number(discount_amount ?? 0)
+      if (!Number.isFinite(discount) || discount < 0) {
+        return NextResponse.json({ error: 'Discount must be a non-negative number' }, { status: 400 })
+      }
+      const hasInvalidItem = items.some((item: { quantity?: unknown; unit_price?: unknown }) => {
+        const quantity = Number(item.quantity)
+        const unitPrice = Number(item.unit_price)
+        return !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitPrice) || unitPrice < 0
+      })
+      if (hasInvalidItem) {
+        return NextResponse.json({ error: 'Line-item quantity and price must be valid numbers' }, { status: 400 })
+      }
 
       const supabaseAdmin = createAdminClient() as any
       const { data: existing } = await supabaseAdmin
@@ -137,15 +149,47 @@ export async function PATCH(
       if (existing.organization_id !== profile.organization_id) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
+      if (existing.status === 'issued' && Number(existing.amount_paid ?? 0) === 0) {
+        const { error: reviseError } = await supabaseAdmin.rpc(
+          'revise_issued_customer_invoice',
+          {
+            p_org_id: profile.organization_id,
+            p_actor_id: user.id,
+            p_invoice_id: id,
+            p_customer_id: customer_id,
+            p_invoice_type: invoice_type ?? 'service',
+            p_invoice_date: invoice_date,
+            p_due_date: due_date ?? null,
+            p_work_order_id: work_order_id ?? null,
+            p_ref_number: ref_number?.trim() || null,
+            p_discount_amount: discount,
+            p_notes: notes?.trim() || null,
+            p_terms_and_conditions: terms_and_conditions?.trim() || null,
+            p_items: items,
+          },
+        )
+        if (reviseError) throw reviseError
+
+        await logAudit({
+          orgId: profile.organization_id,
+          userId: user.id,
+          userName: profile.full_name,
+          action: 'update',
+          entityType: 'invoice',
+          entityId: id,
+          entityLabel: `${existing.invoice_number} — revised issued invoice`,
+        })
+        return NextResponse.json({ success: true, id })
+      }
       if (existing.status !== 'draft') {
         return NextResponse.json(
-          { error: 'Posted invoice financials are immutable; cancel and create a replacement invoice' },
+          { error: 'Only unpaid issued invoices can have their accounting details and line items revised' },
           { status: 400 },
         )
       }
 
       const subtotal = items.reduce((sum: number, it: { quantity: number; unit_price: number }) => sum + it.quantity * it.unit_price, 0)
-      const discountAmt = Math.max(0, Number(discount_amount ?? 0))
+      const discountAmt = discount
       const totalAmount = Math.max(0, subtotal - discountAmt)
       const balanceDue = Math.max(0, totalAmount - Number(existing.amount_paid ?? 0))
 

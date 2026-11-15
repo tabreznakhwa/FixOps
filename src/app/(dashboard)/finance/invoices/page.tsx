@@ -20,6 +20,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
   const { profile } = await getAuthedProfile()
   const userRole = profile?.role ?? ''
   const canEditDelete = ['owner', 'admin', 'manager'].includes(userRole)
+  const canMergeIssued = ['owner', 'admin'].includes(userRole)
 
   const hasDateFilter = Boolean(params.from || params.to || params.q)
 
@@ -80,7 +81,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
             <Suspense fallback={<div className="w-64 h-9 bg-slate-100 rounded-lg animate-pulse" />}>
               <InvoiceSearchBar />
             </Suspense>
-            {canEditDelete && (
+            {canMergeIssued && (
               <Link
                 href={withReturnTo('/finance/invoices/merge', invoicesPath)}
                 className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-200 transition-colors"

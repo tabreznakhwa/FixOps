@@ -15,17 +15,21 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const customerId = searchParams.get('customer_id')
+    const status = searchParams.get('status')
     const statusNot = searchParams.get('status_not') // comma-separated statuses to exclude
+    const unpaidOnly = searchParams.get('unpaid_only') === 'true'
 
     const supabase = createAdminClient() as any
     let query = supabase
       .from('invoices')
-      .select('id, invoice_number, invoice_date, due_date, total_amount, balance_due, status')
+      .select('id, invoice_number, invoice_date, due_date, total_amount, balance_due, status, invoice_type')
       .eq('organization_id', profile.organization_id)
       .order('invoice_date', { ascending: false })
       .limit(200)
 
     if (customerId) query = query.eq('customer_id', customerId)
+    if (status) query = query.eq('status', status)
+    if (unpaidOnly) query = query.eq('amount_paid', 0).gt('balance_due', 0).neq('invoice_type', 'credit_note')
     if (statusNot) {
       const excludedStatuses = statusNot.split(',').map(s => s.trim())
       query = query.not('status', 'in', `(${excludedStatuses.join(',')})`)

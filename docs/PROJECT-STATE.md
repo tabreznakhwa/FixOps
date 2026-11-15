@@ -209,6 +209,33 @@ currently checks invoice/payment activity immediately before a separate write;
 a concurrent invoice/payment creation can still race that check until these
 mutations share a row-locked database transaction.
 
+### Monthly invoice merge and issued-invoice correction
+
+The Monthly Invoice screen now loads unpaid `issued` invoices rather than drafts.
+Production diagnosis on 15 Nov 2026 confirmed the reported customer had many
+unpaid issued invoices and no eligible drafts, which is why the screen was empty.
+Owner and Admin may select two or more unpaid issued invoices for one customer.
+Migration 066 (`066_merge_issued_customer_invoices.sql`) performs the merge in one
+transaction: it locks the exact source set, reverses each source AR posting,
+cancels the source invoices with an audit reference, copies their lines into one
+consolidated invoice, and posts that consolidated invoice. Migrations 066–069 were
+manually applied on 15 Nov 2026 before the compatible application deployment.
+
+Owner and Admin may also edit the customer, date, type, discount, and line items
+of an unpaid issued invoice. The same migration adds a transactional revision RPC
+that reverses the current AR posting and appends a replacement posting; invoices
+with any payment activity, and paid/cancelled invoices, remain financially locked.
+Manager keeps metadata/status operations but no longer gets full financial edit or
+issued-invoice merge access. Migration 066 was manually applied on 15 Nov 2026.
+A review after that application found lifecycle hardening needed for cancellation
+of revised invoices, direct payment-row checks, credit-note exclusion, source-line
+valuation, and work-order snapshots. Migration 067 was manually applied on 15 Nov
+2026. A deeper review then found additional active-posting, immutable posting-tuple,
+discount-preservation, NaN-validation and direct-receipt reconciliation defects.
+Migration 068 was manually applied on 15 Nov 2026. Its cancellation replacement
+still hardcoded the original invoice source type; migration 069 corrected cancellation
+of a revised invoice and was manually applied on 15 Nov 2026.
+
 ### Customer settlement discounts
 
 Migration 061 was manually applied on 20 Oct 2026, but its latest local file

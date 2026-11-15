@@ -14,13 +14,13 @@ export default async function EditInvoicePage({ params, searchParams }: { params
   const { return_to } = await searchParams
   const supabase = await createClient()
 
-  // Role guard — only admin/owner/manager
+  // Full invoice editing is restricted to Owner and Admin.
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
   const { data: profileRaw } = await (supabase as any)
     .from('users').select('role').eq('id', user.id).single()
   const role = (profileRaw as { role: string } | null)?.role ?? ''
-  if (!['admin', 'owner', 'manager'].includes(role)) redirect(`/finance/invoices/${id}`)
+  if (!['admin', 'owner'].includes(role)) redirect(`/finance/invoices/${id}`)
 
   const { data: invoiceRaw } = await (supabase as any)
     .from('invoices')
@@ -29,7 +29,7 @@ export default async function EditInvoicePage({ params, searchParams }: { params
     .single()
 
   if (!invoiceRaw) notFound()
-  if (['cancelled', 'paid'].includes(invoiceRaw.status)) redirect(`/finance/invoices/${id}`)
+  if (!['draft', 'issued'].includes(invoiceRaw.status)) redirect(`/finance/invoices/${id}`)
 
   const { data: itemsRaw } = await (supabase as any)
     .from('invoice_items')

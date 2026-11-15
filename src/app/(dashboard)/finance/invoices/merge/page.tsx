@@ -25,7 +25,7 @@ export default async function MergeInvoicePage({
   const { data: profileRaw } = await (supabase as any)
     .from('users').select('role').eq('id', user.id).single()
   const userRole = (profileRaw as { role: string } | null)?.role ?? ''
-  if (!['owner', 'admin', 'manager'].includes(userRole)) redirect('/finance/invoices')
+  if (!['owner', 'admin'].includes(userRole)) redirect('/finance/invoices')
 
   const customersRaw = await fetchAllCustomers(supabase, 'id, full_name, mobile_number, company_name')
 

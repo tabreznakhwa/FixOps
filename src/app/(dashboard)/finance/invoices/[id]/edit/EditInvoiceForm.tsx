@@ -24,7 +24,7 @@ interface LineItem {
 
 interface Props {
   invoice: {
-    id: string; invoice_number: string; invoice_type: string; invoice_date: string
+    id: string; invoice_number: string; invoice_type: string; invoice_date: string; status: string
     due_date: string | null; ref_number: string | null; discount_amount: number; notes: string | null
     terms_and_conditions: string | null; customer_id: string; work_order_id: string | null
     posting_sequence: number | null
@@ -79,6 +79,7 @@ const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 export function EditInvoiceForm({ invoice, items: initialItems, customers, workOrders, inventoryItems, detailHref }: Props) {
   const router = useRouter()
   const isPosted = invoice.posting_sequence !== null
+  const canEditFinancials = !isPosted || invoice.status === 'issued'
   const [customerId, setCustomerId] = useState(invoice.customer_id)
   const [invoiceType, setInvoiceType] = useState(invoice.invoice_type)
   const [invoiceDate, setInvoiceDate] = useState(invoice.invoice_date)
@@ -160,8 +161,8 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    if (!isPosted && !customerId) { setError('Please select a customer'); return }
-    if (!isPosted && items.some(it => !it.description.trim() || !it.unit_price)) {
+    if (canEditFinancials && !customerId) { setError('Please select a customer'); return }
+    if (canEditFinancials && items.some(it => !it.description.trim() || !it.unit_price)) {
       setError('All line items must have a description and unit price'); return
     }
     setLoading(true)
@@ -173,7 +174,7 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
         notes: notes.trim() || null,
         terms_and_conditions: termsAndConditions.trim() || null,
       }
-      const body = isPosted
+      const body = !canEditFinancials
         ? metadata
         : {
             customer_id: customerId,
@@ -213,14 +214,18 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
       {isPosted && (
         <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl text-sm">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-          <span>This invoice has been posted. Accounting details and line items are locked; only the due date, REF number, linked work order, notes, and terms can be changed.</span>
+          <span>
+            {canEditFinancials
+              ? 'This issued invoice has no payments. Saving financial changes will reverse its current posting and create a replacement posting with a complete audit trail.'
+              : 'This invoice has payment or cancellation activity. Accounting details and line items are locked; only the due date, REF number, linked work order, notes, and terms can be changed.'}
+          </span>
         </div>
       )}
 
       <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-5">
         <h2 className="font-semibold text-slate-900">Invoice Details</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {!isPosted && (
+          {canEditFinancials && (
             <>
               <div>
                 <label className={labelClass}>Customer *</label>
@@ -273,7 +278,7 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
       </div>
 
       {/* Line Items */}
-      {!isPosted && (
+      {canEditFinancials && (
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <h2 className="font-semibold text-slate-900 mb-4">Line Items</h2>
           <div className="space-y-3">
@@ -360,7 +365,7 @@ export function EditInvoiceForm({ invoice, items: initialItems, customers, workO
       )}
 
       {/* Totals */}
-      {!isPosted && (
+      {canEditFinancials && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
             <h2 className="font-semibold text-slate-900">Discount</h2>
