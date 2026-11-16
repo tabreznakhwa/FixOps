@@ -199,7 +199,7 @@ export function LeaveApplicationsList({
                       </div>
                       <p className="mt-2 text-sm font-semibold text-slate-700">{LEAVE_TYPE_LABELS[type]}</p>
                       <p className="mt-1 text-sm text-slate-600">
-                        {formatDate(application.start_date)} – {formatDate(application.end_date)} · {application.requested_days} {application.requested_days === 1 ? 'working day' : 'working days'}
+                        {formatDate(application.start_date)} – {formatDate(application.end_date)} · {application.requested_days} {application.requested_days === 1 ? 'day' : 'days'}
                         {status === 'pending' ? ' estimated' : ''}
                       </p>
                       {status === 'pending' && (
@@ -271,7 +271,7 @@ export function LeaveApplicationsList({
 
             {reviewing.decision === 'approved' && (
               <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
-                Approval will add {leaveApprovalEffect(reviewing.application.leave_type)} to attendance for each working day. Existing worked attendance will block approval rather than be overwritten.
+                Approval will add {leaveApprovalEffect(reviewing.application.leave_type)} to attendance for each counted day. Annual leave includes Friday; other leave types exclude Friday. Known public holidays are excluded. Existing worked attendance will block approval rather than be overwritten.
               </div>
             )}
 

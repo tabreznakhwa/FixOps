@@ -3,7 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { TrendingUp, FileText, DollarSign, Users } from 'lucide-react'
+import { AlertTriangle, TrendingUp, FileText, DollarSign, Users } from 'lucide-react'
+import { readPagedRows } from '@/lib/reportPaging'
 import { ReportExportButton } from './ReportExportButton'
 import { OrgLetterhead } from '@/components/print/OrgLetterhead'
 import { PrintActions } from '@/components/print/PrintActions'
@@ -95,30 +96,53 @@ export default async function ReportsPage({
   // Payment mode breakdown
   let pmQuery = supabase
     .from('payments')
-    .select('payment_mode, amount_received')
+    .select('id, payment_mode, amount_received, payment_date')
     .eq('is_cancelled', false)
   if (from) pmQuery = pmQuery.gte('payment_date', from.split('T')[0])
   if (to) pmQuery = pmQuery.lte('payment_date', to.split('T')[0])
 
-  const [
-    { data: invoicesRaw },
-    { data: allInvoicesRaw },
-    { data: paymentsRaw },
-    { data: agingRaw },
-  ] = await Promise.all([
-    invQuery as any,
-    (supabase as any)
-      .from('invoices')
-      .select('invoice_date, total_amount, amount_paid, status')
-      .not('status', 'in', '(cancelled,written_off)')
-      .gte('invoice_date', sixMonthsAgo.toISOString().split('T')[0])
-      .order('invoice_date', { ascending: true }),
-    pmQuery,
-    (supabase as any)
-      .from('invoices')
-      .select('balance_due, due_date, status')
-      .in('status', ['issued', 'partial', 'overdue'])
-      .gt('balance_due', 0),
+  const failures: string[] = []
+  const [invoicesRaw, allInvoicesRaw, paymentsRaw, agingRaw] = await Promise.all([
+    readPagedRows<any>(
+      (pageFrom, pageTo) => (invQuery as any)
+        .order('invoice_date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(pageFrom, pageTo),
+      failures,
+      'selected-period invoices',
+    ),
+    readPagedRows<any>(
+      (pageFrom, pageTo) => (supabase as any)
+        .from('invoices')
+        .select('id, invoice_date, total_amount, amount_paid, status')
+        .not('status', 'in', '(cancelled,written_off)')
+        .gte('invoice_date', sixMonthsAgo.toISOString().split('T')[0])
+        .order('invoice_date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(pageFrom, pageTo),
+      failures,
+      'six-month invoices',
+    ),
+    readPagedRows<any>(
+      (pageFrom, pageTo) => (pmQuery as any)
+        .order('payment_date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(pageFrom, pageTo),
+      failures,
+      'customer payments',
+    ),
+    readPagedRows<any>(
+      (pageFrom, pageTo) => (supabase as any)
+        .from('invoices')
+        .select('id, balance_due, due_date, status')
+        .in('status', ['issued', 'partial', 'overdue'])
+        .gt('balance_due', 0)
+        .order('due_date', { ascending: true, nullsFirst: true })
+        .order('id', { ascending: true })
+        .range(pageFrom, pageTo),
+      failures,
+      'receivables aging',
+    ),
   ])
 
   const invoices = (invoicesRaw ?? []) as unknown as Array<{
@@ -258,6 +282,15 @@ export default async function ReportsPage({
       />
 
       <div className="p-6 space-y-6">
+        {failures.length > 0 && (
+          <div className="flex gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>
+              <strong>These figures are incomplete.</strong> Could not fully load: {failures.join(', ')}. Totals and charts are not reliable until this is resolved.
+            </span>
+          </div>
+        )}
+
         {/* Date range tabs */}
         <div className="flex gap-2 overflow-x-auto pb-1 print:hidden">
           {RANGE_TABS.map((r) => (

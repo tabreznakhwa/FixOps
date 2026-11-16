@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Reason must be 1,000 characters or fewer' }, { status: 400 })
     }
 
-    const calendarWorkingDays = countLeaveDays(startDate, endDate)
+    const calendarWorkingDays = countLeaveDays(startDate, endDate, leaveType)
     if (calendarWorkingDays < 1) {
       return NextResponse.json({ error: 'The selected range contains no working days' }, { status: 400 })
     }

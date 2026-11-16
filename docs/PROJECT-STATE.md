@@ -220,6 +220,10 @@ transaction: it locks the exact source set, reverses each source AR posting,
 cancels the source invoices with an audit reference, copies their lines into one
 consolidated invoice, and posts that consolidated invoice. Migrations 066–069 were
 manually applied on 15 Nov 2026 before the compatible application deployment.
+Editing an issued invoice then exposed SQLSTATE 42702 because the revision RPC's
+`invoice_id` output variable collided with unqualified table columns. Migration
+072 (`072_fix_issued_invoice_revision_ambiguity.sql`) qualifies those references
+and was manually applied on 16 Nov 2026.
 
 Owner and Admin may also edit the customer, date, type, discount, and line items
 of an unpaid issued invoice. The same migration adds a transactional revision RPC
@@ -393,6 +397,18 @@ reopening the others. Cash/Bank Book totals remain cash-only; settlement discoun
 are separate non-cash AP adjustments. Deploy only the compatible application after
 verifying migration 063, and never use `db push --include-all`.
 
+### Finance Reports completeness
+
+The Finance Reports monthly chart previously used one unpaged Supabase request for
+six months of invoices. PostgREST's 1,000-row cap could therefore make newer
+months (for example October and November) look empty once the oldest 1,000 rows
+filled the response. The selected-period invoice KPIs, payment-mode breakdown and
+receivables aging had the same silent-partial-data risk. All four sources now use
+explicit 1,000-row paging with stable date-plus-ID ordering, remain concurrent,
+and show a visible **These figures are incomplete** warning if any source fails or
+exceeds the 50,000-row safety limit. The Finance Reports CSV endpoint uses the
+same explicit paging and refuses to return a silently partial export.
+
 ### Bank Book completeness
 
 On 27 Oct 2026, Bank Book was found to omit recent bank receipts once qualifying
@@ -457,7 +473,15 @@ directly; there is currently no approved-leave revocation workflow. Migration
 and holiday changes. Once migration 056 is applied, newly approved Annual Leave
 maps to `unpaid_leave`; its payroll daily rate is `(basic + housing + transport +
 other + food + applicable seasonal fixed OT) / 30`, separate from ordinary
-absence (which excludes food). Existing salary-slip history is preserved: the
+absence (which excludes food). Migration 070 changes the approved Annual Leave
+calendar rule so Fridays inside the requested range are also materialized and
+deducted as unpaid leave; sick and compensation leave continue to skip Friday,
+and public holidays remain excluded. Migration 070
+(`070_count_fridays_in_annual_leave.sql`) was manually applied by the user on
+15 Nov 2026. Migration 071 (`071_harden_annual_leave_friday.sql`) was manually applied on
+16 Nov 2026; it makes payroll block on pending Friday-only Annual Leave and
+protects approved annual-leave Fridays from later public-holiday calendar
+changes. Existing salary-slip history is preserved: the
 exact approved annual-leave rows represented by an existing employee slip are
 marked as paid snapshot `leave`, while historical dates without a matching slip
 convert to `unpaid_leave`. New slips freeze `annual_leave_days` and

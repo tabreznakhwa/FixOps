@@ -26,13 +26,23 @@ function parseISODate(date: string): Date | null {
   return parsed.toISOString().slice(0, 10) === date ? parsed : null
 }
 
-/** Friday is FixOps' weekly off and never consumes an employee's leave days. */
-export function countLeaveDays(startDate: string, endDate: string): number {
+/**
+ * Annual leave is unpaid for every calendar day in its approved range, including
+ * Friday. Other leave types continue to treat Friday as the weekly off.
+ * Public holidays are reconciled by the approval RPC because they are org data.
+ */
+export function countLeaveDays(
+  startDate: string,
+  endDate: string,
+  leaveType?: LeaveType,
+): number {
   const start = parseISODate(startDate)
   const end = parseISODate(endDate)
   if (!start || !end || end < start) return 0
 
   const totalDays = Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1
+  if (leaveType === 'annual_leave') return totalDays
+
   const wholeWeeks = Math.floor(totalDays / 7)
   let days = totalDays - wholeWeeks
 

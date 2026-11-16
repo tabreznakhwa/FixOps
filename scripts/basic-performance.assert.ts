@@ -38,14 +38,17 @@ assert.equal(
   'reports must resolve its four independent reads through one Promise.all',
 )
 for (const marker of [
-  '{ data: invoicesRaw }',
-  '{ data: allInvoicesRaw }',
-  '{ data: paymentsRaw }',
-  '{ data: agingRaw }',
+  'const [invoicesRaw, allInvoicesRaw, paymentsRaw, agingRaw] = await Promise.all([',
+  "readPagedRows<any>(",
+  "'selected-period invoices'",
+  "'six-month invoices'",
+  "'customer payments'",
+  "'receivables aging'",
   "not('status', 'in', '(cancelled,written_off)')",
   "eq('is_cancelled', false)",
   "in('status', ['issued', 'partial', 'overdue'])",
   ".gt('balance_due', 0)",
+  "<strong>These figures are incomplete.</strong>",
 ]) {
   assert.ok(reports.includes(marker), `reports missing: ${marker}`)
 }

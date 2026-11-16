@@ -45,6 +45,7 @@ const migration = read('supabase/migrations/066_merge_issued_customer_invoices.s
 const hardeningMigration = read('supabase/migrations/067_harden_issued_invoice_lifecycle.sql')
 const finalMigration = read('supabase/migrations/068_finalize_issued_invoice_lifecycle.sql')
 const cancellationFix = read('supabase/migrations/069_fix_revised_invoice_cancellation.sql')
+const ambiguityFix = read('supabase/migrations/072_fix_issued_invoice_revision_ambiguity.sql')
 for (const marker of [
   'add column if not exists current_posting_id',
   'create or replace function public.revise_issued_customer_invoice(',
@@ -99,5 +100,21 @@ for (const marker of [
 }
 assert.equal(cancellationFix.includes('create or replace function public.merge_issued_customer_invoices('), false)
 assert.equal(cancellationFix.includes('create or replace function public.revise_issued_customer_invoice('), false)
+for (const marker of [
+  'create or replace function public.revise_issued_customer_invoice(',
+  'delete from public.invoice_items ii where ii.invoice_id = p_invoice_id',
+  'from public.invoice_items ii',
+  'where ii.invoice_id = p_invoice_id',
+  'from public.payments p',
+  'where p.invoice_id = p_invoice_id',
+  'grant execute on function public.revise_issued_customer_invoice',
+]) {
+  assert.ok(ambiguityFix.includes(marker), `issued-invoice ambiguity fix is missing: ${marker}`)
+}
+assert.equal(
+  ambiguityFix.includes('delete from public.invoice_items where invoice_id = p_invoice_id'),
+  false,
+  'issued-invoice revision must not leave invoice_id ambiguous against the output variable',
+)
 
 console.log('issued invoice edit assertions passed')

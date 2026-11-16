@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { readPagedRows } from '@/lib/reportPaging'
 
 type Range = 'month' | 'last_month' | 'quarter' | 'year' | 'all'
 
@@ -45,6 +46,8 @@ export async function GET(request: NextRequest) {
     } = await supabaseUser.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    // Generated relationship types trail the live reporting schema.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: profileRaw } = await (supabaseUser as any)
       .from('users').select('organization_id, role').eq('id', user.id).single()
     const profile = profileRaw as { organization_id: string; role: string } | null
@@ -62,23 +65,39 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient()
 
-    let query = (supabase as any)
-      .from('invoices')
-      .select(
-        'invoice_number, invoice_date, due_date, status, invoice_type, subtotal, discount_amount, tax_amount, total_amount, amount_paid, balance_due, customers(full_name)',
+    const failures: string[] = []
+    // Generated relationship types trail the live reporting schema.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = await readPagedRows<any>(
+      (pageFrom, pageTo) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let query = (supabase as any)
+          .from('invoices')
+          .select(
+            'id, invoice_number, invoice_date, due_date, status, invoice_type, subtotal, discount_amount, tax_amount, total_amount, amount_paid, balance_due, customers(full_name)',
+          )
+          .eq('organization_id', profile.organization_id)
+          .not('status', 'in', '(cancelled,written_off)')
+          .order('invoice_date', { ascending: false })
+          .order('id', { ascending: false })
+
+        if (from) query = query.gte('invoice_date', from)
+        if (to) query = query.lte('invoice_date', to)
+        return query.range(pageFrom, pageTo)
+      },
+      failures,
+      'invoice export',
+    )
+
+    if (failures.length > 0) {
+      console.error('Reports export incomplete:', failures)
+      return NextResponse.json(
+        { error: 'Unable to export a complete report. Please try again.' },
+        { status: 500 },
       )
-      .eq('organization_id', profile.organization_id)
-      .not('status', 'in', '(cancelled,written_off)')
-      .order('invoice_date', { ascending: false })
+    }
 
-    if (from) query = query.gte('invoice_date', from)
-    if (to) query = query.lte('invoice_date', to)
-
-    const { data: rows, error } = await query
-
-    if (error) throw error
-
-    const result = (rows ?? []).map(
+    const result = rows.map(
       (row: {
         invoice_number: string
         invoice_date: string

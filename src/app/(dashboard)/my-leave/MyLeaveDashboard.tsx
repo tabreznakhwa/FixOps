@@ -66,8 +66,8 @@ export function MyLeaveDashboard({
   })
 
   const estimatedDays = useMemo(
-    () => countLeaveDays(form.start_date, form.end_date),
-    [form.start_date, form.end_date],
+    () => countLeaveDays(form.start_date, form.end_date, form.leave_type),
+    [form.start_date, form.end_date, form.leave_type],
   )
 
   const currentYear = kuwaitISODate().slice(0, 4)
@@ -185,7 +185,7 @@ export function MyLeaveDashboard({
         <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-semibold text-slate-900">Leave Applications</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Fridays are weekly off and are not counted as leave days.</p>
+            <p className="mt-0.5 text-xs text-slate-500">Annual leave counts every calendar day, including Friday. Other leave types exclude Friday.</p>
           </div>
           {!showForm && (
             <button onClick={openForm} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700">
@@ -243,8 +243,12 @@ export function MyLeaveDashboard({
 
             <div className="flex flex-col gap-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-semibold text-blue-900">Estimated: {estimatedDays} working {estimatedDays === 1 ? 'day' : 'days'}</p>
-                <p className="mt-0.5 text-xs text-blue-700">This estimate excludes Fridays. The confirmed total also excludes known public holidays and is shown after submission.</p>
+                <p className="text-sm font-semibold text-blue-900">Estimated: {estimatedDays} {estimatedDays === 1 ? 'day' : 'days'}</p>
+                <p className="mt-0.5 text-xs text-blue-700">
+                  {form.leave_type === 'annual_leave'
+                    ? 'Annual leave includes Fridays. The confirmed total excludes known public holidays.'
+                    : 'This estimate excludes Fridays. The confirmed total also excludes known public holidays.'}
+                </p>
               </div>
               <button type="submit" disabled={saving || estimatedDays < 1} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />} {saving ? 'Submitting…' : 'Submit Application'}
